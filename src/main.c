@@ -1,5 +1,7 @@
+#include "array.h"
 #include "map.h"
 #include "memory.h"
+#include "scanner.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -19,8 +21,8 @@ static char* readFile(const char* path)
   rewind(file);
 
   char* buffer = memory_alloc(&memory, file_size);
-
   size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
+
   if (file_size != bytes_read)
   {
     fprintf(stderr, "Could not read file: %s\n", path);
@@ -39,22 +41,18 @@ static void runFile(const char* path)
   if (!source)
     return;
 
-  printf("%s\n", source);
+  scanner_init(source);
+  ArrayToken tokens = scanner_scan();
+
+  Token token;
+  array_foreach(&tokens, token)
+  {
+    printf("%d '%.*s'\n", token.type, token.length, token.start);
+  }
 }
 
 int main(int argc, char* argv[])
 {
-  map_str a;
-  map_init_str(&a, 0, 0);
-  map_put_str(&a, "cookie", "poop");
-  map_put_str(&a, "frank", "poop");
-
-  const char *K, *V;
-  map_foreach(&a, K, V)
-  {
-    printf("%s %s\n", K, V);
-  }
-
   if (argc == 2)
   {
     runFile(argv[1]);
@@ -65,8 +63,6 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  memory_reset(&memory);
   memory_free(&memory);
-
   return 0;
 }

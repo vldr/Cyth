@@ -15,7 +15,7 @@
     size_t cap;                                                                                                        \
     size_t size;                                                                                                       \
     T* elems;                                                                                                          \
-  } array_##name
+  } Array##name
 
 #define array_init(a)                                                                                                  \
   do                                                                                                                   \

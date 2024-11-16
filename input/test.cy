@@ -1,4 +1,9 @@
 void hello()
-    print("hi")
+    if (a
+            hh
+    ):
+        print("
+            h
+        ")
 
-hello()
+hello(12)

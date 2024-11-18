@@ -1,6 +1,6 @@
 OUTPUT = output/cyth
 CXX = clang
-CXXFLAGS = -MMD -O0 -Wall -Wextra -pedantic -fsanitize=address
+CXXFLAGS = -MMD -O0 -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
 LINKFLAGS =
 
 SRCS = $(wildcard src/*.c)

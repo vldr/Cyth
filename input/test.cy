@@ -1,9 +1,12 @@
 void hello()
-    if (a
-            hh
-    ):
-        print("
-            h
-        ")
+    if (
+        a
+                and
+        b
+    )
+        return true     
 
-hello(12)
+    return false   + 2
+
+
+hello()

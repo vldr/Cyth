@@ -7,8 +7,9 @@
 typedef enum
 {
   // Indentation
-  TOKEN_IDENT,
+  TOKEN_INDENT,
   TOKEN_DEDENT,
+  TOKEN_NEWLINE,
 
   // Single-character tokens
   TOKEN_LEFT_PAREN,
@@ -58,6 +59,7 @@ typedef enum
   TOKEN_IF,
   TOKEN_NULL,
   TOKEN_OR,
+  TOKEN_NOT,
   TOKEN_RETURN,
   TOKEN_SUPER,
   TOKEN_THIS,
@@ -70,6 +72,10 @@ typedef enum
 typedef struct
 {
   TokenType type;
+  int start_line;
+  int start_column;
+  int end_line;
+  int end_column;
   int length;
   const char* start;
 } Token;
@@ -77,6 +83,7 @@ typedef struct
 array_def(Token, Token);
 
 void scanner_init(const char* source);
+void scanner_print();
 ArrayToken scanner_scan();
 
 #endif

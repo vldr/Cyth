@@ -39,7 +39,7 @@
     bool found;                                                                                                        \
   };                                                                                                                   \
                                                                                                                        \
-  typedef struct map_##name map_##name;                                                                                \
+  typedef struct map_##name Map##name;                                                                                 \
                                                                                                                        \
   bool map_init_##name(struct map_##name* map, uint32_t cap, uint32_t load_factor);                                    \
   uint32_t map_size_##name(struct map_##name* map);                                                                    \

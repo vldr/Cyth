@@ -100,16 +100,16 @@
   for (size_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)                                                   \
     for ((elem) = (a)->elems[_i]; _k; _k = !_k)
 
-array_def(int, int);
-array_def(unsigned int, uint);
-array_def(long, long);
-array_def(long long, ll);
-array_def(unsigned long, ulong);
-array_def(unsigned long long, ull);
+array_def(int, Int);
+array_def(unsigned int, Uint);
+array_def(long, Long);
+array_def(long long, LL);
+array_def(unsigned long, Ulong);
+array_def(unsigned long long, Ull);
 array_def(uint32_t, 32);
 array_def(uint64_t, 64);
-array_def(double, double);
-array_def(const char*, str);
-array_def(void*, ptr);
+array_def(double, Double);
+array_def(const char*, Str);
+array_def(void*, Ptr);
 
 #endif

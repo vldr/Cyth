@@ -1,5 +1,4 @@
 #include "array.h"
-#include "map.h"
 #include "memory.h"
 #include "scanner.h"
 
@@ -20,7 +19,7 @@ static char* readFile(const char* path)
   size_t file_size = ftell(file);
   rewind(file);
 
-  char* buffer = memory_alloc(&memory, file_size);
+  char* buffer = memory_alloc(&memory, file_size + 1);
   size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
 
   if (file_size != bytes_read)
@@ -31,7 +30,7 @@ static char* readFile(const char* path)
 
   fclose(file);
 
-  buffer[bytes_read] = '\0';
+  buffer[file_size] = '\0';
   return buffer;
 }
 
@@ -42,13 +41,8 @@ static void runFile(const char* path)
     return;
 
   scanner_init(source);
-  ArrayToken tokens = scanner_scan();
-
-  Token token;
-  array_foreach(&tokens, token)
-  {
-    printf("%d '%.*s'\n", token.type, token.length, token.start);
-  }
+  scanner_scan();
+  scanner_print();
 }
 
 int main(int argc, char* argv[])

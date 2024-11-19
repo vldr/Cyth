@@ -1,5 +1,6 @@
 #include "scanner.h"
 #include "array.h"
+#include "main.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -12,13 +13,19 @@ struct
   int current_line;
   int current_column;
 
-  bool multi_line;
+  int multi_line;
 
   const char* start;
   const char* current;
 
-  ArrayToken tokens;
+  enum
+  {
+    INDENTATION_NONE,
+    INDENTATION_TAB,
+    INDENTATION_SPACE
+  } indentation_type;
   ArrayInt indentation;
+  ArrayToken tokens;
 } scanner;
 
 static void add_custom_token(TokenType type, const char* start, int length)
@@ -94,7 +101,7 @@ static void string()
 
     if (peek() == '\0')
     {
-      printf("Error: unterminated string\n");
+      report_error(scanner.start_line, scanner.start_column, "unterminated string");
       return;
     }
 
@@ -131,6 +138,12 @@ static void literal()
   add_token(type);
 }
 
+static void comment()
+{
+  while (peek() != '\n' && peek() != '\0')
+    advance();
+}
+
 static void scan_token()
 {
   char c = advance();
@@ -138,32 +151,32 @@ static void scan_token()
   switch (c)
   {
   case '(':
-    scanner.multi_line = true;
+    scanner.multi_line++;
 
     add_token(TOKEN_LEFT_PAREN);
     break;
   case ')':
-    scanner.multi_line = false;
+    scanner.multi_line--;
 
     add_token(TOKEN_RIGHT_PAREN);
     break;
   case '{':
-    scanner.multi_line = true;
+    scanner.multi_line++;
 
     add_token(TOKEN_LEFT_BRACE);
     break;
   case '}':
-    scanner.multi_line = false;
+    scanner.multi_line--;
 
     add_token(TOKEN_RIGHT_BRACE);
     break;
   case '[':
-    scanner.multi_line = true;
+    scanner.multi_line++;
 
     add_token(TOKEN_LEFT_BRACKET);
     break;
   case ']':
-    scanner.multi_line = false;
+    scanner.multi_line--;
 
     add_token(TOKEN_RIGHT_BRACKET);
     break;
@@ -200,10 +213,7 @@ static void scan_token()
 
     break;
   case '/':
-    if (match('/'))
-      while (peek() != '\n' && peek() != '\0')
-        advance();
-    else if (match('='))
+    if (match('='))
       add_token(TOKEN_SLASH_EQUAL);
     else
       add_token(TOKEN_SLASH);
@@ -226,6 +236,10 @@ static void scan_token()
     break;
   case '>':
     add_token(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+    break;
+
+  case '#':
+    comment();
     break;
 
   case '"':
@@ -256,7 +270,7 @@ static void scan_token()
       break;
     }
 
-    printf("Unexpected character: %c", c);
+    report_error(scanner.current_line, scanner.current_column, "unexpected character");
     break;
   }
 }
@@ -279,17 +293,32 @@ static void scan_indentation()
       newline();
       break;
     case ' ':
+      indentation += 1;
+      scanner.indentation_type |= INDENTATION_SPACE;
+
+      advance();
+      break;
     case '\t':
-      indentation++;
+      indentation += 4;
+      scanner.indentation_type |= INDENTATION_TAB;
+
+      advance();
+      break;
     default:
       advance();
       break;
     }
   }
 
-  if (eof())
+  if (eof() || peek() == '#')
   {
     return;
+  }
+
+  if ((scanner.indentation_type & INDENTATION_SPACE) && (scanner.indentation_type & INDENTATION_TAB))
+  {
+    report_error(scanner.current_line, scanner.current_column, "mixing of tabs and spaces");
+    scanner.indentation_type = INDENTATION_NONE;
   }
 
   if (indentation > array_last(&scanner.indentation))
@@ -304,18 +333,24 @@ static void scan_indentation()
       add_custom_token(TOKEN_DEDENT, NULL, 0);
       array_del_last(&scanner.indentation);
     }
+
+    if (indentation != array_last(&scanner.indentation))
+    {
+      report_error(scanner.current_line, scanner.current_column, "unexpected deindent");
+    }
   }
 }
 
 void scanner_init(const char* source)
 {
+  scanner.start = source;
+  scanner.current = source;
   scanner.start_line = 1;
   scanner.start_column = 1;
   scanner.current_line = scanner.start_line;
   scanner.current_column = scanner.start_column;
-  scanner.multi_line = false;
-  scanner.start = source;
-  scanner.current = source;
+  scanner.multi_line = 0;
+  scanner.indentation_type = INDENTATION_NONE;
 
   array_init(&scanner.tokens);
   array_init(&scanner.indentation);
@@ -336,6 +371,11 @@ ArrayToken scanner_scan()
     scanner.start_column = scanner.current_column;
 
     scan_token();
+  }
+
+  if (scanner.multi_line)
+  {
+    report_error(scanner.current_line, scanner.current_column, "reached end-of-file in multi-line mode");
   }
 
   if (array_size(&scanner.tokens) && array_last(&scanner.tokens).type != TOKEN_NEWLINE)

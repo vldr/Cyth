@@ -1,3 +1,4 @@
+#include "main.h"
 #include "array.h"
 #include "memory.h"
 #include "scanner.h"
@@ -6,7 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static char* readFile(const char* path)
+static bool had_error = false;
+
+static char* read_file(const char* path)
 {
   FILE* file = fopen(path, "rb");
   if (!file)
@@ -34,9 +37,9 @@ static char* readFile(const char* path)
   return buffer;
 }
 
-static void runFile(const char* path)
+static void run_file(const char* path)
 {
-  char* source = readFile(path);
+  char* source = read_file(path);
   if (!source)
     return;
 
@@ -45,11 +48,17 @@ static void runFile(const char* path)
   scanner_print();
 }
 
+void report_error(int line, int column, const char* message)
+{
+  fprintf(stderr, "%d:%d: error: %s\n", line, column, message);
+  had_error = true;
+}
+
 int main(int argc, char* argv[])
 {
   if (argc == 2)
   {
-    runFile(argv[1]);
+    run_file(argv[1]);
   }
   else
   {

@@ -1,12 +1,5 @@
-void hello()
-	if (
-		a
-				and
-		b
-	)
-		return "
-
-shsuihsui        
-"
-											
-	return false   + 2
+def hello()
+	print("hello")
+    print("hi")
+	print("hello")
+    print("bye")

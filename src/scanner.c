@@ -6,7 +6,22 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-struct
+#define KEYWORD_GROUP(ch)                                                                          \
+  break;                                                                                           \
+  case ch:
+
+#define KEYWORD(keyword, token)                                                                    \
+  {                                                                                                \
+    size_t input_length = scanner.current - scanner.start;                                         \
+    size_t keyword_length = sizeof(keyword) - 1;                                                   \
+    if (input_length == keyword_length && memcmp(keyword, scanner.start, input_length) == 0)       \
+    {                                                                                              \
+      type = token;                                                                                \
+      break;                                                                                       \
+    }                                                                                              \
+  }
+
+static struct
 {
   int start_line;
   int start_column;
@@ -101,7 +116,8 @@ static void string()
 
     if (peek() == '\0')
     {
-      report_error(scanner.start_line, scanner.start_column, "unterminated string");
+      report_error(scanner.start_line, scanner.start_column, scanner.current_line,
+                   scanner.current_column, "unterminated string");
       return;
     }
 
@@ -134,6 +150,36 @@ static void literal()
     advance();
 
   TokenType type = TOKEN_IDENTIFIER;
+
+  switch (*scanner.start)
+  {
+  default:
+    KEYWORD_GROUP('a')
+    KEYWORD("and", TOKEN_AND)
+    KEYWORD_GROUP('c')
+    KEYWORD("class", TOKEN_CLASS)
+    KEYWORD_GROUP('e')
+    KEYWORD("else", TOKEN_ELSE)
+    KEYWORD_GROUP('f')
+    KEYWORD("false", TOKEN_FALSE)
+    KEYWORD("for", TOKEN_FOR)
+    KEYWORD_GROUP('i')
+    KEYWORD("if", TOKEN_IF)
+    KEYWORD_GROUP('n')
+    KEYWORD("null", TOKEN_NULL)
+    KEYWORD("not", TOKEN_NOT)
+    KEYWORD_GROUP('o')
+    KEYWORD("or", TOKEN_OR)
+    KEYWORD_GROUP('r')
+    KEYWORD("return", TOKEN_RETURN)
+    KEYWORD_GROUP('s')
+    KEYWORD("super", TOKEN_SUPER)
+    KEYWORD_GROUP('t')
+    KEYWORD("this", TOKEN_THIS)
+    KEYWORD("true", TOKEN_TRUE)
+    KEYWORD_GROUP('w')
+    KEYWORD("while", TOKEN_WHILE)
+  }
 
   add_token(type);
 }
@@ -270,7 +316,8 @@ static void scan_token()
       break;
     }
 
-    report_error(scanner.current_line, scanner.current_column, "unexpected character");
+    report_error(scanner.start_line, scanner.start_column, scanner.current_line,
+                 scanner.current_column, "unexpected character");
     break;
   }
 }
@@ -315,9 +362,11 @@ static void scan_indentation()
     return;
   }
 
-  if ((scanner.indentation_type & INDENTATION_SPACE) && (scanner.indentation_type & INDENTATION_TAB))
+  if ((scanner.indentation_type & INDENTATION_SPACE) &&
+      (scanner.indentation_type & INDENTATION_TAB))
   {
-    report_error(scanner.current_line, scanner.current_column, "mixing of tabs and spaces");
+    report_error(scanner.start_line, scanner.start_column, scanner.current_line,
+                 scanner.current_column, "mixing of tabs and spaces");
     scanner.indentation_type = INDENTATION_NONE;
   }
 
@@ -336,7 +385,8 @@ static void scan_indentation()
 
     if (indentation != array_last(&scanner.indentation))
     {
-      report_error(scanner.current_line, scanner.current_column, "unexpected deindent");
+      report_error(scanner.start_line, scanner.start_column, scanner.current_line,
+                   scanner.current_column, "unexpected deindent");
     }
   }
 }
@@ -375,7 +425,8 @@ ArrayToken scanner_scan()
 
   if (scanner.multi_line)
   {
-    report_error(scanner.current_line, scanner.current_column, "reached end-of-file in multi-line mode");
+    report_error(scanner.start_line, scanner.start_column, scanner.current_line,
+                 scanner.current_column, "reached end-of-file in multi-line mode");
   }
 
   if (array_size(&scanner.tokens) && array_last(&scanner.tokens).type != TOKEN_NEWLINE)
@@ -417,7 +468,7 @@ void scanner_print()
                                   "RETURN",        "SUPER",        "THIS",
                                   "TRUE",          "WHILE",        "EOF"};
 
-    printf("%d,%d-%d,%d \t%s    \t'%.*s'  \n", token.start_line, token.start_column, token.end_line, token.end_column,
-           types[token.type], token.length, token.start);
+    printf("%d,%d-%d,%d \t%s    \t'%.*s'  \n", token.start_line, token.start_column, token.end_line,
+           token.end_column, types[token.type], token.length, token.start);
   }
 }

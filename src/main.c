@@ -48,9 +48,11 @@ static void run_file(const char* path)
   scanner_print();
 }
 
-void report_error(int line, int column, const char* message)
+void report_error(int start_line, int start_column, int end_line, int end_column,
+                  const char* message)
 {
-  fprintf(stderr, "%d:%d: error: %s\n", line, column, message);
+  fprintf(stderr, "%d:%d-%d:%d: error: %s\n", start_line, start_column, end_line, end_column,
+          message);
   had_error = true;
 }
 

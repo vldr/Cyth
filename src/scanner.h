@@ -44,7 +44,8 @@ typedef enum
 
   TOKEN_IDENTIFIER,
   TOKEN_STRING,
-  TOKEN_NUMBER,
+  TOKEN_INTEGER,
+  TOKEN_FLOAT,
 
   TOKEN_AND,
   TOKEN_CLASS,
@@ -61,7 +62,6 @@ typedef enum
   TOKEN_TRUE,
   TOKEN_WHILE,
 
-  TOKEN_ERROR,
   TOKEN_EOF
 } TokenType;
 
@@ -79,7 +79,6 @@ typedef struct
 array_def(Token, Token);
 
 void scanner_init(const char* source);
-void scanner_print();
 ArrayToken scanner_scan();
 
 #endif

@@ -53,7 +53,7 @@ typedef struct
 {
   enum
   {
-    LITERAL_VOID,
+    LITERAL_NULL,
     LITERAL_BOOL,
     LITERAL_INTEGER,
     LITERAL_FLOAT,
@@ -64,7 +64,11 @@ typedef struct
     bool boolean;
     int integer;
     float floating;
-    char* string;
+    struct
+    {
+      const char* value;
+      int length;
+    } string;
   };
 } LiteralExpr;
 
@@ -88,7 +92,6 @@ typedef struct
 typedef enum
 {
   EXPR_BINARY,
-  EXPR_LOGICAL,
   EXPR_UNARY,
   EXPR_GROUP,
   EXPR_LITERAL,

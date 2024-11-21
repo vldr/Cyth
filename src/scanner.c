@@ -124,12 +124,14 @@ static void string()
     advance();
   }
 
+  add_custom_token(TOKEN_STRING, scanner.start + 1, scanner.current - scanner.start - 1);
   advance();
-  add_token(TOKEN_STRING);
 }
 
 static void number()
 {
+  TokenType type = TOKEN_INTEGER;
+
   while (isdigit(peek()))
     advance();
 
@@ -139,9 +141,11 @@ static void number()
 
     while (isdigit(peek()))
       advance();
+
+    type = TOKEN_FLOAT;
   }
 
-  add_token(TOKEN_NUMBER);
+  add_token(type);
 }
 
 static void literal()
@@ -443,25 +447,4 @@ ArrayToken scanner_scan()
   add_custom_token(TOKEN_EOF, NULL, 0);
 
   return scanner.tokens;
-}
-
-void scanner_print()
-{
-  Token token;
-  array_foreach(&scanner.tokens, token)
-  {
-    static const char* types[] = {
-      "INDENT",        "DEDENT",       "NEWLINE",       "LEFT_PAREN",  "RIGHT_PAREN", "LEFT_BRACE",
-      "RIGHT_BRACE",   "LEFT_BRACKET", "RIGHT_BRACKET", "SEMICOLON",   "COLON",       "COMMA",
-      "DOT",           "MINUS",        "MINUS_MINUS",   "MINUS_EQUAL", "PLUS",        "PLUS_PLUS",
-      "PLUS_EQUAL",    "SLASH",        "SLASH_EQUAL",   "STAR",        "STAR_EQUAL",  "PERCENT",
-      "PERCENT_EQUAL", "BANG",         "BANG_EQUAL",    "EQUAL",       "EQUAL_EQUAL", "GREATER",
-      "GREATER_EQUAL", "LESS",         "LESS_EQUAL",    "IDENTIFIER",  "STRING",      "NUMBER",
-      "AND",           "CLASS",        "ELSE",          "FALSE",       "FOR",         "IF",
-      "NULL",          "OR",           "NOT",           "RETURN",      "SUPER",       "THIS",
-      "TRUE",          "WHILE",        "ERROR",         "EOF"};
-
-    printf("%d,%d-%d,%d \t%s    \t'%.*s'  \n", token.start_line, token.start_column, token.end_line,
-           token.end_column, types[token.type], token.length, token.start);
-  }
 }

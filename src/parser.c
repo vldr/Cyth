@@ -4,6 +4,8 @@
 #include "main.h"
 #include "scanner.h"
 
+Expr* expression();
+
 struct
 {
   int current;
@@ -16,11 +18,6 @@ static void error(Token token, const char* message)
 }
 
 static Token peek()
-{
-  return array_at(&parser.tokens, parser.current);
-}
-
-static Token peek_next()
 {
   return array_at(&parser.tokens, parser.current);
 }
@@ -70,41 +67,73 @@ bool match(TokenType type)
 
 static Expr* primary()
 {
+  Expr* expr = EXPR();
+  Token token = peek();
 
-  // if (match(TOKEN_TRUE))
-  //   return new LiteralExpr(true);
-  // else if (match(TOKEN_FALSE))
-  //   return new LiteralExpr(false);
-  // else if (match(TOKEN_NIL))
-  //   return new LiteralExpr(Nil());
-  // else if (match(TOKEN_THIS))
-  //   return new ThisExpr(previous());
-  // else if (match(TOKEN_SUPER))
-  // {
-  //   Token keyword = previous();
-  //   consume(TOKEN_DOT, "Expected a '.' after 'super' keyword.");
-  //   Token method = consume(TOKEN_IDENTIFIER, "Expected a superclass name.");
+  switch (token.type)
+  {
+  case TOKEN_TRUE:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_BOOL;
+    expr->literal.boolean = true;
 
-  //   return new SuperExpr(keyword, method);
-  // }
-  // else if (match(TOKEN_NUMBER, TOKEN_STRING))
-  // {
-  //   return new LiteralExpr(previous().literal);
-  // }
-  // else if (match(TOKEN_LEFT_PAREN))
-  // {
-  //   auto expr = expression();
-  //   consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
+    advance();
+    return expr;
+  case TOKEN_FALSE:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_BOOL;
+    expr->literal.boolean = false;
 
-  //   return new GroupExpr(expr);
-  // }
-  // else if (match(TOKEN_IDENTIFIER))
-  // {
-  //   return new VarExpr(previous());
-  // }
+    advance();
+    return expr;
+  case TOKEN_NULL:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_NULL;
 
-  // throw error(peek(), "Expected an expression.");
+    advance();
+    return expr;
+  case TOKEN_INTEGER:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_INTEGER;
+    expr->literal.integer = strtol(token.start, NULL, 10);
 
+    advance();
+    return expr;
+  case TOKEN_FLOAT:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_FLOAT;
+    expr->literal.floating = strtod(token.start, NULL);
+
+    advance();
+    return expr;
+  case TOKEN_STRING:
+    expr->type = EXPR_LITERAL;
+    expr->literal.type = LITERAL_STRING;
+    expr->literal.string.value = token.start;
+    expr->literal.string.length = token.length;
+
+    advance();
+    return expr;
+  case TOKEN_LEFT_PAREN:
+    advance();
+
+    expr->type = EXPR_GROUP;
+    expr->group.expr = expression();
+
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
+    return expr;
+  case TOKEN_IDENTIFIER:
+    expr->type = EXPR_VAR;
+    expr->var.name = token;
+
+    advance();
+    return expr;
+  default:
+    advance();
+    break;
+  }
+
+  error(token, "Expected an expression.");
   return NULL;
 }
 

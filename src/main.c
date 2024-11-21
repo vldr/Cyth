@@ -1,6 +1,8 @@
 #include "main.h"
 #include "array.h"
 #include "memory.h"
+#include "parser.h"
+#include "printer.h"
 #include "scanner.h"
 
 #include <stddef.h>
@@ -44,8 +46,16 @@ static void run_file(const char* path)
     return;
 
   scanner_init(source);
-  scanner_scan();
-  scanner_print();
+  ArrayToken tokens = scanner_scan();
+
+  if (had_error)
+    return;
+
+  parser_init(tokens);
+  Expr* expr = parser_parse();
+
+  print_ast(expr);
+  printf("\n");
 }
 
 void report_error(int start_line, int start_column, int end_line, int end_column,

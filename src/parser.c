@@ -1,10 +1,11 @@
 #include "parser.h"
 #include "array.h"
-#include "expression.h"
 #include "main.h"
 #include "scanner.h"
+#include "statement.h"
 
-Expr* expression();
+static Expr* expression();
+static Stmt* statement();
 
 struct
 {
@@ -51,6 +52,7 @@ static Token consume(TokenType type, const char* message)
     return advance();
 
   error(peek(), message);
+
   return peek();
 }
 
@@ -73,46 +75,52 @@ static Expr* primary()
   switch (token.type)
   {
   case TOKEN_TRUE:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_BOOL;
     expr->literal.boolean = true;
 
-    advance();
     return expr;
   case TOKEN_FALSE:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_BOOL;
     expr->literal.boolean = false;
 
-    advance();
     return expr;
   case TOKEN_NULL:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_NULL;
 
-    advance();
     return expr;
   case TOKEN_INTEGER:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_INTEGER;
     expr->literal.integer = strtol(token.start, NULL, 10);
 
-    advance();
     return expr;
   case TOKEN_FLOAT:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_FLOAT;
     expr->literal.floating = strtod(token.start, NULL);
 
-    advance();
     return expr;
   case TOKEN_STRING:
+    advance();
+
     expr->type = EXPR_LITERAL;
     expr->literal.type = LITERAL_STRING;
     expr->literal.string.value = token.start;
     expr->literal.string.length = token.length;
 
-    advance();
     return expr;
   case TOKEN_LEFT_PAREN:
     advance();
@@ -121,15 +129,16 @@ static Expr* primary()
     expr->group.expr = expression();
 
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
+
     return expr;
   case TOKEN_IDENTIFIER:
+    advance();
+
     expr->type = EXPR_VAR;
     expr->var.name = token;
 
-    advance();
     return expr;
   default:
-    advance();
     break;
   }
 
@@ -214,9 +223,32 @@ static Expr* equality()
   return expr;
 }
 
-Expr* expression()
+static Expr* expression()
 {
   return equality();
+}
+
+static Stmt* expression_statement()
+{
+  Expr* expr = expression();
+  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+
+  Stmt* stmt = STMT();
+  stmt->type = STMT_EXPR;
+  stmt->expr.expr = expr;
+
+  return stmt;
+}
+
+static Stmt* statement()
+{
+  Token token = peek();
+
+  switch (token.type)
+  {
+  default:
+    return expression_statement();
+  }
 }
 
 void parser_init(ArrayToken tokens)
@@ -225,7 +257,15 @@ void parser_init(ArrayToken tokens)
   parser.tokens = tokens;
 }
 
-Expr* parser_parse()
+ArrayStmt parser_parse()
 {
-  return expression();
+  ArrayStmt statements;
+  array_init(&statements);
+
+  while (!eof())
+  {
+    array_add(&statements, statement());
+  }
+
+  return statements;
 }

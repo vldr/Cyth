@@ -26,10 +26,7 @@
   } while (0)
 
 typedef struct _EXPR Expr;
-typedef struct _STMT Stmt;
-
 array_def(Expr*, Expr);
-array_def(Stmt*, Stmt);
 
 typedef struct
 {

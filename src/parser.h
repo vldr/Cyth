@@ -2,10 +2,9 @@
 #define parser_h
 
 #include "scanner.h"
-
-typedef struct _EXPR Expr;
+#include "statement.h"
 
 void parser_init(ArrayToken tokens);
-Expr* parser_parse();
+ArrayStmt parser_parse();
 
 #endif

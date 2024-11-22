@@ -4,6 +4,7 @@
 #include "parser.h"
 #include "printer.h"
 #include "scanner.h"
+#include "statement.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -52,10 +53,17 @@ static void run_file(const char* path)
     return;
 
   parser_init(tokens);
-  Expr* expr = parser_parse();
+  ArrayStmt statements = parser_parse();
 
-  print_ast(expr);
-  printf("\n");
+  if (had_error)
+    return;
+
+  Stmt* stmt;
+  array_foreach(&statements, stmt)
+  {
+    print_ast(stmt->expr.expr);
+    printf("\n");
+  }
 }
 
 void report_error(int start_line, int start_column, int end_line, int end_column,
@@ -74,6 +82,7 @@ int main(int argc, char* argv[])
   }
   else
   {
+    run_file("input/test.cy");
     fprintf(stderr, "Usage: cyth [path]\n");
     return -1;
   }

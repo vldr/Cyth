@@ -59,7 +59,7 @@ static void add_custom_token(TokenType type, const char* start, int length)
 
 static void add_token(TokenType type)
 {
-  add_custom_token(type, scanner.start, scanner.current - scanner.start);
+  add_custom_token(type, scanner.start, (int)(scanner.current - scanner.start));
 }
 
 static bool eof()
@@ -124,7 +124,7 @@ static void string()
     advance();
   }
 
-  add_custom_token(TOKEN_STRING, scanner.start + 1, scanner.current - scanner.start - 1);
+  add_custom_token(TOKEN_STRING, scanner.start + 1, (int)(scanner.current - scanner.start - 1));
   advance();
 }
 
@@ -377,7 +377,7 @@ static void scan_indentation()
   if (indentation > array_last(&scanner.indentation))
   {
     array_add(&scanner.indentation, indentation);
-    add_custom_token(TOKEN_INDENT, scanner.start + 1, scanner.current - scanner.start - 1);
+    add_custom_token(TOKEN_INDENT, scanner.start + 1, (int)(scanner.current - scanner.start - 1));
   }
   else if (indentation < array_last(&scanner.indentation))
   {

@@ -7,8 +7,9 @@
 static Expr* expression();
 static Stmt* statement();
 
-struct
+static struct
 {
+  bool error;
   int current;
   ArrayToken tokens;
 } parser;
@@ -16,6 +17,7 @@ struct
 static void error(Token token, const char* message)
 {
   report_error(token.start_line, token.start_column, token.end_line, token.end_column, message);
+  parser.error = true;
 }
 
 static Token peek()
@@ -78,7 +80,7 @@ static Expr* primary()
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_BOOL;
+    expr->literal.type = TYPE_BOOL;
     expr->literal.boolean = true;
 
     return expr;
@@ -86,7 +88,7 @@ static Expr* primary()
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_BOOL;
+    expr->literal.type = TYPE_BOOL;
     expr->literal.boolean = false;
 
     return expr;
@@ -94,14 +96,14 @@ static Expr* primary()
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_NULL;
+    expr->literal.type = TYPE_NULL;
 
     return expr;
   case TOKEN_INTEGER:
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_INTEGER;
+    expr->literal.type = TYPE_INTEGER;
     expr->literal.integer = strtol(token.start, NULL, 10);
 
     return expr;
@@ -109,15 +111,15 @@ static Expr* primary()
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_FLOAT;
-    expr->literal.floating = strtod(token.start, NULL);
+    expr->literal.type = TYPE_FLOAT;
+    expr->literal.floating = (float)strtod(token.start, NULL);
 
     return expr;
   case TOKEN_STRING:
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = LITERAL_STRING;
+    expr->literal.type = TYPE_STRING;
     expr->literal.string.value = token.start;
     expr->literal.string.length = token.length;
 
@@ -253,6 +255,7 @@ static Stmt* statement()
 
 void parser_init(ArrayToken tokens)
 {
+  parser.error = false;
   parser.current = 0;
   parser.tokens = tokens;
 }

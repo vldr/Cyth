@@ -1,5 +1,6 @@
 #include "main.h"
 #include "array.h"
+#include "checker.h"
 #include "memory.h"
 #include "parser.h"
 #include "printer.h"
@@ -10,7 +11,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static bool had_error = false;
+static const char* file_name = NULL;
+static bool error = false;
+
+void report_error(int start_line, int start_column, int end_line, int end_column,
+                  const char* message)
+{
+  fprintf(stderr, "%s:%d:%d-%d:%d: error: %s\n", file_name, start_line, start_column, end_line,
+          end_column, message);
+  error = true;
+}
 
 static char* read_file(const char* path)
 {
@@ -36,7 +46,9 @@ static char* read_file(const char* path)
 
   fclose(file);
 
+  file_name = path;
   buffer[file_size] = '\0';
+
   return buffer;
 }
 
@@ -49,13 +61,19 @@ static void run_file(const char* path)
   scanner_init(source);
   ArrayToken tokens = scanner_scan();
 
-  if (had_error)
+  if (error)
     return;
 
   parser_init(tokens);
   ArrayStmt statements = parser_parse();
 
-  if (had_error)
+  if (error)
+    return;
+
+  checker_init(statements);
+  checker_validate();
+
+  if (error)
     return;
 
   Stmt* stmt;
@@ -64,14 +82,6 @@ static void run_file(const char* path)
     print_ast(stmt->expr.expr);
     printf("\n");
   }
-}
-
-void report_error(int start_line, int start_column, int end_line, int end_column,
-                  const char* message)
-{
-  fprintf(stderr, "%d:%d-%d:%d: error: %s\n", start_line, start_column, end_line, end_column,
-          message);
-  had_error = true;
 }
 
 int main(int argc, char* argv[])

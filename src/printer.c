@@ -30,6 +30,30 @@ void print_ast(Expr* expr)
 {
   switch (expr->type)
   {
+  case EXPR_LITERAL:
+    switch (expr->literal.type)
+    {
+    case TYPE_VOID:
+      printf("void");
+      break;
+    case TYPE_NULL:
+      printf("null");
+      break;
+    case TYPE_BOOL:
+      printf("%s", expr->literal.boolean ? "true" : "false");
+      break;
+    case TYPE_INTEGER:
+      printf("%d", expr->literal.integer);
+      break;
+    case TYPE_FLOAT:
+      printf("%f", expr->literal.floating);
+      break;
+    case TYPE_STRING:
+      printf("\"%.*s\"", expr->literal.string.length, expr->literal.string.value);
+      break;
+    }
+
+    break;
   case EXPR_BINARY:
     printf("(binary ");
     print_ast(expr->binary.left);
@@ -47,27 +71,6 @@ void print_ast(Expr* expr)
     printf("(group ");
     print_ast(expr->group.expr);
     printf(")");
-    break;
-  case EXPR_LITERAL:
-    switch (expr->literal.type)
-    {
-    case LITERAL_NULL:
-      printf("null");
-      break;
-    case LITERAL_BOOL:
-      printf("%s", expr->literal.boolean ? "true" : "false");
-      break;
-    case LITERAL_INTEGER:
-      printf("%d", expr->literal.integer);
-      break;
-    case LITERAL_FLOAT:
-      printf("%f", expr->literal.floating);
-      break;
-    case LITERAL_STRING:
-      printf("\"%.*s\"", expr->literal.string.length, expr->literal.string.value);
-      break;
-    }
-
     break;
   case EXPR_VAR:
     printf("%.*s", expr->var.name.length, expr->var.name.start);

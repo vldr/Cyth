@@ -28,6 +28,32 @@
 typedef struct _EXPR Expr;
 array_def(Expr*, Expr);
 
+typedef enum
+{
+  TYPE_VOID,
+  TYPE_NULL,
+  TYPE_BOOL,
+  TYPE_INTEGER,
+  TYPE_FLOAT,
+  TYPE_STRING,
+} Type;
+
+typedef struct
+{
+  Type type;
+
+  union {
+    bool boolean;
+    int integer;
+    float floating;
+    struct
+    {
+      const char* value;
+      int length;
+    } string;
+  };
+} LiteralExpr;
+
 typedef struct
 {
   Expr* left;
@@ -48,29 +74,6 @@ typedef struct
 
 typedef struct
 {
-  enum
-  {
-    LITERAL_NULL,
-    LITERAL_BOOL,
-    LITERAL_INTEGER,
-    LITERAL_FLOAT,
-    LITERAL_STRING,
-  } type;
-
-  union {
-    bool boolean;
-    int integer;
-    float floating;
-    struct
-    {
-      const char* value;
-      int length;
-    } string;
-  };
-} LiteralExpr;
-
-typedef struct
-{
   Token name;
 } VarExpr;
 
@@ -88,10 +91,10 @@ typedef struct
 
 typedef enum
 {
+  EXPR_LITERAL,
   EXPR_BINARY,
   EXPR_UNARY,
   EXPR_GROUP,
-  EXPR_LITERAL,
   EXPR_VAR,
   EXPR_ASSIGN,
   EXPR_CALL,

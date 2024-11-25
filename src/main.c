@@ -92,7 +92,6 @@ int main(int argc, char* argv[])
   }
   else
   {
-    run_file("input/test.cy");
     fprintf(stderr, "Usage: cyth [path]\n");
     return -1;
   }

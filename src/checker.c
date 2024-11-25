@@ -2,6 +2,7 @@
 #include "array.h"
 #include "expression.h"
 #include "main.h"
+#include "memory.h"
 #include "scanner.h"
 
 static struct
@@ -19,7 +20,21 @@ static void error(Token token, const char* message)
   checker.error = true;
 }
 
-static Type check_expression(Expr* expression)
+static void error_type_mismatch(Token token)
+{
+  error(token, "Type mismatch.");
+}
+
+static void error_operation_not_defined(Token token)
+{
+  error(token, memory_sprintf(&memory, "Operator %c not defined for types.", *token.start));
+}
+
+static void implicit_cast()
+{
+}
+
+static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
   {
@@ -28,25 +43,42 @@ static Type check_expression(Expr* expression)
   case EXPR_GROUP:
     return check_expression(expression->group.expr);
   case EXPR_BINARY: {
-    Type left = check_expression(expression->binary.left);
-    Type right = check_expression(expression->binary.right);
+    Token op = expression->binary.op;
+    DataType left = check_expression(expression->binary.left);
+    DataType right = check_expression(expression->binary.right);
 
     if (left != right)
     {
-      error(expression->binary.op, memory_sprintf(&memory, "Type mismatch"));
+      error_type_mismatch(expression->binary.op);
+    }
+
+    DataType result = left;
+
+    switch (op.type)
+    {
+    default:
+      error_operation_not_defined(op);
+      break;
     }
 
     return left;
   }
   case EXPR_UNARY: {
     Token op = expression->unary.op;
-    Type type = check_expression(expression->unary.expr);
+    DataType type = check_expression(expression->unary.expr);
 
     if (op.type == TOKEN_MINUS)
     {
-      if (type != TYPE_INTEGER || type != TYPE_FLOAT)
+      if (type != TYPE_INTEGER && type != TYPE_FLOAT)
       {
-        error(expression->binary.op, memory_sprintf(&memory, "Type mismatch"));
+        error_type_mismatch(op);
+      }
+    }
+    else if (op.type == TOKEN_BANG)
+    {
+      if (type != TYPE_BOOL)
+      {
+        error_type_mismatch(op);
       }
     }
 
@@ -55,6 +87,9 @@ static Type check_expression(Expr* expression)
   case EXPR_VAR:
   case EXPR_ASSIGN:
   case EXPR_CALL:
+    break;
+  case EXPR_CAST:
+    return expression->data_type;
     break;
   }
 

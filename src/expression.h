@@ -36,11 +36,11 @@ typedef enum
   TYPE_INTEGER,
   TYPE_FLOAT,
   TYPE_STRING,
-} Type;
+} DataType;
 
 typedef struct
 {
-  Type type;
+  DataType type;
 
   union {
     bool boolean;
@@ -89,6 +89,12 @@ typedef struct
   ArrayExpr arguments;
 } CallExpr;
 
+typedef struct
+{
+  DataType current_data_type;
+  Expr* expr;
+} CastExpr;
+
 typedef enum
 {
   EXPR_LITERAL,
@@ -98,11 +104,13 @@ typedef enum
   EXPR_VAR,
   EXPR_ASSIGN,
   EXPR_CALL,
+  EXPR_CAST,
 } ExprType;
 
 struct _EXPR
 {
   ExprType type;
+  DataType data_type;
 
   union {
     BinaryExpr binary;
@@ -112,6 +120,7 @@ struct _EXPR
     VarExpr var;
     AssignExpr assign;
     CallExpr call;
+    CastExpr cast;
   };
 };
 

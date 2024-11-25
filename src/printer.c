@@ -63,7 +63,7 @@ void print_ast(Expr* expr)
     break;
   case EXPR_UNARY:
     printf("(unary ");
-    printf(" %c ", *expr->unary.op.start);
+    printf("%c", *expr->unary.op.start);
     print_ast(expr->unary.expr);
     printf(")");
     break;
@@ -76,6 +76,7 @@ void print_ast(Expr* expr)
     printf("%.*s", expr->var.name.length, expr->var.name.start);
   case EXPR_ASSIGN:
   case EXPR_CALL:
+  case EXPR_CAST:
     break;
   }
 }

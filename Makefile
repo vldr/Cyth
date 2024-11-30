@@ -1,8 +1,7 @@
 OUTPUT = output/cyth
-CC = clang
-CXX = clang++
-CCFLAGS = -Ithird_party/includes  -MMD -O0 -Wall -Wextra -pedantic
-LINKFLAGS = -Lthird_party/libs -lpthread -lbinaryen
+CXX = clang
+CXXFLAGS = -Ithird_party/includes -MMD -O0 -Wall -Wextra -pedantic
+LINKFLAGS = -Wl,-rpath,third_party/libs -Lthird_party/libs -lbinaryen -fsanitize=address -fsanitize=undefined
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(patsubst src/%, objs/%, $(patsubst %.c, %.o, $(SRCS)))
@@ -10,10 +9,6 @@ DEPS = $(patsubst %.o, %.d, $(OBJS))
 
 ifeq ($(strip $(shell which $(CXX))),)
 $(error $(CXX) is not installed)
-endif
-
-ifeq ($(strip $(shell which $(CC))),)
-$(error $(CC) is not installed)
 endif
  
 all: objs/ output/ build 
@@ -28,7 +23,7 @@ build: $(OBJS)
 	$(CXX) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
 
 objs/%.o: src/%.c
-	$(CC) $(CCFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: build
 	./$(OUTPUT)

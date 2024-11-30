@@ -101,7 +101,7 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
   return ref;
 }
 
-static BinaryenExpressionRef generate_statements()
+static BinaryenExpressionRef generate_statements(void)
 {
   ArrayBinaryenExpressionRef list;
   array_init(&list);

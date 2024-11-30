@@ -1,7 +1,7 @@
 OUTPUT = output/cyth
 CXX = clang
 CXXFLAGS = -Ithird_party/includes -MMD -O0 -Wall -Wextra -pedantic
-LINKFLAGS = -Wl,-rpath,third_party/libs -Lthird_party/libs -lbinaryen -fsanitize=address -fsanitize=undefined
+LINKFLAGS = -Wl,-rpath,third_party/libs -Lthird_party/libs -lbinaryen
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(patsubst src/%, objs/%, $(patsubst %.c, %.o, $(SRCS)))

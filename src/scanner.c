@@ -62,29 +62,29 @@ static void add_token(TokenType type)
   add_custom_token(type, scanner.start, (int)(scanner.current - scanner.start));
 }
 
-static bool eof()
+static bool eof(void)
 {
   return *scanner.current == '\0';
 }
 
-static void newline()
+static void newline(void)
 {
   scanner.current_column = 1;
   scanner.current_line++;
 }
 
-static char advance()
+static char advance(void)
 {
   scanner.current_column++;
   return *scanner.current++;
 }
 
-static char peek()
+static char peek(void)
 {
   return *scanner.current;
 }
 
-static char peek_next()
+static char peek_next(void)
 {
   if (eof())
     return '\0';
@@ -103,7 +103,7 @@ static bool match(char c)
   return false;
 }
 
-static void string()
+static void string(void)
 {
   while (peek() != '"')
   {
@@ -128,7 +128,7 @@ static void string()
   advance();
 }
 
-static void number()
+static void number(void)
 {
   TokenType type = TOKEN_INTEGER;
 
@@ -148,14 +148,14 @@ static void number()
   add_token(type);
 }
 
-static void literal()
+static void literal(void)
 {
   while (isalnum(peek()) || peek() == '_')
     advance();
 
   TokenType type = TOKEN_IDENTIFIER;
 
-  switch (*scanner.start)
+  switch (scanner.start[0])
   {
   default:
     KEYWORD_GROUP('a')
@@ -164,37 +164,70 @@ static void literal()
     KEYWORD("class", TOKEN_CLASS)
     KEYWORD_GROUP('e')
     KEYWORD("else", TOKEN_ELSE)
-    KEYWORD_GROUP('f')
-    KEYWORD("false", TOKEN_FALSE)
-    KEYWORD("for", TOKEN_FOR)
-    KEYWORD_GROUP('i')
-    KEYWORD("if", TOKEN_IF)
-    KEYWORD_GROUP('n')
-    KEYWORD("null", TOKEN_NULL)
-    KEYWORD("not", TOKEN_NOT)
     KEYWORD_GROUP('o')
     KEYWORD("or", TOKEN_OR)
     KEYWORD_GROUP('r')
     KEYWORD("return", TOKEN_RETURN)
     KEYWORD_GROUP('s')
     KEYWORD("super", TOKEN_SUPER)
-    KEYWORD_GROUP('t')
-    KEYWORD("this", TOKEN_THIS)
-    KEYWORD("true", TOKEN_TRUE)
     KEYWORD_GROUP('w')
     KEYWORD("while", TOKEN_WHILE)
+
+    KEYWORD_GROUP('f')
+    switch (scanner.start[1])
+    {
+    default:
+      KEYWORD_GROUP('a')
+      KEYWORD("false", TOKEN_FALSE)
+      KEYWORD_GROUP('o')
+      KEYWORD("for", TOKEN_FOR)
+    }
+
+    KEYWORD_GROUP('i')
+    switch (scanner.start[1])
+    {
+    default:
+      KEYWORD_GROUP('f')
+      KEYWORD("if", TOKEN_IF)
+      KEYWORD_GROUP('n')
+      KEYWORD("in", TOKEN_IN)
+    }
+
+    KEYWORD_GROUP('n')
+    switch (scanner.start[1])
+    {
+      KEYWORD_GROUP('u')
+      KEYWORD("null", TOKEN_NULL)
+      KEYWORD_GROUP('o')
+      KEYWORD("not", TOKEN_NOT)
+    }
+
+    KEYWORD_GROUP('t')
+    switch (scanner.start[1])
+    {
+      KEYWORD_GROUP('h')
+      KEYWORD("this", TOKEN_THIS)
+      KEYWORD_GROUP('r')
+      KEYWORD("true", TOKEN_TRUE)
+    }
   }
 
   add_token(type);
 }
 
-static void comment()
+static void comment(void)
 {
   while (peek() != '\n' && peek() != '\0')
     advance();
+
+  if (peek() == '\n')
+  {
+    advance();
+    newline();
+  }
 }
 
-static void scan_token()
+static void scan_token(void)
 {
   char c = advance();
 
@@ -326,7 +359,7 @@ static void scan_token()
   }
 }
 
-static void scan_indentation()
+static void scan_indentation(void)
 {
   if (scanner.multi_line || scanner.current_column != 1)
     return;
@@ -411,7 +444,7 @@ void scanner_init(const char* source)
   array_add(&scanner.indentation, 0);
 }
 
-ArrayToken scanner_scan()
+ArrayToken scanner_scan(void)
 {
   for (;;)
   {

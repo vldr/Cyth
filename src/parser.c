@@ -4,8 +4,8 @@
 #include "scanner.h"
 #include "statement.h"
 
-static Expr* expression();
-static Stmt* statement();
+static Expr* expression(void);
+static Stmt* statement(void);
 
 static struct
 {
@@ -20,12 +20,12 @@ static void error(Token token, const char* message)
   parser.error = true;
 }
 
-static Token peek()
+static Token peek(void)
 {
   return array_at(&parser.tokens, parser.current);
 }
 
-static Token previous()
+static Token previous(void)
 {
   return array_at(&parser.tokens, parser.current - 1);
 }
@@ -35,12 +35,12 @@ static bool check(TokenType type)
   return peek().type == type;
 }
 
-static bool eof()
+static bool eof(void)
 {
   return peek().type == TOKEN_EOF;
 }
 
-static Token advance()
+static Token advance(void)
 {
   if (!eof())
     parser.current++;
@@ -69,7 +69,7 @@ bool match(TokenType type)
   return false;
 }
 
-static Expr* primary()
+static Expr* primary(void)
 {
   Expr* expr = EXPR();
   Token token = peek();
@@ -148,7 +148,7 @@ static Expr* primary()
   return NULL;
 }
 
-static Expr* prefix_unary()
+static Expr* prefix_unary(void)
 {
   if (match(TOKEN_BANG) || match(TOKEN_MINUS))
   {
@@ -164,7 +164,7 @@ static Expr* prefix_unary()
   return primary();
 }
 
-static Expr* factor()
+static Expr* factor(void)
 {
   Expr* expr = prefix_unary();
 
@@ -179,7 +179,7 @@ static Expr* factor()
   return expr;
 }
 
-static Expr* term()
+static Expr* term(void)
 {
   Expr* expr = factor();
 
@@ -194,7 +194,7 @@ static Expr* term()
   return expr;
 }
 
-static Expr* comparison()
+static Expr* comparison(void)
 {
   Expr* expr = term();
 
@@ -210,7 +210,7 @@ static Expr* comparison()
   return expr;
 }
 
-static Expr* equality()
+static Expr* equality(void)
 {
   Expr* expr = comparison();
 
@@ -225,12 +225,12 @@ static Expr* equality()
   return expr;
 }
 
-static Expr* expression()
+static Expr* expression(void)
 {
   return equality();
 }
 
-static Stmt* expression_statement()
+static Stmt* expression_statement(void)
 {
   Expr* expr = expression();
   consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
@@ -242,7 +242,7 @@ static Stmt* expression_statement()
   return stmt;
 }
 
-static Stmt* statement()
+static Stmt* statement(void)
 {
   Token token = peek();
 
@@ -260,7 +260,7 @@ void parser_init(ArrayToken tokens)
   parser.tokens = tokens;
 }
 
-ArrayStmt parser_parse()
+ArrayStmt parser_parse(void)
 {
   ArrayStmt statements;
   array_init(&statements);

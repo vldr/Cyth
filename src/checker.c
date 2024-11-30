@@ -2,7 +2,6 @@
 #include "array.h"
 #include "expression.h"
 #include "main.h"
-#include "memory.h"
 #include "scanner.h"
 
 static struct
@@ -25,14 +24,14 @@ static void error_type_mismatch(Token token)
   error(token, "Type mismatch.");
 }
 
-static void error_operation_not_defined(Token token)
-{
-  error(token, memory_sprintf(&memory, "Operator %c not defined for types.", *token.start));
-}
+// static void error_operation_not_defined(Token token)
+// {
+//   error(token, memory_sprintf(&memory, "Operator %c not defined for types.", *token.start));
+// }
 
-static void implicit_cast()
-{
-}
+// static void implicit_cast()
+// {
+// }
 
 static DataType check_expression(Expr* expression)
 {
@@ -43,7 +42,7 @@ static DataType check_expression(Expr* expression)
   case EXPR_GROUP:
     return check_expression(expression->group.expr);
   case EXPR_BINARY: {
-    Token op = expression->binary.op;
+    // Token op = expression->binary.op;
     DataType left = check_expression(expression->binary.left);
     DataType right = check_expression(expression->binary.right);
 
@@ -52,15 +51,14 @@ static DataType check_expression(Expr* expression)
       error_type_mismatch(expression->binary.op);
     }
 
-    DataType result = left;
+    // switch (op.type)
+    // {
+    // default:
+    //   error_operation_not_defined(op);
+    //   break;
+    // }
 
-    switch (op.type)
-    {
-    default:
-      error_operation_not_defined(op);
-      break;
-    }
-
+    expression->data_type = left;
     return left;
   }
   case EXPR_UNARY: {
@@ -82,6 +80,7 @@ static DataType check_expression(Expr* expression)
       }
     }
 
+    expression->data_type = type;
     break;
   }
   case EXPR_VAR:
@@ -114,7 +113,7 @@ void checker_init(ArrayStmt statements)
   checker.statements = statements;
 }
 
-void checker_validate()
+void checker_validate(void)
 {
   Stmt* statement;
   array_foreach(&checker.statements, statement)

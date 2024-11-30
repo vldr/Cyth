@@ -1,5 +1,1 @@
-def hello()
-	print("hello")
-    print("hi")
-	print("hello")
-    print("bye")
+and class else false for if in null or not return super this true while

@@ -5,6 +5,6 @@
 #include "statement.h"
 
 void parser_init(ArrayToken tokens);
-ArrayStmt parser_parse();
+ArrayStmt parser_parse(void);
 
 #endif

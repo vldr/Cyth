@@ -4,6 +4,6 @@
 #include "statement.h"
 
 void checker_init(ArrayStmt statements);
-void checker_validate();
+void checker_validate(void);
 
 #endif

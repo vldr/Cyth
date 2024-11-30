@@ -1,6 +1,7 @@
 #include "main.h"
 #include "array.h"
 #include "checker.h"
+#include "codegen.h"
 #include "memory.h"
 #include "parser.h"
 #include "printer.h"
@@ -76,12 +77,17 @@ static void run_file(const char* path)
   if (error)
     return;
 
+  codegen_init(statements);
+  codegen_generate();
+
   Stmt* stmt;
   array_foreach(&statements, stmt)
   {
     print_ast(stmt->expr.expr);
     printf("\n");
   }
+
+  print_tokens(tokens);
 }
 
 int main(int argc, char* argv[])

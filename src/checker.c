@@ -3,6 +3,7 @@
 #include "expression.h"
 #include "main.h"
 #include "scanner.h"
+#include <assert.h>
 
 static DataType check_expression(Expr* expression);
 static void check_statement(Stmt* statement);
@@ -35,6 +36,21 @@ static void error_type_mismatch(Token token)
 // static void implicit_cast()
 // {
 // }
+
+static DataType check_cast_expression(Expr* expression)
+{
+  return expression->data_type;
+}
+
+static DataType check_literal_expression(Expr* expression)
+{
+  return expression->literal.type;
+}
+
+static DataType check_group_expression(Expr* expression)
+{
+  return check_expression(expression->group.expr);
+}
 
 static DataType check_unary_expression(Expr* expression)
 {
@@ -87,15 +103,16 @@ static DataType check_expression(Expr* expression)
   switch (expression->type)
   {
   case EXPR_CAST:
-    return expression->data_type;
+    return check_cast_expression(expression);
   case EXPR_LITERAL:
-    return expression->literal.type;
+    return check_literal_expression(expression);
   case EXPR_GROUP:
-    return check_expression(expression->group.expr);
+    return check_group_expression(expression);
   case EXPR_BINARY:
     return check_binary_expression(expression);
   case EXPR_UNARY:
     return check_unary_expression(expression);
+
   default:
     assert(!"Unhanled expression");
   }
@@ -110,6 +127,9 @@ static void check_statement(Stmt* statement)
   case STMT_EXPR:
     check_expression(statement->expr.expr);
     break;
+
+  default:
+    assert(!"Unhandled statement");
   }
 }
 

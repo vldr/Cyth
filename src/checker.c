@@ -28,14 +28,41 @@ static void error_type_mismatch(Token token)
   error(token, "Type mismatch.");
 }
 
-// static void error_operation_not_defined(Token token)
-// {
-//   error(token, memory_sprintf(&memory, "Operator %c not defined for types.", *token.start));
-// }
+static void error_operation_not_defined(Token token, const char* type)
+{
+  error(token, memory_sprintf(&memory, "Operator %c only defined for %s.", *token.start, type));
+}
 
-// static void implicit_cast()
-// {
-// }
+static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
+{
+  Expr** target;
+  DataType* target_type;
+
+  if (*left == from && *right == to)
+  {
+    target_type = left;
+    target = &expression->binary.left;
+  }
+  else if (*left == to && *right == from)
+  {
+    target_type = right;
+    target = &expression->binary.right;
+  }
+  else
+  {
+    return false;
+  }
+
+  Expr* cast_expression = EXPR();
+  cast_expression->type = EXPR_CAST;
+  cast_expression->data_type = to;
+  cast_expression->cast.expr = *target;
+
+  *target = cast_expression;
+  *target_type = to;
+
+  return true;
+}
 
 static DataType check_cast_expression(Expr* expression)
 {
@@ -44,12 +71,14 @@ static DataType check_cast_expression(Expr* expression)
 
 static DataType check_literal_expression(Expr* expression)
 {
-  return expression->literal.type;
+  expression->data_type = expression->literal.type;
+  return expression->data_type;
 }
 
 static DataType check_group_expression(Expr* expression)
 {
-  return check_expression(expression->group.expr);
+  expression->data_type = check_expression(expression->group.expr);
+  return expression->data_type;
 }
 
 static DataType check_unary_expression(Expr* expression)
@@ -80,21 +109,44 @@ static DataType check_binary_expression(Expr* expression)
 {
   DataType left = check_expression(expression->binary.left);
   DataType right = check_expression(expression->binary.right);
-  Token op = expression->binary.op;
 
   if (left != right)
   {
-    error_type_mismatch(expression->binary.op);
+    if (!upcast(expression, &left, &right, TYPE_INTEGER, TYPE_FLOAT))
+    {
+      error_type_mismatch(expression->binary.op);
+    }
   }
 
-  // switch (op.type)
-  // {
-  // default:
-  //   error_operation_not_defined(op);
-  //   break;
-  // }
-
   expression->data_type = left;
+
+  Token op = expression->binary.op;
+
+  switch (op.type)
+  {
+  case TOKEN_AND:
+  case TOKEN_OR:
+  case TOKEN_NOT:
+    if (expression->data_type != TYPE_BOOL)
+      error_operation_not_defined(op, "'bool'");
+
+    break;
+  case TOKEN_PLUS:
+  case TOKEN_MINUS:
+  case TOKEN_STAR:
+  case TOKEN_SLASH:
+  case TOKEN_PLUS_EQUAL:
+  case TOKEN_MINUS_EQUAL:
+  case TOKEN_STAR_EQUAL:
+  case TOKEN_SLASH_EQUAL:
+    if (expression->data_type != TYPE_INTEGER && expression->data_type != TYPE_FLOAT)
+      error_operation_not_defined(op, "'int' and 'float'");
+
+    break;
+  default:
+    error_operation_not_defined(op, "type");
+  }
+
   return left;
 }
 

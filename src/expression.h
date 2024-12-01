@@ -91,7 +91,6 @@ typedef struct
 
 typedef struct
 {
-  DataType current_data_type;
   Expr* expr;
 } CastExpr;
 

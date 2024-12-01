@@ -76,6 +76,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else
       assert(!"Unsupported binary type for /");
 
+    break;
   default:
     assert(!"Unhandled binary operation");
     break;
@@ -110,6 +111,17 @@ static BinaryenExpressionRef generate_unary_expression(Expr* expression)
   }
 }
 
+static BinaryenExpressionRef generate_cast_expression(Expr* expression)
+{
+  if (expression->data_type == TYPE_FLOAT && expression->cast.expr->data_type == TYPE_INTEGER)
+  {
+    BinaryenExpressionRef value = generate_expression(expression->cast.expr);
+    return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
+  }
+
+  assert(!"Unsupported cast type");
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -122,6 +134,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_expression(expression->group.expr);
   case EXPR_UNARY:
     return generate_unary_expression(expression);
+  case EXPR_CAST:
+    return generate_cast_expression(expression);
 
   default:
     assert(!"Unhandled expression");

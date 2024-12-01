@@ -4,6 +4,9 @@
 #include "main.h"
 #include "scanner.h"
 
+static DataType check_expression(Expr* expression);
+static void check_statement(Stmt* statement);
+
 static struct
 {
   bool error;
@@ -33,66 +36,69 @@ static void error_type_mismatch(Token token)
 // {
 // }
 
+static DataType check_unary_expression(Expr* expression)
+{
+  Token op = expression->unary.op;
+  DataType type = check_expression(expression->unary.expr);
+
+  if (op.type == TOKEN_MINUS)
+  {
+    if (type != TYPE_INTEGER && type != TYPE_FLOAT)
+    {
+      error_type_mismatch(op);
+    }
+  }
+  else if (op.type == TOKEN_BANG)
+  {
+    if (type != TYPE_BOOL)
+    {
+      error_type_mismatch(op);
+    }
+  }
+
+  expression->data_type = type;
+  return type;
+}
+
+static DataType check_binary_expression(Expr* expression)
+{
+  DataType left = check_expression(expression->binary.left);
+  DataType right = check_expression(expression->binary.right);
+  Token op = expression->binary.op;
+
+  if (left != right)
+  {
+    error_type_mismatch(expression->binary.op);
+  }
+
+  // switch (op.type)
+  // {
+  // default:
+  //   error_operation_not_defined(op);
+  //   break;
+  // }
+
+  expression->data_type = left;
+  return left;
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
   {
+  case EXPR_CAST:
+    return expression->data_type;
   case EXPR_LITERAL:
     return expression->literal.type;
   case EXPR_GROUP:
     return check_expression(expression->group.expr);
-  case EXPR_BINARY: {
-    // Token op = expression->binary.op;
-    DataType left = check_expression(expression->binary.left);
-    DataType right = check_expression(expression->binary.right);
-
-    if (left != right)
-    {
-      error_type_mismatch(expression->binary.op);
-    }
-
-    // switch (op.type)
-    // {
-    // default:
-    //   error_operation_not_defined(op);
-    //   break;
-    // }
-
-    expression->data_type = left;
-    return left;
+  case EXPR_BINARY:
+    return check_binary_expression(expression);
+  case EXPR_UNARY:
+    return check_unary_expression(expression);
+  default:
+    assert(!"Unhanled expression");
   }
-  case EXPR_UNARY: {
-    Token op = expression->unary.op;
-    DataType type = check_expression(expression->unary.expr);
-
-    if (op.type == TOKEN_MINUS)
-    {
-      if (type != TYPE_INTEGER && type != TYPE_FLOAT)
-      {
-        error_type_mismatch(op);
-      }
-    }
-    else if (op.type == TOKEN_BANG)
-    {
-      if (type != TYPE_BOOL)
-      {
-        error_type_mismatch(op);
-      }
-    }
-
-    expression->data_type = type;
-    break;
-  }
-  case EXPR_VAR:
-  case EXPR_ASSIGN:
-  case EXPR_CALL:
-    break;
-  case EXPR_CAST:
-    return expression->data_type;
-    break;
-  }
-
-  return TYPE_VOID;
 }
 
 static void check_statement(Stmt* statement)

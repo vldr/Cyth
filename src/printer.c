@@ -74,7 +74,7 @@ void print_ast(Expr* expr)
   switch (expr->type)
   {
   case EXPR_LITERAL:
-    switch (expr->literal.type)
+    switch (expr->literal.data_type)
     {
     case TYPE_VOID:
       printf("void");
@@ -100,13 +100,13 @@ void print_ast(Expr* expr)
   case EXPR_BINARY:
     printf("(binary ");
     print_ast(expr->binary.left);
-    printf(" %c ", *expr->binary.op.start);
+    printf(" %.*s ", expr->binary.op.length, expr->binary.op.start);
     print_ast(expr->binary.right);
     printf(")");
     break;
   case EXPR_UNARY:
     printf("(unary ");
-    printf("%c", *expr->unary.op.start);
+    printf("%.*s ", expr->unary.op.length, expr->unary.op.start);
     print_ast(expr->unary.expr);
     printf(")");
     break;
@@ -117,9 +117,12 @@ void print_ast(Expr* expr)
     break;
   case EXPR_VAR:
     printf("%.*s", expr->var.name.length, expr->var.name.start);
+  case EXPR_CAST:
+    printf("(cast ");
+    print_ast(expr->cast.expr);
+    printf(")");
   case EXPR_ASSIGN:
   case EXPR_CALL:
-  case EXPR_CAST:
     break;
   }
 }

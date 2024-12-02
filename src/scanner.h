@@ -80,6 +80,6 @@ typedef struct
 array_def(Token, Token);
 
 void scanner_init(const char* source);
-ArrayToken scanner_scan();
+ArrayToken scanner_scan(void);
 
 #endif

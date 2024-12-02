@@ -1,3 +1,1 @@
--2.5 + 10
--2 + 10.5 / 2
-#true and false
+not (true) and true

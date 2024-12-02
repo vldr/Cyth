@@ -30,7 +30,8 @@ static void error_type_mismatch(Token token)
 
 static void error_operation_not_defined(Token token, const char* type)
 {
-  error(token, memory_sprintf(&memory, "Operator %c only defined for %s.", *token.start, type));
+  error(token, memory_sprintf(&memory, "Operator '%.*s' only defined for %s.", token.length,
+                              token.start, type));
 }
 
 static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
@@ -71,7 +72,7 @@ static DataType check_cast_expression(Expr* expression)
 
 static DataType check_literal_expression(Expr* expression)
 {
-  expression->data_type = expression->literal.type;
+  expression->data_type = expression->literal.data_type;
   return expression->data_type;
 }
 
@@ -93,7 +94,7 @@ static DataType check_unary_expression(Expr* expression)
       error_type_mismatch(op);
     }
   }
-  else if (op.type == TOKEN_BANG)
+  else if (op.type == TOKEN_BANG || op.type == TOKEN_NOT)
   {
     if (type != TYPE_BOOL)
     {
@@ -107,6 +108,7 @@ static DataType check_unary_expression(Expr* expression)
 
 static DataType check_binary_expression(Expr* expression)
 {
+  Token op = expression->binary.op;
   DataType left = check_expression(expression->binary.left);
   DataType right = check_expression(expression->binary.right);
 
@@ -118,36 +120,48 @@ static DataType check_binary_expression(Expr* expression)
     }
   }
 
+  expression->binary.data_type = left;
   expression->data_type = left;
-
-  Token op = expression->binary.op;
 
   switch (op.type)
   {
   case TOKEN_AND:
   case TOKEN_OR:
-  case TOKEN_NOT:
-    if (expression->data_type != TYPE_BOOL)
+    if (left != TYPE_BOOL)
       error_operation_not_defined(op, "'bool'");
 
+    break;
+  case TOKEN_EQUAL_EQUAL:
+  case TOKEN_BANG_EQUAL:
+  case TOKEN_GREATER:
+  case TOKEN_GREATER_EQUAL:
+  case TOKEN_LESS:
+  case TOKEN_LESS_EQUAL:
+    if (left != TYPE_INTEGER && left != TYPE_FLOAT && left != TYPE_BOOL)
+      error_operation_not_defined(op, "'int', 'float', 'bool");
+
+    expression->data_type = TYPE_BOOL;
     break;
   case TOKEN_PLUS:
   case TOKEN_MINUS:
   case TOKEN_STAR:
   case TOKEN_SLASH:
-  case TOKEN_PLUS_EQUAL:
-  case TOKEN_MINUS_EQUAL:
-  case TOKEN_STAR_EQUAL:
-  case TOKEN_SLASH_EQUAL:
-    if (expression->data_type != TYPE_INTEGER && expression->data_type != TYPE_FLOAT)
+    if (left != TYPE_INTEGER && left != TYPE_FLOAT)
       error_operation_not_defined(op, "'int' and 'float'");
 
     break;
+
+  case TOKEN_PERCENT:
+    if (left != TYPE_INTEGER)
+      error_operation_not_defined(op, "'int'");
+
+    break;
+
   default:
-    error_operation_not_defined(op, "type");
+    error_operation_not_defined(op, "'unknown'");
   }
 
-  return left;
+  return expression->data_type;
 }
 
 static DataType check_expression(Expr* expression)

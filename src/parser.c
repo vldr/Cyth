@@ -80,7 +80,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_BOOL;
+    expr->literal.data_type = TYPE_BOOL;
     expr->literal.boolean = true;
 
     return expr;
@@ -88,7 +88,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_BOOL;
+    expr->literal.data_type = TYPE_BOOL;
     expr->literal.boolean = false;
 
     return expr;
@@ -96,14 +96,14 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_NULL;
+    expr->literal.data_type = TYPE_NULL;
 
     return expr;
   case TOKEN_INTEGER:
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_INTEGER;
+    expr->literal.data_type = TYPE_INTEGER;
     expr->literal.integer = strtol(token.start, NULL, 10);
 
     return expr;
@@ -111,7 +111,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_FLOAT;
+    expr->literal.data_type = TYPE_FLOAT;
     expr->literal.floating = (float)strtod(token.start, NULL);
 
     return expr;
@@ -119,7 +119,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.type = TYPE_STRING;
+    expr->literal.data_type = TYPE_STRING;
     expr->literal.string.value = token.start;
     expr->literal.string.length = token.length;
 
@@ -150,7 +150,7 @@ static Expr* primary(void)
 
 static Expr* prefix_unary(void)
 {
-  if (match(TOKEN_BANG) || match(TOKEN_MINUS))
+  if (match(TOKEN_BANG) || match(TOKEN_NOT) || match(TOKEN_MINUS))
   {
     Token op = previous();
     Expr* expr = prefix_unary();
@@ -225,9 +225,39 @@ static Expr* equality(void)
   return expr;
 }
 
+static Expr* logic_and(void)
+{
+  Expr* expr = equality();
+
+  while (match(TOKEN_AND))
+  {
+    Token op = previous();
+    Expr* right = equality();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
+static Expr* logic_or(void)
+{
+  Expr* expr = logic_and();
+
+  while (match(TOKEN_OR))
+  {
+    Token op = previous();
+    Expr* right = logic_and();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
 static Expr* expression(void)
 {
-  return equality();
+  return logic_or();
 }
 
 static Stmt* expression_statement(void)

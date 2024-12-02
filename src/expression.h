@@ -40,7 +40,7 @@ typedef enum
 
 typedef struct
 {
-  DataType type;
+  DataType data_type;
 
   union {
     bool boolean;
@@ -56,6 +56,8 @@ typedef struct
 
 typedef struct
 {
+  DataType data_type;
+
   Expr* left;
   Token op;
   Expr* right;

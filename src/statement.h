@@ -2,7 +2,7 @@
 #define statement_h
 
 #include "expression.h"
-#include "scanner.h"
+#include "lexer.h"
 
 #define STMT() ((Stmt*)memory_alloc(&memory, sizeof(Stmt)))
 
@@ -14,9 +14,19 @@ typedef struct
   Expr* expr;
 } ExprStmt;
 
+typedef struct
+{
+  Token type;
+  Token name;
+  ArrayToken param_types;
+  ArrayToken params;
+  ArrayStmt body;
+} FuncStmt;
+
 typedef enum
 {
   STMT_EXPR,
+  STMT_FUNCTION_DECL,
 } StmtType;
 
 struct _STMT
@@ -25,6 +35,7 @@ struct _STMT
 
   union {
     ExprStmt expr;
+    FuncStmt func;
   };
 };
 

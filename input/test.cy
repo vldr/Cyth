@@ -1,1 +1,2 @@
-not (true) and true
+void a()
+    2 > 10.5 + 2

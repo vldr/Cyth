@@ -1,5 +1,4 @@
 #include "printer.h"
-#include "scanner.h"
 
 #include <stdio.h>
 
@@ -11,6 +10,7 @@ void print_tokens(ArrayToken tokens)
     static const char* types[] = {"TOKEN_INDENT",
                                   "TOKEN_DEDENT",
                                   "TOKEN_NEWLINE",
+
                                   "TOKEN_LEFT_PAREN",
                                   "TOKEN_RIGHT_PAREN",
                                   "TOKEN_LEFT_BRACE",
@@ -33,6 +33,7 @@ void print_tokens(ArrayToken tokens)
                                   "TOKEN_STAR_EQUAL",
                                   "TOKEN_PERCENT",
                                   "TOKEN_PERCENT_EQUAL",
+
                                   "TOKEN_BANG",
                                   "TOKEN_BANG_EQUAL",
                                   "TOKEN_EQUAL",
@@ -41,10 +42,17 @@ void print_tokens(ArrayToken tokens)
                                   "TOKEN_GREATER_EQUAL",
                                   "TOKEN_LESS",
                                   "TOKEN_LESS_EQUAL",
+
                                   "TOKEN_IDENTIFIER",
+                                  "TOKEN_IDENTIFIER_VOID",
+                                  "TOKEN_IDENTIFIER_INT",
+                                  "TOKEN_IDENTIFIER_FLOAT",
+                                  "TOKEN_IDENTIFIER_BOOL",
+                                  "TOKEN_IDENTIFIER_STRING",
                                   "TOKEN_STRING",
                                   "TOKEN_INTEGER",
                                   "TOKEN_FLOAT",
+
                                   "TOKEN_AND",
                                   "TOKEN_CLASS",
                                   "TOKEN_ELSE",
@@ -60,6 +68,7 @@ void print_tokens(ArrayToken tokens)
                                   "TOKEN_THIS",
                                   "TOKEN_TRUE",
                                   "TOKEN_WHILE",
+
                                   "TOKEN_EOF"
 
     };

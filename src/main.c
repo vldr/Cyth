@@ -2,10 +2,10 @@
 #include "array.h"
 #include "checker.h"
 #include "codegen.h"
+#include "lexer.h"
 #include "memory.h"
 #include "parser.h"
 #include "printer.h"
-#include "scanner.h"
 #include "statement.h"
 
 #include <stddef.h>
@@ -59,8 +59,8 @@ static void run_file(const char* path)
   if (!source)
     return;
 
-  scanner_init(source);
-  ArrayToken tokens = scanner_scan();
+  lexer_init(source);
+  ArrayToken tokens = lexer_scan();
 
   if (error)
     return;

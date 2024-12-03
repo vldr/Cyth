@@ -1,7 +1,7 @@
 #ifndef expression_h
 #define expression_h
 
-#include "scanner.h"
+#include "lexer.h"
 
 #define EXPR() ((Expr*)memory_alloc(&memory, sizeof(Expr)))
 #define BINARY_EXPR(destination, op, l, r)                                                         \

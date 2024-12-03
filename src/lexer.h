@@ -1,5 +1,5 @@
-#ifndef scanner_h
-#define scanner_h
+#ifndef lexer_h
+#define lexer_h
 
 #include "array.h"
 #include "memory.h"
@@ -43,6 +43,11 @@ typedef enum
   TOKEN_LESS_EQUAL,
 
   TOKEN_IDENTIFIER,
+  TOKEN_IDENTIFIER_VOID,
+  TOKEN_IDENTIFIER_INT,
+  TOKEN_IDENTIFIER_FLOAT,
+  TOKEN_IDENTIFIER_BOOL,
+  TOKEN_IDENTIFIER_STRING,
   TOKEN_STRING,
   TOKEN_INTEGER,
   TOKEN_FLOAT,
@@ -79,7 +84,7 @@ typedef struct
 
 array_def(Token, Token);
 
-void scanner_init(const char* source);
-ArrayToken scanner_scan(void);
+void lexer_init(const char* source);
+ArrayToken lexer_scan(void);
 
 #endif

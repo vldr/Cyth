@@ -1,8 +1,9 @@
 #include "checker.h"
 #include "array.h"
 #include "expression.h"
+#include "lexer.h"
 #include "main.h"
-#include "scanner.h"
+
 #include <assert.h>
 
 static DataType check_expression(Expr* expression);

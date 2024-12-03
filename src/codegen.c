@@ -1,7 +1,7 @@
 #include "codegen.h"
 #include "array.h"
 #include "expression.h"
-#include "scanner.h"
+#include "lexer.h"
 
 #include <assert.h>
 #include <binaryen-c.h>

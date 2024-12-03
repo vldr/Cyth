@@ -1,10 +1,13 @@
 #include "parser.h"
 #include "array.h"
+#include "expression.h"
+#include "lexer.h"
 #include "main.h"
-#include "scanner.h"
 #include "statement.h"
+#include <stdio.h>
 
 static Expr* expression(void);
+static Stmt* declaration(void);
 static Stmt* statement(void);
 
 static struct
@@ -16,7 +19,11 @@ static struct
 
 static void error(Token token, const char* message)
 {
-  report_error(token.start_line, token.start_column, token.end_line, token.end_column, message);
+  if (!parser.error)
+  {
+    report_error(token.start_line, token.start_column, token.end_line, token.end_column, message);
+  }
+
   parser.error = true;
 }
 
@@ -48,17 +55,7 @@ static Token advance(void)
   return previous();
 }
 
-static Token consume(TokenType type, const char* message)
-{
-  if (check(type))
-    return advance();
-
-  error(peek(), message);
-
-  return peek();
-}
-
-bool match(TokenType type)
+static bool match(TokenType type)
 {
   if (check(type))
   {
@@ -67,6 +64,56 @@ bool match(TokenType type)
   }
 
   return false;
+}
+static Token consume(TokenType type, const char* message)
+{
+  if (match(type))
+    return previous();
+
+  error(peek(), message);
+
+  return peek();
+}
+
+static bool match_type(void)
+{
+  return match(TOKEN_IDENTIFIER) || match(TOKEN_IDENTIFIER_VOID) || match(TOKEN_IDENTIFIER_INT) ||
+         match(TOKEN_IDENTIFIER_FLOAT) || match(TOKEN_IDENTIFIER_STRING) ||
+         match(TOKEN_IDENTIFIER_BOOL);
+}
+
+static Token consume_type(const char* message)
+{
+  if (match_type())
+    return previous();
+
+  error(peek(), message);
+
+  return peek();
+}
+
+static void synchronize(void)
+{
+  advance();
+
+  while (!eof())
+  {
+    if (previous().type == TOKEN_NEWLINE)
+      return;
+
+    switch (peek().type)
+    {
+    case TOKEN_CLASS:
+    case TOKEN_FOR:
+    case TOKEN_IF:
+    case TOKEN_WHILE:
+    case TOKEN_RETURN:
+      return;
+    default:
+      advance();
+      break;
+    }
+  }
 }
 
 static Expr* primary(void)
@@ -260,6 +307,10 @@ static Expr* expression(void)
   return logic_or();
 }
 
+static Stmt* block_statement(void)
+{
+}
+
 static Stmt* expression_statement(void)
 {
   Expr* expr = expression();
@@ -283,6 +334,53 @@ static Stmt* statement(void)
   }
 }
 
+static Stmt* function_declaration(void)
+{
+  Token type = previous();
+  Token name = consume(TOKEN_IDENTIFIER, "Expected a function name after type name.");
+
+  Stmt* stmt = STMT();
+  stmt->type = STMT_FUNCTION_DECL;
+  stmt->func.type = type;
+  stmt->func.name = name;
+
+  array_init(&stmt->func.param_types);
+  array_init(&stmt->func.params);
+  array_init(&stmt->func.body);
+
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+
+  if (!check(TOKEN_RIGHT_PAREN))
+  {
+    do
+    {
+      Token type = consume_type("Expected a type after '('");
+      Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
+
+      array_add(&stmt->func.param_types, type);
+      array_add(&stmt->func.params, name);
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
+  consume(TOKEN_NEWLINE, "Expected newline after ')'.");
+
+  stmt->func.body = block_statement();
+  return
+}
+
+static Stmt* declaration(void)
+{
+  if (match_type())
+  {
+    return function_declaration();
+  }
+  else
+  {
+    return statement();
+  }
+}
+
 void parser_init(ArrayToken tokens)
 {
   parser.error = false;
@@ -297,7 +395,14 @@ ArrayStmt parser_parse(void)
 
   while (!eof())
   {
-    array_add(&statements, statement());
+    array_add(&statements, declaration());
+
+    if (parser.error)
+    {
+      synchronize();
+
+      parser.error = false;
+    }
   }
 
   return statements;

@@ -24,9 +24,6 @@
     <ClInclude Include="src\printer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\scanner.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\statement.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -48,15 +45,15 @@
     <ClInclude Include="src\codegen.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\lexer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\parser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\printer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scanner.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\checker.c">
@@ -72,6 +69,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\codegen.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lexer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

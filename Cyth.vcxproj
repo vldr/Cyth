@@ -23,23 +23,23 @@
     <ClInclude Include="src\checker.h" />
     <ClInclude Include="src\codegen.h" />
     <ClInclude Include="src\expression.h" />
+    <ClInclude Include="src\lexer.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\map.h" />
     <ClInclude Include="src\memory.h" />
     <ClInclude Include="src\parser.h" />
     <ClInclude Include="src\printer.h" />
-    <ClInclude Include="src\scanner.h" />
     <ClInclude Include="src\statement.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\checker.c" />
     <ClCompile Include="src\codegen.c" />
+    <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\map.c" />
     <ClCompile Include="src\memory.c" />
     <ClCompile Include="src\parser.c" />
     <ClCompile Include="src\printer.c" />
-    <ClCompile Include="src\scanner.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

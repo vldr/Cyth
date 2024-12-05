@@ -401,4 +401,6 @@ map_def_strkey(sv, const char *, void *, map_streq, murmurhash)
 map_def_strkey(s64, const char *, uint64_t, map_streq, murmurhash)
 map_def_strkey(sll, const char *, long long, map_streq, murmurhash)
 
+map_def_strkey(func, const char *, struct _STMT*, map_streq, murmurhash)
+
   // clang-format on

@@ -43,7 +43,7 @@ static struct
   ArrayToken tokens;
 } lexer;
 
-static void add_custom_token(TokenType type, const char* start, int length)
+static void add_custom_token(TokenType type, const char* lexeme, int length)
 {
   Token token;
   token.type = type;
@@ -51,8 +51,7 @@ static void add_custom_token(TokenType type, const char* start, int length)
   token.start_column = lexer.start_column;
   token.end_line = lexer.current_line;
   token.end_column = lexer.current_column;
-  token.length = length;
-  token.start = start;
+  token.lexeme = memory_strldup(&memory, lexeme, length);
 
   array_add(&lexer.tokens, token);
 }

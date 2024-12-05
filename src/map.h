@@ -3,11 +3,9 @@
 
 #include <memory.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 
-#define map_dec_strkey(name, K, V)                                                                 \
+#define map_dec_strkey(typename, name, K, V)                                                       \
   struct map_item_##name                                                                           \
   {                                                                                                \
     K key;                                                                                         \
@@ -15,18 +13,18 @@
     uint32_t hash;                                                                                 \
   };                                                                                               \
                                                                                                    \
-  map_of(name, K, V)
+  map_of(typename, name, K, V)
 
-#define map_dec_scalar(name, K, V)                                                                 \
+#define map_dec_scalar(typename, name, K, V)                                                       \
   struct map_item_##name                                                                           \
   {                                                                                                \
     K key;                                                                                         \
     V value;                                                                                       \
   };                                                                                               \
                                                                                                    \
-  map_of(name, K, V)
+  map_of(typename, name, K, V)
 
-#define map_of(name, K, V)                                                                         \
+#define map_of(typename, name, K, V)                                                               \
   struct map_##name                                                                                \
   {                                                                                                \
     struct map_item_##name* mem;                                                                   \
@@ -39,7 +37,7 @@
     bool found;                                                                                    \
   };                                                                                               \
                                                                                                    \
-  typedef struct map_##name Map##name;                                                             \
+  typedef struct map_##name Map##typename;                                                         \
                                                                                                    \
   bool map_init_##name(struct map_##name* map, uint32_t cap, uint32_t load_factor);                \
   uint32_t map_size_##name(struct map_##name* map);                                                \
@@ -69,21 +67,23 @@
 
 // clang-format off
 
-map_dec_scalar(int, int, int)
-map_dec_scalar(intv, int, void *)
-map_dec_scalar(ints, int, const char *)
-map_dec_scalar(ll, long long, long long)
-map_dec_scalar(llv, long long, void *)
-map_dec_scalar(lls, long long, const char *)
-map_dec_scalar(32, uint32_t, uint32_t)
-map_dec_scalar(64, uint64_t, uint64_t)
-map_dec_scalar(64v, uint64_t, void *)
-map_dec_scalar(64s, uint64_t, const char *)
+map_dec_scalar(int, int, int, int)
+map_dec_scalar(intv, intv, int, void *)
+map_dec_scalar(ints, ints, int, const char *)
+map_dec_scalar(ll,  ll, long long, long long)
+map_dec_scalar(llv, llv, long long, void *)
+map_dec_scalar(lls, lls, long long, const char *)
+map_dec_scalar(32, 32, uint32_t, uint32_t)
+map_dec_scalar(64, 64, uint64_t, uint64_t)
+map_dec_scalar(64v, 64v, uint64_t, void *)
+map_dec_scalar(64s, 64s, uint64_t, const char *)
 
-map_dec_strkey(str, const char *, const char *)
-map_dec_strkey(sv, const char *, void *)
-map_dec_strkey(s64, const char *, uint64_t)
-map_dec_strkey(sll, const char *, long long)
+map_dec_strkey(str, str, const char *, const char *)
+map_dec_strkey(sv, sv, const char *, void *)
+map_dec_strkey(s64, s64, const char *, uint64_t)
+map_dec_strkey(sll, sll, const char *, long long)
+
+map_dec_strkey(Func, func, const char*, struct _STMT*)
 
 // clang-format on
 

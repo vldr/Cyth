@@ -78,8 +78,7 @@ typedef struct
   int start_column;
   int end_line;
   int end_column;
-  int length;
-  const char* start;
+  const char* lexeme;
 } Token;
 
 array_def(Token, Token);

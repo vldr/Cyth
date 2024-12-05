@@ -16,6 +16,13 @@ typedef struct
 
 typedef struct
 {
+  Token keyword;
+  Expr* expr;
+} ReturnStmt;
+
+typedef struct
+{
+  DataType data_type;
   Token type;
   Token name;
   ArrayToken param_types;
@@ -26,6 +33,7 @@ typedef struct
 typedef enum
 {
   STMT_EXPR,
+  STMT_RETURN,
   STMT_FUNCTION_DECL,
 } StmtType;
 
@@ -36,6 +44,7 @@ struct _STMT
   union {
     ExprStmt expr;
     FuncStmt func;
+    ReturnStmt ret;
   };
 };
 

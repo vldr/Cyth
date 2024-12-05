@@ -46,11 +46,7 @@ typedef struct
     bool boolean;
     int integer;
     float floating;
-    struct
-    {
-      const char* value;
-      int length;
-    } string;
+    const char* string;
   };
 } LiteralExpr;
 

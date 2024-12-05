@@ -151,7 +151,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = TYPE_INTEGER;
-    expr->literal.integer = strtol(token.start, NULL, 10);
+    expr->literal.integer = strtol(token.lexeme, NULL, 10);
 
     return expr;
   case TOKEN_FLOAT:
@@ -159,7 +159,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = TYPE_FLOAT;
-    expr->literal.floating = (float)strtod(token.start, NULL);
+    expr->literal.floating = (float)strtod(token.lexeme, NULL);
 
     return expr;
   case TOKEN_STRING:
@@ -167,8 +167,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = TYPE_STRING;
-    expr->literal.string.value = token.start;
-    expr->literal.string.length = token.length;
+    expr->literal.string = token.lexeme;
 
     return expr;
   case TOKEN_LEFT_PAREN:
@@ -307,8 +306,19 @@ static Expr* expression(void)
   return logic_or();
 }
 
-static Stmt* block_statement(void)
+static Stmt* return_statement(void)
 {
+  Token keyword = advance();
+
+  Expr* expr = expression();
+  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+
+  Stmt* stmt = STMT();
+  stmt->type = STMT_RETURN;
+  stmt->ret.expr = expr;
+  stmt->ret.keyword = keyword;
+
+  return stmt;
 }
 
 static Stmt* expression_statement(void)
@@ -329,9 +339,28 @@ static Stmt* statement(void)
 
   switch (token.type)
   {
+  case TOKEN_RETURN:
+    return return_statement();
   default:
     return expression_statement();
   }
+}
+
+static ArrayStmt statements(void)
+{
+  ArrayStmt statements;
+  array_init(&statements);
+
+  consume(TOKEN_INDENT, "Expected an indent.");
+
+  while (!eof() && !check(TOKEN_DEDENT))
+  {
+    array_add(&statements, statement());
+  }
+
+  consume(TOKEN_DEDENT, "Expected a dedent.");
+
+  return statements;
 }
 
 static Stmt* function_declaration(void)
@@ -365,8 +394,8 @@ static Stmt* function_declaration(void)
   consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
   consume(TOKEN_NEWLINE, "Expected newline after ')'.");
 
-  stmt->func.body = block_statement();
-  return
+  stmt->func.body = statements();
+  return stmt;
 }
 
 static Stmt* declaration(void)

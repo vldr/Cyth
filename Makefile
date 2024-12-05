@@ -1,6 +1,6 @@
 OUTPUT = output/cyth
 CXX = clang
-CXXFLAGS = -Ithird_party/includes -MMD -O0 -Wall -Wextra -pedantic
+CXXFLAGS = -Ithird_party/includes -MMD -O0 -g -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
 LINKFLAGS = -Wl,-rpath,third_party/libs -Lthird_party/libs -lbinaryen
 
 SRCS = $(wildcard src/*.c)
@@ -20,7 +20,7 @@ output/:
 	mkdir output
 
 build: $(OBJS)
-	$(CXX) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
+	$(CXX) $(CXXFLAGS) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
 
 objs/%.o: src/%.c
 	$(CXX) $(CXXFLAGS) -c $< -o $@

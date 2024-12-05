@@ -3,6 +3,9 @@
 #include "expression.h"
 #include "lexer.h"
 #include "main.h"
+#include "map.h"
+#include "memory.h"
+#include "statement.h"
 
 #include <assert.h>
 
@@ -13,6 +16,9 @@ static struct
 {
   bool error;
   ArrayStmt statements;
+
+  Stmt* function;
+  MapFunc functions;
 } checker;
 
 static void error(Token token, const char* message)
@@ -31,8 +37,22 @@ static void error_type_mismatch(Token token)
 
 static void error_operation_not_defined(Token token, const char* type)
 {
-  error(token, memory_sprintf(&memory, "Operator '%.*s' only defined for %s.", token.length,
-                              token.start, type));
+  error(token, memory_sprintf(&memory, "Operator '%s' only defined for %s.", token.lexeme, type));
+}
+
+static void error_function_already_exists(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "The function '%s' already exists.", name));
+}
+
+static void error_unexpected_return(Token token)
+{
+  error(token, "A return statement can only appear inside functions.");
+}
+
+static void error_invalid_return_type(Token token)
+{
+  error(token, "Type mismatch with return.");
 }
 
 static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
@@ -64,6 +84,26 @@ static bool upcast(Expr* expression, DataType* left, DataType* right, DataType f
   *target_type = to;
 
   return true;
+}
+
+static DataType token_to_data_type(Token token)
+{
+  switch (token.type)
+  {
+  case TOKEN_IDENTIFIER_BOOL:
+    return TYPE_BOOL;
+  case TOKEN_IDENTIFIER_VOID:
+    return TYPE_VOID;
+  case TOKEN_IDENTIFIER_INT:
+    return TYPE_INTEGER;
+  case TOKEN_IDENTIFIER_FLOAT:
+    return TYPE_FLOAT;
+  case TOKEN_IDENTIFIER_STRING:
+    return TYPE_STRING;
+
+  default:
+    assert(!"Unhanled data type");
+  }
 }
 
 static DataType check_cast_expression(Expr* expression)
@@ -185,6 +225,51 @@ static DataType check_expression(Expr* expression)
   }
 }
 
+static void check_expression_statement(Stmt* statement)
+{
+  check_expression(statement->expr.expr);
+}
+
+static void check_function_declaration_statement(Stmt* statement)
+{
+  const char* name = statement->func.name.lexeme;
+  if (map_get_func(&checker.functions, name))
+  {
+    error_function_already_exists(statement->func.name, name);
+    return;
+  }
+
+  map_put_func(&checker.functions, name, statement);
+  checker.function = statement;
+
+  statement->func.data_type = token_to_data_type(statement->func.type);
+
+  Stmt* body_statement;
+  array_foreach(&statement->func.body, body_statement)
+  {
+    check_statement(body_statement);
+  }
+
+  checker.function = NULL;
+}
+
+static void check_return_statement(Stmt* statement)
+{
+  if (!checker.function)
+  {
+    error_unexpected_return(statement->ret.keyword);
+    return;
+  }
+
+  DataType data_type = check_expression(statement->ret.expr);
+
+  if (checker.function->func.data_type != data_type)
+  {
+    error_invalid_return_type(checker.function->func.type);
+    return;
+  }
+}
+
 static void check_statement(Stmt* statement)
 {
   checker.error = false;
@@ -192,7 +277,13 @@ static void check_statement(Stmt* statement)
   switch (statement->type)
   {
   case STMT_EXPR:
-    check_expression(statement->expr.expr);
+    check_expression_statement(statement);
+    break;
+  case STMT_FUNCTION_DECL:
+    check_function_declaration_statement(statement);
+    break;
+  case STMT_RETURN:
+    check_return_statement(statement);
     break;
 
   default:
@@ -204,6 +295,9 @@ void checker_init(ArrayStmt statements)
 {
   checker.error = false;
   checker.statements = statements;
+  checker.function = NULL;
+
+  map_init_func(&checker.functions, 0, 0);
 }
 
 void checker_validate(void)

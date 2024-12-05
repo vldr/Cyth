@@ -94,6 +94,18 @@ char* memory_strdup(Memory* a, const char* cstr)
   return dup;
 }
 
+char* memory_strldup(Memory* a, const char* str, size_t length)
+{
+  if (!str)
+    return "";
+
+  char* dup = (char*)memory_alloc(a, length + 1);
+  memcpy(dup, str, length);
+  dup[length] = '\0';
+
+  return dup;
+}
+
 void* memory_memdup(Memory* memory, void* data, size_t size)
 {
   return memcpy(memory_alloc(memory, size), data, size);

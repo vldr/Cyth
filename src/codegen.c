@@ -2,6 +2,7 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
+#include "statement.h"
 
 #include <assert.h>
 #include <binaryen-c.h>
@@ -16,6 +17,24 @@ static struct
   BinaryenModuleRef module;
   ArrayStmt statements;
 } codegen;
+
+static BinaryenType data_type_to_binaryen_type(DataType data_type)
+{
+  switch (data_type)
+  {
+  case TYPE_VOID:
+  case TYPE_NULL:
+    return BinaryenTypeNone();
+  case TYPE_BOOL:
+  case TYPE_INTEGER:
+    return BinaryenTypeInt32();
+  case TYPE_FLOAT:
+    return BinaryenTypeFloat32();
+
+  default:
+    assert(!"Unhanled data type");
+  }
+}
 
 static BinaryenExpressionRef generate_literal_expression(Expr* expression)
 {
@@ -152,10 +171,10 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     if (data_type == TYPE_BOOL)
     {
       BinaryenExpressionRef zero = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
-      BinaryenExpressionRef ifTrue = BinaryenBinary(codegen.module, BinaryenNeInt32(), right, zero);
+      BinaryenExpressionRef ifTrue = right;
       BinaryenExpressionRef ifFalse = zero;
 
-      return BinaryenSelect(codegen.module, left, ifTrue, ifFalse, BinaryenTypeInt32());
+      return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
       assert(!"Unsupported binary type for AND");
@@ -165,13 +184,11 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
   case TOKEN_OR:
     if (data_type == TYPE_BOOL)
     {
-      BinaryenExpressionRef zero = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
       BinaryenExpressionRef one = BinaryenConst(codegen.module, BinaryenLiteralInt32(1));
       BinaryenExpressionRef ifTrue = one;
-      BinaryenExpressionRef ifFalse =
-        BinaryenBinary(codegen.module, BinaryenNeInt32(), right, zero);
+      BinaryenExpressionRef ifFalse = right;
 
-      return BinaryenSelect(codegen.module, left, ifTrue, ifFalse, BinaryenTypeInt32());
+      return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
       assert(!"Unsupported binary type for OR");
@@ -245,10 +262,16 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
   }
 }
 
-static BinaryenExpressionRef generate_statement_expression(Stmt* statement)
+static BinaryenExpressionRef generate_expression_statement(Stmt* statement)
 {
   BinaryenExpressionRef expression = generate_expression(statement->expr.expr);
   return BinaryenDrop(codegen.module, expression);
+}
+
+static BinaryenExpressionRef generate_return_statement(Stmt* statement)
+{
+  BinaryenExpressionRef expression = generate_expression(statement->ret.expr);
+  return BinaryenReturn(codegen.module, expression);
 }
 
 static BinaryenExpressionRef generate_statement(Stmt* statement)
@@ -256,7 +279,9 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
   switch (statement->type)
   {
   case STMT_EXPR:
-    return generate_statement_expression(statement);
+    return generate_expression_statement(statement);
+  case STMT_RETURN:
+    return generate_return_statement(statement);
 
   default:
     assert(!"Unhandled statement");
@@ -264,21 +289,54 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
   }
 }
 
-static BinaryenExpressionRef generate_statements(void)
+static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
 {
   ArrayBinaryenExpressionRef list;
   array_init(&list);
 
   Stmt* statement;
-  array_foreach(&codegen.statements, statement)
+  array_foreach(statements, statement)
   {
     array_add(&list, generate_statement(statement));
   }
 
   BinaryenExpressionRef block =
-    BinaryenBlock(codegen.module, "block", list.elems, list.size, BinaryenTypeNone());
+    BinaryenBlock(codegen.module, NULL, list.elems, list.size, BinaryenTypeAuto());
 
   return block;
+}
+
+static void generate_function_declaration(Stmt* declaration)
+{
+  const char* name = declaration->func.name.lexeme;
+  BinaryenExpressionRef body = generate_statements(&declaration->func.body);
+  BinaryenType return_type = data_type_to_binaryen_type(declaration->func.data_type);
+
+  BinaryenAddFunction(codegen.module, name, BinaryenTypeNone(), return_type, NULL, 0, body);
+  BinaryenAddFunctionExport(codegen.module, name, name);
+}
+
+static void generate_declaration(Stmt* declaration)
+{
+  switch (declaration->type)
+  {
+  case STMT_FUNCTION_DECL:
+    generate_function_declaration(declaration);
+    return;
+
+  default:
+    assert(!"Unhandled declaration");
+    break;
+  }
+}
+
+static void generate_declarations(void)
+{
+  Stmt* declaration;
+  array_foreach(&codegen.statements, declaration)
+  {
+    generate_declaration(declaration);
+  }
 }
 
 void codegen_init(ArrayStmt statements)
@@ -289,14 +347,16 @@ void codegen_init(ArrayStmt statements)
 
 void codegen_generate(void)
 {
-  BinaryenFunctionRef main = BinaryenAddFunction(
-    codegen.module, "main", BinaryenTypeNone(), BinaryenTypeNone(), NULL, 0, generate_statements());
+  generate_declarations();
 
-  BinaryenSetStart(codegen.module, main);
+  // BinaryenFunctionRef main =
+
+  // BinaryenSetStart(codegen.module, main);
   // BinaryenAddMemoryImport(codegen.module, NULL, "env", "memory", 0);
   // BinaryenAddTableImport(codegen.module, NULL, "env", "table");
 
   BinaryenModuleValidate(codegen.module);
+  // BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

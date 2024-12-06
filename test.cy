@@ -1,2 +1,4 @@
 bool main(int hello)
-    return 2 > 10.5 + 2
+    2+2*10
+
+    return 12 < 10 or 5 == 5

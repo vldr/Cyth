@@ -3,7 +3,7 @@
 
 #include "lexer.h"
 
-#define EXPR() ((Expr*)memory_alloc(&memory, sizeof(Expr)))
+#define EXPR() (ALLOC(Expr))
 #define BINARY_EXPR(destination, op, l, r)                                                         \
   do                                                                                               \
   {                                                                                                \
@@ -28,7 +28,7 @@
 typedef struct _EXPR Expr;
 array_def(Expr*, Expr);
 
-typedef enum
+typedef enum _DATA_TYPE
 {
   TYPE_VOID,
   TYPE_NULL,
@@ -98,10 +98,10 @@ typedef enum
   EXPR_BINARY,
   EXPR_UNARY,
   EXPR_GROUP,
+  EXPR_CAST,
   EXPR_VAR,
   EXPR_ASSIGN,
   EXPR_CALL,
-  EXPR_CAST,
 } ExprType;
 
 struct _EXPR

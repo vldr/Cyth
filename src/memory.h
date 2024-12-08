@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define ALLOC(type) ((type*)memory_alloc(&memory, sizeof(type)))
+
 typedef struct _BUCKET Bucket;
 typedef struct
 {

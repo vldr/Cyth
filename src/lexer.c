@@ -210,6 +210,7 @@ static void literal(void)
     KEYWORD_GROUP('n')
     switch (lexer.start[1])
     {
+    default:
       KEYWORD_GROUP('u')
       KEYWORD("null", TOKEN_NULL)
       KEYWORD_GROUP('o')
@@ -219,6 +220,7 @@ static void literal(void)
     KEYWORD_GROUP('t')
     switch (lexer.start[1])
     {
+    default:
       KEYWORD_GROUP('h')
       KEYWORD("this", TOKEN_THIS)
       KEYWORD_GROUP('r')

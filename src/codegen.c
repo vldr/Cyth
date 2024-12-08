@@ -2,6 +2,7 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
+#include "map.h"
 #include "statement.h"
 
 #include <assert.h>
@@ -9,6 +10,7 @@
 #include <stdio.h>
 
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
+
 static BinaryenExpressionRef generate_expression(Expr* expression);
 static BinaryenExpressionRef generate_statement(Stmt* statement);
 
@@ -16,6 +18,7 @@ static struct
 {
   BinaryenModuleRef module;
   ArrayStmt statements;
+  MapUint variables;
 } codegen;
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -309,11 +312,20 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
 static void generate_function_declaration(Stmt* declaration)
 {
   const char* name = declaration->func.name.lexeme;
-  BinaryenExpressionRef body = generate_statements(&declaration->func.body);
-  BinaryenType return_type = data_type_to_binaryen_type(declaration->func.data_type);
 
+  BinaryenExpressionRef body = generate_statements(&declaration->func.body);
+
+  BinaryenType return_type = data_type_to_binaryen_type(declaration->func.data_type);
   BinaryenAddFunction(codegen.module, name, BinaryenTypeNone(), return_type, NULL, 0, body);
   BinaryenAddFunctionExport(codegen.module, name, name);
+}
+
+static void generate_variable_declaration(Stmt* declaration)
+{
+  const char* name = declaration->var.name.lexeme;
+  unsigned int index = map_size_uint(&codegen.variables);
+
+  BinaryenExpressionRef initializer;
 }
 
 static void generate_declaration(Stmt* declaration)
@@ -322,6 +334,9 @@ static void generate_declaration(Stmt* declaration)
   {
   case STMT_FUNCTION_DECL:
     generate_function_declaration(declaration);
+    return;
+  case STMT_VARIABLE_DECL:
+    generate_variable_declaration(declaration);
     return;
 
   default:
@@ -343,6 +358,8 @@ void codegen_init(ArrayStmt statements)
 {
   codegen.module = BinaryenModuleCreate();
   codegen.statements = statements;
+
+  map_init_uint(&codegen.variables, 0, 0);
 }
 
 void codegen_generate(void)

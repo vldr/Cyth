@@ -12,13 +12,20 @@
 static DataType check_expression(Expr* expression);
 static void check_statement(Stmt* statement);
 
+typedef struct _ENVIRONMENT
+{
+  MapStmt variables;
+
+  struct _ENVIRONMENT* parent;
+} Environment;
+
 static struct
 {
   bool error;
   ArrayStmt statements;
 
+  Environment* environment;
   Stmt* function;
-  MapFunc functions;
 } checker;
 
 static void error(Token token, const char* message)
@@ -40,9 +47,19 @@ static void error_operation_not_defined(Token token, const char* type)
   error(token, memory_sprintf(&memory, "Operator '%s' only defined for %s.", token.lexeme, type));
 }
 
-static void error_function_already_exists(Token token, const char* name)
+static void error_name_already_exists(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "The function '%s' already exists.", name));
+  error(token, memory_sprintf(&memory, "The name '%s' already exists.", name));
+}
+
+static void error_cannot_find_name(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
+}
+
+static void error_not_a_variable(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "The name '%s' does not correspond to a variable.", name));
 }
 
 static void error_unexpected_return(Token token)
@@ -205,6 +222,27 @@ static DataType check_binary_expression(Expr* expression)
   return expression->data_type;
 }
 
+static DataType check_variable_expression(Expr* expression)
+{
+  const char* name = expression->var.name.lexeme;
+
+  Stmt* statement = map_get_stmt(&checker.environment->variables, name);
+  if (!statement)
+  {
+    error_cannot_find_name(expression->var.name, name);
+    return TYPE_VOID;
+  }
+
+  if (statement->type != STMT_VARIABLE_DECL)
+  {
+    error_not_a_variable(expression->var.name, name);
+    return TYPE_VOID;
+  }
+
+  expression->data_type = statement->var.data_type;
+  return expression->data_type;
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -219,6 +257,8 @@ static DataType check_expression(Expr* expression)
     return check_binary_expression(expression);
   case EXPR_UNARY:
     return check_unary_expression(expression);
+  case EXPR_VAR:
+    return check_variable_expression(expression);
 
   default:
     assert(!"Unhanled expression");
@@ -228,29 +268,6 @@ static DataType check_expression(Expr* expression)
 static void check_expression_statement(Stmt* statement)
 {
   check_expression(statement->expr.expr);
-}
-
-static void check_function_declaration_statement(Stmt* statement)
-{
-  const char* name = statement->func.name.lexeme;
-  if (map_get_func(&checker.functions, name))
-  {
-    error_function_already_exists(statement->func.name, name);
-    return;
-  }
-
-  map_put_func(&checker.functions, name, statement);
-  checker.function = statement;
-
-  statement->func.data_type = token_to_data_type(statement->func.type);
-
-  Stmt* body_statement;
-  array_foreach(&statement->func.body, body_statement)
-  {
-    check_statement(body_statement);
-  }
-
-  checker.function = NULL;
 }
 
 static void check_return_statement(Stmt* statement)
@@ -270,6 +287,67 @@ static void check_return_statement(Stmt* statement)
   }
 }
 
+static void check_function_declaration(Stmt* statement)
+{
+  const char* name = statement->func.name.lexeme;
+  if (map_get_stmt(&checker.environment->variables, name))
+  {
+    error_name_already_exists(statement->func.name, name);
+    return;
+  }
+
+  map_put_stmt(&checker.environment->variables, name, statement);
+  statement->func.data_type = token_to_data_type(statement->func.type);
+
+  Environment* environment = ALLOC(Environment);
+  environment->parent = checker.environment;
+  map_init_stmt(&environment->variables, 0, 0);
+
+  Stmt* parameter;
+  array_foreach(&statement->func.parameters, parameter)
+  {
+    parameter->var.data_type = token_to_data_type(parameter->var.type);
+    map_put_stmt(&environment->variables, parameter->var.name.lexeme, parameter);
+  }
+
+  checker.environment = environment;
+  checker.function = statement;
+
+  Stmt* body_statement;
+  array_foreach(&statement->func.body, body_statement)
+  {
+    check_statement(body_statement);
+  }
+
+  checker.function = NULL;
+  checker.environment = checker.environment->parent;
+}
+
+static void check_variable_declaration(Stmt* statement)
+{
+  const char* name = statement->var.name.lexeme;
+  if (map_get_stmt(&checker.environment->variables, name))
+  {
+    error_name_already_exists(statement->var.name, name);
+    return;
+  }
+
+  statement->var.data_type = token_to_data_type(statement->var.type);
+
+  if (statement->var.initializer)
+  {
+    DataType data_type = check_expression(statement->var.initializer);
+
+    if (statement->var.data_type != data_type)
+    {
+      error_type_mismatch(statement->var.type);
+      return;
+    }
+  }
+
+  map_put_stmt(&checker.environment->variables, name, statement);
+}
+
 static void check_statement(Stmt* statement)
 {
   checker.error = false;
@@ -279,11 +357,15 @@ static void check_statement(Stmt* statement)
   case STMT_EXPR:
     check_expression_statement(statement);
     break;
-  case STMT_FUNCTION_DECL:
-    check_function_declaration_statement(statement);
-    break;
   case STMT_RETURN:
     check_return_statement(statement);
+    break;
+
+  case STMT_FUNCTION_DECL:
+    check_function_declaration(statement);
+    break;
+  case STMT_VARIABLE_DECL:
+    check_variable_declaration(statement);
     break;
 
   default:
@@ -294,10 +376,12 @@ static void check_statement(Stmt* statement)
 void checker_init(ArrayStmt statements)
 {
   checker.error = false;
-  checker.statements = statements;
   checker.function = NULL;
+  checker.statements = statements;
 
-  map_init_func(&checker.functions, 0, 0);
+  checker.environment = ALLOC(Environment);
+  checker.environment->parent = NULL;
+  map_init_stmt(&checker.environment->variables, 0, 0);
 }
 
 void checker_validate(void)

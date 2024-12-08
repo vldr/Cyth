@@ -130,7 +130,7 @@ static Expr* primary(void)
     expr->literal.data_type = TYPE_BOOL;
     expr->literal.boolean = true;
 
-    return expr;
+    break;
   case TOKEN_FALSE:
     advance();
 
@@ -138,14 +138,14 @@ static Expr* primary(void)
     expr->literal.data_type = TYPE_BOOL;
     expr->literal.boolean = false;
 
-    return expr;
+    break;
   case TOKEN_NULL:
     advance();
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = TYPE_NULL;
 
-    return expr;
+    break;
   case TOKEN_INTEGER:
     advance();
 
@@ -153,7 +153,7 @@ static Expr* primary(void)
     expr->literal.data_type = TYPE_INTEGER;
     expr->literal.integer = strtol(token.lexeme, NULL, 10);
 
-    return expr;
+    break;
   case TOKEN_FLOAT:
     advance();
 
@@ -161,7 +161,7 @@ static Expr* primary(void)
     expr->literal.data_type = TYPE_FLOAT;
     expr->literal.floating = (float)strtod(token.lexeme, NULL);
 
-    return expr;
+    break;
   case TOKEN_STRING:
     advance();
 
@@ -169,7 +169,7 @@ static Expr* primary(void)
     expr->literal.data_type = TYPE_STRING;
     expr->literal.string = token.lexeme;
 
-    return expr;
+    break;
   case TOKEN_LEFT_PAREN:
     advance();
 
@@ -178,20 +178,20 @@ static Expr* primary(void)
 
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
 
-    return expr;
+    break;
   case TOKEN_IDENTIFIER:
     advance();
 
     expr->type = EXPR_VAR;
     expr->var.name = token;
 
-    return expr;
+    break;
   default:
+    error(token, "Expected an expression.");
     break;
   }
 
-  error(token, "Expected an expression.");
-  return NULL;
+  return expr;
 }
 
 static Expr* prefix_unary(void)
@@ -301,9 +301,32 @@ static Expr* logic_or(void)
   return expr;
 }
 
+static Expr* assignment(void)
+{
+  Expr* expr = logic_or();
+
+  if (match(TOKEN_EQUAL))
+  {
+    Token op = previous();
+
+    if (expr->type == EXPR_VAR)
+    {
+      expr->type = EXPR_ASSIGN;
+      expr->assign.name = expr->var.name;
+      expr->assign.value = assignment();
+
+      return expr;
+    }
+
+    error(op, "Invalid assignment target.");
+  }
+
+  return expr;
+}
+
 static Expr* expression(void)
 {
-  return logic_or();
+  return assignment();
 }
 
 static Stmt* return_statement(void)
@@ -341,6 +364,7 @@ static Stmt* statement(void)
   {
   case TOKEN_RETURN:
     return return_statement();
+
   default:
     return expression_statement();
   }
@@ -355,7 +379,7 @@ static ArrayStmt statements(void)
 
   while (!eof() && !check(TOKEN_DEDENT))
   {
-    array_add(&statements, statement());
+    array_add(&statements, declaration());
   }
 
   consume(TOKEN_DEDENT, "Expected a dedent.");
@@ -363,18 +387,14 @@ static ArrayStmt statements(void)
   return statements;
 }
 
-static Stmt* function_declaration(void)
+static Stmt* function_declaration(Token type, Token name)
 {
-  Token type = previous();
-  Token name = consume(TOKEN_IDENTIFIER, "Expected a function name after type name.");
-
   Stmt* stmt = STMT();
   stmt->type = STMT_FUNCTION_DECL;
   stmt->func.type = type;
   stmt->func.name = name;
 
-  array_init(&stmt->func.param_types);
-  array_init(&stmt->func.params);
+  array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);
 
   consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
@@ -386,8 +406,13 @@ static Stmt* function_declaration(void)
       Token type = consume_type("Expected a type after '('");
       Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
 
-      array_add(&stmt->func.param_types, type);
-      array_add(&stmt->func.params, name);
+      Stmt* parameter = STMT();
+      parameter->type = STMT_VARIABLE_DECL;
+      parameter->var.type = type;
+      parameter->var.name = name;
+      parameter->var.initializer = NULL;
+
+      array_add(&stmt->func.parameters, parameter);
     } while (match(TOKEN_COMMA));
   }
 
@@ -398,11 +423,34 @@ static Stmt* function_declaration(void)
   return stmt;
 }
 
+static Stmt* variable_declaration(Token type, Token name)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_VARIABLE_DECL;
+  stmt->var.type = type;
+  stmt->var.name = name;
+
+  if (match(TOKEN_EQUAL))
+    stmt->var.initializer = expression();
+  else
+    stmt->var.initializer = NULL;
+
+  consume(TOKEN_NEWLINE, "Expected newline after variable declaration.");
+
+  return stmt;
+}
+
 static Stmt* declaration(void)
 {
   if (match_type())
   {
-    return function_declaration();
+    Token type = previous();
+    Token name = consume(TOKEN_IDENTIFIER, "Expected a name after type.");
+
+    if (check(TOKEN_LEFT_PAREN))
+      return function_declaration(type, name);
+    else
+      return variable_declaration(type, name);
   }
   else
   {

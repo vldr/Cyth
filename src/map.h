@@ -78,12 +78,14 @@ map_dec_scalar(64, 64, uint64_t, uint64_t)
 map_dec_scalar(64v, 64v, uint64_t, void *)
 map_dec_scalar(64s, 64s, uint64_t, const char *)
 
-map_dec_strkey(str, str, const char *, const char *)
-map_dec_strkey(sv, sv, const char *, void *)
-map_dec_strkey(s64, s64, const char *, uint64_t)
-map_dec_strkey(sll, sll, const char *, long long)
+map_dec_strkey(Str, str, const char *, const char *)
+map_dec_strkey(Sv, sv, const char *, void *)
+map_dec_strkey(S64, s64, const char *, uint64_t)
+map_dec_strkey(Sll, sll, const char *, long long)
 
-map_dec_strkey(Func, func, const char*, struct _STMT*)
+map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
+map_dec_strkey(Expr, expr, const char*, struct _EXPR*)
+map_dec_strkey(Uint, uint, const char*, unsigned int)
 
 // clang-format on
 

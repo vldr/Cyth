@@ -1,4 +1,4 @@
 bool main(int hello)
-    2+2*10
+    int a = 10 + hello
 
     return 12 < 10 or 5 == 5

@@ -19,6 +19,15 @@ typedef struct _ENVIRONMENT
   struct _ENVIRONMENT* parent;
 } Environment;
 
+static Environment* init_environment(Environment* parent)
+{
+  Environment* environment = ALLOC(Environment);
+  environment->parent = parent;
+  map_init_stmt(&environment->variables, 0, 0);
+
+  return environment;
+}
+
 static struct
 {
   bool error;
@@ -27,6 +36,29 @@ static struct
   Environment* environment;
   Stmt* function;
 } checker;
+
+static Stmt* get_variable(const char* name)
+{
+  Environment* environment = checker.environment;
+
+  while (environment)
+  {
+    Stmt* variable = map_get_stmt(&environment->variables, name);
+    if (variable)
+    {
+      return variable;
+    }
+
+    environment = environment->parent;
+  }
+
+  return NULL;
+}
+
+static void set_variable(const char* name, Stmt* variable)
+{
+  map_put_stmt(&checker.environment->variables, name, variable);
+}
 
 static void error(Token token, const char* message)
 {
@@ -226,7 +258,7 @@ static DataType check_variable_expression(Expr* expression)
 {
   const char* name = expression->var.name.lexeme;
 
-  Stmt* statement = map_get_stmt(&checker.environment->variables, name);
+  Stmt* statement = get_variable(name);
   if (!statement)
   {
     error_cannot_find_name(expression->var.name, name);
@@ -290,28 +322,24 @@ static void check_return_statement(Stmt* statement)
 static void check_function_declaration(Stmt* statement)
 {
   const char* name = statement->func.name.lexeme;
-  if (map_get_stmt(&checker.environment->variables, name))
+  if (get_variable(name))
   {
     error_name_already_exists(statement->func.name, name);
     return;
   }
 
-  map_put_stmt(&checker.environment->variables, name, statement);
   statement->func.data_type = token_to_data_type(statement->func.type);
+  set_variable(name, statement);
 
-  Environment* environment = ALLOC(Environment);
-  environment->parent = checker.environment;
-  map_init_stmt(&environment->variables, 0, 0);
+  checker.environment = init_environment(checker.environment);
+  checker.function = statement;
 
   Stmt* parameter;
   array_foreach(&statement->func.parameters, parameter)
   {
     parameter->var.data_type = token_to_data_type(parameter->var.type);
-    map_put_stmt(&environment->variables, parameter->var.name.lexeme, parameter);
+    set_variable(parameter->var.name.lexeme, parameter);
   }
-
-  checker.environment = environment;
-  checker.function = statement;
 
   Stmt* body_statement;
   array_foreach(&statement->func.body, body_statement)
@@ -326,12 +354,13 @@ static void check_function_declaration(Stmt* statement)
 static void check_variable_declaration(Stmt* statement)
 {
   const char* name = statement->var.name.lexeme;
-  if (map_get_stmt(&checker.environment->variables, name))
+  if (get_variable(name))
   {
     error_name_already_exists(statement->var.name, name);
     return;
   }
 
+  statement->var.index = array_size(&checker.function->func.variables);
   statement->var.data_type = token_to_data_type(statement->var.type);
 
   if (statement->var.initializer)
@@ -345,7 +374,8 @@ static void check_variable_declaration(Stmt* statement)
     }
   }
 
-  map_put_stmt(&checker.environment->variables, name, statement);
+  array_add(&checker.function->func.variables, statement);
+  set_variable(name, statement);
 }
 
 static void check_statement(Stmt* statement)
@@ -378,10 +408,7 @@ void checker_init(ArrayStmt statements)
   checker.error = false;
   checker.function = NULL;
   checker.statements = statements;
-
-  checker.environment = ALLOC(Environment);
-  checker.environment->parent = NULL;
-  map_init_stmt(&checker.environment->variables, 0, 0);
+  checker.environment = init_environment(NULL);
 }
 
 void checker_validate(void)

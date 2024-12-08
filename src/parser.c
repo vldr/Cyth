@@ -396,6 +396,7 @@ static Stmt* function_declaration(Token type, Token name)
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);
+  array_init(&stmt->func.variables);
 
   consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
 

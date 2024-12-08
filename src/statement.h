@@ -27,12 +27,14 @@ typedef struct
   Token type;
   Token name;
 
+  ArrayStmt variables;
   ArrayStmt parameters;
   ArrayStmt body;
 } FuncStmt;
 
 typedef struct
 {
+  size_t index;
   DataType data_type;
 
   Token type;

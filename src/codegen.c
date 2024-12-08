@@ -277,6 +277,14 @@ static BinaryenExpressionRef generate_return_statement(Stmt* statement)
   return BinaryenReturn(codegen.module, expression);
 }
 
+static void generate_variable_declaration_statement(Stmt* declaration)
+{
+  const char* name = declaration->var.name.lexeme;
+  unsigned int index = map_size_uint(&codegen.variables);
+
+  BinaryenExpressionRef initializer;
+}
+
 static BinaryenExpressionRef generate_statement(Stmt* statement)
 {
   switch (statement->type)
@@ -285,6 +293,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_expression_statement(statement);
   case STMT_RETURN:
     return generate_return_statement(statement);
+  case STMT_VARIABLE_DECL:
+    return generate_variable_declaration_statement(statement);
 
   default:
     assert(!"Unhandled statement");
@@ -320,23 +330,12 @@ static void generate_function_declaration(Stmt* declaration)
   BinaryenAddFunctionExport(codegen.module, name, name);
 }
 
-static void generate_variable_declaration(Stmt* declaration)
-{
-  const char* name = declaration->var.name.lexeme;
-  unsigned int index = map_size_uint(&codegen.variables);
-
-  BinaryenExpressionRef initializer;
-}
-
 static void generate_declaration(Stmt* declaration)
 {
   switch (declaration->type)
   {
   case STMT_FUNCTION_DECL:
     generate_function_declaration(declaration);
-    return;
-  case STMT_VARIABLE_DECL:
-    generate_variable_declaration(declaration);
     return;
 
   default:

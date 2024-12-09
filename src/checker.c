@@ -271,7 +271,9 @@ static DataType check_variable_expression(Expr* expression)
     return TYPE_VOID;
   }
 
+  expression->var.index = statement->var.index;
   expression->data_type = statement->var.data_type;
+
   return expression->data_type;
 }
 
@@ -331,13 +333,19 @@ static void check_function_declaration(Stmt* statement)
   statement->func.data_type = token_to_data_type(statement->func.type);
   set_variable(name, statement);
 
+  Stmt* previous_function = checker.function;
+  Environment* previous_environment = checker.environment;
+
   checker.environment = init_environment(checker.environment);
   checker.function = statement;
 
+  int index = 0;
   Stmt* parameter;
   array_foreach(&statement->func.parameters, parameter)
   {
+    parameter->var.index = index++;
     parameter->var.data_type = token_to_data_type(parameter->var.type);
+
     set_variable(parameter->var.name.lexeme, parameter);
   }
 
@@ -347,8 +355,8 @@ static void check_function_declaration(Stmt* statement)
     check_statement(body_statement);
   }
 
-  checker.function = NULL;
-  checker.environment = checker.environment->parent;
+  checker.function = previous_function;
+  checker.environment = previous_environment;
 }
 
 static void check_variable_declaration(Stmt* statement)
@@ -360,7 +368,8 @@ static void check_variable_declaration(Stmt* statement)
     return;
   }
 
-  statement->var.index = array_size(&checker.function->func.variables);
+  statement->var.index =
+    array_size(&checker.function->func.variables) + array_size(&checker.function->func.parameters);
   statement->var.data_type = token_to_data_type(statement->var.type);
 
   if (statement->var.initializer)

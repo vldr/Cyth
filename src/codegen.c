@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
+array_def(BinaryenType, BinaryenType);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
 static BinaryenExpressionRef generate_statement(Stmt* statement);
@@ -35,7 +36,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
     return BinaryenTypeFloat32();
 
   default:
-    assert(!"Unhanled data type");
+    assert(!"Unhandled data type");
   }
 }
 
@@ -244,6 +245,17 @@ static BinaryenExpressionRef generate_cast_expression(Expr* expression)
   assert(!"Unsupported cast type");
 }
 
+static BinaryenExpressionRef generate_variable_expression(Expr* expression)
+{
+  if (expression->var.index == -1)
+  {
+    assert(!"Invalid variable expression index");
+  }
+
+  return BinaryenLocalGet(codegen.module, expression->var.index,
+                          data_type_to_binaryen_type(expression->data_type));
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -258,6 +270,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_unary_expression(expression);
   case EXPR_CAST:
     return generate_cast_expression(expression);
+  case EXPR_VAR:
+    return generate_variable_expression(expression);
 
   default:
     assert(!"Unhandled expression");
@@ -277,12 +291,31 @@ static BinaryenExpressionRef generate_return_statement(Stmt* statement)
   return BinaryenReturn(codegen.module, expression);
 }
 
-static void generate_variable_declaration_statement(Stmt* declaration)
+static BinaryenExpressionRef generate_variable_declaration_statement(Stmt* statement)
 {
-  const char* name = declaration->var.name.lexeme;
-  unsigned int index = map_size_uint(&codegen.variables);
-
   BinaryenExpressionRef initializer;
+  if (statement->var.initializer)
+  {
+    initializer = generate_expression(statement->var.initializer);
+  }
+  else
+  {
+    switch (statement->var.data_type)
+    {
+    case TYPE_INTEGER:
+    case TYPE_BOOL:
+      initializer = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
+      break;
+    case TYPE_FLOAT:
+      initializer = BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
+      break;
+    default:
+      initializer = BinaryenNop(codegen.module);
+      assert(!"Unexpected default initializer");
+    }
+  }
+
+  return BinaryenLocalSet(codegen.module, statement->var.index, initializer);
 }
 
 static BinaryenExpressionRef generate_statement(Stmt* statement)
@@ -321,12 +354,33 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
 
 static void generate_function_declaration(Stmt* declaration)
 {
+  ArrayBinaryenType parameter_types;
+  array_init(&parameter_types);
+
+  Stmt* parameter;
+  array_foreach(&declaration->func.parameters, parameter)
+  {
+    BinaryenType parameter_data_type = data_type_to_binaryen_type(parameter->var.data_type);
+    array_add(&parameter_types, parameter_data_type);
+  }
+
+  ArrayBinaryenType variable_types;
+  array_init(&variable_types);
+
+  Stmt* variable;
+  array_foreach(&declaration->func.variables, variable)
+  {
+    BinaryenType variable_data_type = data_type_to_binaryen_type(variable->var.data_type);
+    array_add(&variable_types, variable_data_type);
+  }
+
   const char* name = declaration->func.name.lexeme;
-
   BinaryenExpressionRef body = generate_statements(&declaration->func.body);
+  BinaryenType results = data_type_to_binaryen_type(declaration->func.data_type);
+  BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
 
-  BinaryenType return_type = data_type_to_binaryen_type(declaration->func.data_type);
-  BinaryenAddFunction(codegen.module, name, BinaryenTypeNone(), return_type, NULL, 0, body);
+  BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
+                      variable_types.size, body);
   BinaryenAddFunctionExport(codegen.module, name, name);
 }
 

@@ -1,4 +1,5 @@
-bool main(int hello)
-    int a = 10 + hello
+int main(int hello, int poop)
+    int a = hello * poop
+    int b = hello + poop
 
-    return 12 < 10 or 5 == 5
+    return a + b

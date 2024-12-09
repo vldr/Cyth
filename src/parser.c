@@ -183,6 +183,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_VAR;
+    expr->var.index = -1;
     expr->var.name = token;
 
     break;
@@ -411,6 +412,7 @@ static Stmt* function_declaration(Token type, Token name)
       parameter->type = STMT_VARIABLE_DECL;
       parameter->var.type = type;
       parameter->var.name = name;
+      parameter->var.index = -1;
       parameter->var.initializer = NULL;
 
       array_add(&stmt->func.parameters, parameter);

@@ -19,7 +19,7 @@ typedef struct _ENVIRONMENT
   struct _ENVIRONMENT* parent;
 } Environment;
 
-static Environment* init_environment(Environment* parent)
+static Environment* environment_init(Environment* parent)
 {
   Environment* environment = ALLOC(Environment);
   environment->parent = parent;
@@ -151,7 +151,7 @@ static DataType token_to_data_type(Token token)
     return TYPE_STRING;
 
   default:
-    assert(!"Unhanled data type");
+    assert(!"Unhandled data type");
   }
 }
 
@@ -277,6 +277,36 @@ static DataType check_variable_expression(Expr* expression)
   return expression->data_type;
 }
 
+static DataType check_assignment_expression(Expr* expression)
+{
+  const char* name = expression->assign.name.lexeme;
+
+  Stmt* statement = get_variable(name);
+  if (!statement)
+  {
+    error_cannot_find_name(expression->var.name, name);
+    return TYPE_VOID;
+  }
+
+  if (statement->type != STMT_VARIABLE_DECL)
+  {
+    error_not_a_variable(expression->var.name, name);
+    return TYPE_VOID;
+  }
+
+  DataType data_type = check_expression(expression->assign.value);
+
+  if (statement->var.data_type != data_type)
+  {
+    error_type_mismatch(expression->assign.name);
+  }
+
+  expression->data_type = data_type;
+  expression->assign.index = statement->var.index;
+
+  return expression->data_type;
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -293,9 +323,11 @@ static DataType check_expression(Expr* expression)
     return check_unary_expression(expression);
   case EXPR_VAR:
     return check_variable_expression(expression);
+  case EXPR_ASSIGN:
+    return check_assignment_expression(expression);
 
   default:
-    assert(!"Unhanled expression");
+    assert(!"Unhandled expression");
   }
 }
 
@@ -336,7 +368,7 @@ static void check_function_declaration(Stmt* statement)
   Stmt* previous_function = checker.function;
   Environment* previous_environment = checker.environment;
 
-  checker.environment = init_environment(checker.environment);
+  checker.environment = environment_init(checker.environment);
   checker.function = statement;
 
   int index = 0;
@@ -417,7 +449,7 @@ void checker_init(ArrayStmt statements)
   checker.error = false;
   checker.function = NULL;
   checker.statements = statements;
-  checker.environment = init_environment(NULL);
+  checker.environment = environment_init(NULL);
 }
 
 void checker_validate(void)

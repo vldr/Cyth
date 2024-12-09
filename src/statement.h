@@ -34,7 +34,7 @@ typedef struct
 
 typedef struct
 {
-  size_t index;
+  int index;
   DataType data_type;
 
   Token type;

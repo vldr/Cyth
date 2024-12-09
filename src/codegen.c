@@ -2,7 +2,6 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
-#include "map.h"
 #include "statement.h"
 
 #include <assert.h>
@@ -19,7 +18,6 @@ static struct
 {
   BinaryenModuleRef module;
   ArrayStmt statements;
-  MapUint variables;
 } codegen;
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -256,6 +254,19 @@ static BinaryenExpressionRef generate_variable_expression(Expr* expression)
                           data_type_to_binaryen_type(expression->data_type));
 }
 
+static BinaryenExpressionRef generate_assignment_expression(Expr* expression)
+{
+  if (expression->assign.index == -1)
+  {
+    assert(!"Invalid variable expression index");
+  }
+
+  BinaryenExpressionRef value = generate_expression(expression->assign.value);
+  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+
+  return BinaryenLocalTee(codegen.module, expression->assign.index, value, type);
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -272,6 +283,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_cast_expression(expression);
   case EXPR_VAR:
     return generate_variable_expression(expression);
+  case EXPR_ASSIGN:
+    return generate_assignment_expression(expression);
 
   default:
     assert(!"Unhandled expression");
@@ -411,8 +424,6 @@ void codegen_init(ArrayStmt statements)
 {
   codegen.module = BinaryenModuleCreate();
   codegen.statements = statements;
-
-  map_init_uint(&codegen.variables, 0, 0);
 }
 
 void codegen_generate(void)

@@ -32,6 +32,11 @@ static Token peek(void)
   return array_at(&parser.tokens, parser.current);
 }
 
+static Token peek_next(void)
+{
+  return array_at(&parser.tokens, parser.current + 1);
+}
+
 static Token previous(void)
 {
   return array_at(&parser.tokens, parser.current - 1);
@@ -65,6 +70,7 @@ static bool match(TokenType type)
 
   return false;
 }
+
 static Token consume(TokenType type, const char* message)
 {
   if (match(type))
@@ -75,17 +81,32 @@ static Token consume(TokenType type, const char* message)
   return peek();
 }
 
-static bool match_type(void)
+static bool is_data_type(TokenType type)
 {
-  return match(TOKEN_IDENTIFIER) || match(TOKEN_IDENTIFIER_VOID) || match(TOKEN_IDENTIFIER_INT) ||
-         match(TOKEN_IDENTIFIER_FLOAT) || match(TOKEN_IDENTIFIER_STRING) ||
-         match(TOKEN_IDENTIFIER_BOOL);
+  switch (type)
+  {
+  case TOKEN_IDENTIFIER:
+  case TOKEN_IDENTIFIER_VOID:
+  case TOKEN_IDENTIFIER_INT:
+  case TOKEN_IDENTIFIER_FLOAT:
+  case TOKEN_IDENTIFIER_BOOL:
+  case TOKEN_IDENTIFIER_STRING:
+    return true;
+
+  default:
+    return false;
+  }
 }
 
-static Token consume_type(const char* message)
+static bool is_data_type_and_identifier(void)
 {
-  if (match_type())
-    return previous();
+  return is_data_type(peek().type) && peek_next().type == TOKEN_IDENTIFIER;
+}
+
+static Token consume_data_type(const char* message)
+{
+  if (is_data_type(peek().type))
+    return advance();
 
   error(peek(), message);
 
@@ -312,11 +333,13 @@ static Expr* assignment(void)
 
     if (expr->type == EXPR_VAR)
     {
-      expr->type = EXPR_ASSIGN;
-      expr->assign.name = expr->var.name;
-      expr->assign.value = assignment();
+      Expr* var = EXPR();
+      var->type = EXPR_ASSIGN;
+      var->assign.index = -1;
+      var->assign.name = expr->var.name;
+      var->assign.value = assignment();
 
-      return expr;
+      return var;
     }
 
     error(op, "Invalid assignment target.");
@@ -405,7 +428,7 @@ static Stmt* function_declaration(Token type, Token name)
   {
     do
     {
-      Token type = consume_type("Expected a type after '('");
+      Token type = consume_data_type("Expected a type after '('");
       Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
 
       Stmt* parameter = STMT();
@@ -445,10 +468,10 @@ static Stmt* variable_declaration(Token type, Token name)
 
 static Stmt* declaration(void)
 {
-  if (match_type())
+  if (is_data_type_and_identifier())
   {
-    Token type = previous();
-    Token name = consume(TOKEN_IDENTIFIER, "Expected a name after type.");
+    Token type = consume_data_type("Expected a type.");
+    Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
     if (check(TOKEN_LEFT_PAREN))
       return function_declaration(type, name);

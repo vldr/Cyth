@@ -78,6 +78,7 @@ typedef struct
 
 typedef struct
 {
+  int index;
   Token name;
   Expr* value;
 } AssignExpr;

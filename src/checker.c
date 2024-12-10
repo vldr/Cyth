@@ -55,7 +55,6 @@ static struct
   ArrayStmt statements;
 
   Environment* environment;
-  Environment* global_environment;
   Stmt* function;
 } checker;
 
@@ -93,7 +92,12 @@ static void error_cannot_find_name(Token token, const char* name)
 
 static void error_not_a_variable(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "The name '%s' does not correspond to a variable.", name));
+  error(token, memory_sprintf(&memory, "The name '%s' is not a variable.", name));
+}
+
+static void error_not_a_function(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "The name '%s' is not a function.", name));
 }
 
 static void error_unexpected_return(Token token)
@@ -104,6 +108,11 @@ static void error_unexpected_return(Token token)
 static void error_invalid_return_type(Token token)
 {
   error(token, "Type mismatch with return.");
+}
+
+static void error_invalid_arity(Token token, int expected, int got)
+{
+  error(token, memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
 }
 
 static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
@@ -182,16 +191,12 @@ static DataType check_unary_expression(Expr* expression)
   if (op.type == TOKEN_MINUS)
   {
     if (type != TYPE_INTEGER && type != TYPE_FLOAT)
-    {
       error_type_mismatch(op);
-    }
   }
   else if (op.type == TOKEN_BANG || op.type == TOKEN_NOT)
   {
     if (type != TYPE_BOOL)
-    {
       error_type_mismatch(op);
-    }
   }
 
   expression->data_type = type;
@@ -286,13 +291,13 @@ static DataType check_assignment_expression(Expr* expression)
   Stmt* statement = environment_get_variable(checker.environment, name);
   if (!statement)
   {
-    error_cannot_find_name(expression->var.name, name);
+    error_cannot_find_name(expression->assign.name, name);
     return TYPE_VOID;
   }
 
   if (statement->type != STMT_VARIABLE_DECL)
   {
-    error_not_a_variable(expression->var.name, name);
+    error_not_a_variable(expression->assign.name, name);
     return TYPE_VOID;
   }
 
@@ -306,6 +311,47 @@ static DataType check_assignment_expression(Expr* expression)
   expression->data_type = data_type;
   expression->assign.index = statement->var.index;
 
+  return expression->data_type;
+}
+
+static DataType check_call_expression(Expr* expression)
+{
+  const char* name = expression->call.name.lexeme;
+
+  Stmt* statement = environment_get_variable(checker.environment, name);
+  if (!statement)
+  {
+    error_cannot_find_name(expression->call.name, name);
+    return TYPE_VOID;
+  }
+
+  if (statement->type != STMT_FUNCTION_DECL)
+  {
+    error_not_a_function(expression->call.name, name);
+    return TYPE_VOID;
+  }
+
+  int number_of_arguments = array_size(&expression->call.arguments);
+  int expected_number_of_arguments = array_size(&statement->func.parameters);
+
+  if (number_of_arguments != expected_number_of_arguments)
+  {
+    error_invalid_arity(expression->call.name, expected_number_of_arguments, number_of_arguments);
+    return TYPE_VOID;
+  }
+
+  for (int i = 0; i < number_of_arguments; i++)
+  {
+    Expr* argument = expression->call.arguments.elems[i];
+    Stmt* parameter = statement->func.parameters.elems[i];
+
+    if (check_expression(argument) != token_to_data_type(parameter->var.type))
+    {
+      error_type_mismatch(expression->call.name);
+    }
+  }
+
+  expression->data_type = statement->func.data_type;
   return expression->data_type;
 }
 
@@ -327,6 +373,8 @@ static DataType check_expression(Expr* expression)
     return check_variable_expression(expression);
   case EXPR_ASSIGN:
     return check_assignment_expression(expression);
+  case EXPR_CALL:
+    return check_call_expression(expression);
 
   default:
     ERROR("Unhandled expression");
@@ -346,7 +394,12 @@ static void check_return_statement(Stmt* statement)
     return;
   }
 
-  DataType data_type = check_expression(statement->ret.expr);
+  DataType data_type;
+
+  if (statement->ret.expr)
+    data_type = check_expression(statement->ret.expr);
+  else
+    data_type = TYPE_VOID;
 
   if (checker.function->func.data_type != data_type)
   {
@@ -421,7 +474,6 @@ static void check_variable_declaration(Stmt* statement)
     if (statement->var.data_type != data_type)
     {
       error_type_mismatch(statement->var.type);
-      return;
     }
   }
 
@@ -464,7 +516,6 @@ void checker_init(ArrayStmt statements)
   checker.function = NULL;
   checker.statements = statements;
   checker.environment = environment_init(NULL);
-  checker.global_environment = checker.environment;
 }
 
 void checker_validate(void)

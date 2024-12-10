@@ -216,6 +216,48 @@ static Expr* primary(void)
   return expr;
 }
 
+static Expr* call(void)
+{
+  Expr* expr = primary();
+
+  for (;;)
+  {
+    if (match(TOKEN_LEFT_PAREN))
+    {
+      if (expr->type != EXPR_VAR)
+      {
+        error(previous(), "Expected a variable.");
+      }
+
+      ArrayExpr arguments;
+      array_init(&arguments);
+
+      if (!check(TOKEN_RIGHT_PAREN))
+      {
+        do
+        {
+          array_add(&arguments, expression());
+        } while (match(TOKEN_COMMA));
+      }
+
+      consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments.");
+
+      Expr* call = EXPR();
+      call->type = EXPR_CALL;
+      call->call.arguments = arguments;
+      call->call.name = expr->var.name;
+
+      expr = call;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  return expr;
+}
+
 static Expr* prefix_unary(void)
 {
   if (match(TOKEN_BANG) || match(TOKEN_NOT) || match(TOKEN_MINUS))
@@ -229,7 +271,7 @@ static Expr* prefix_unary(void)
     return unary;
   }
 
-  return primary();
+  return call();
 }
 
 static Expr* factor(void)
@@ -356,9 +398,13 @@ static Expr* expression(void)
 static Stmt* return_statement(void)
 {
   Token keyword = advance();
+  Expr* expr = NULL;
 
-  Expr* expr = expression();
-  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+  if (!match(TOKEN_NEWLINE))
+  {
+    expr = expression();
+    consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+  }
 
   Stmt* stmt = STMT();
   stmt->type = STMT_RETURN;

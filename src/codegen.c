@@ -38,6 +38,11 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   }
 }
 
+static BinaryenExpressionRef generate_group_expression(Expr* expression)
+{
+  return generate_expression(expression->group.expr);
+}
+
 static BinaryenExpressionRef generate_literal_expression(Expr* expression)
 {
   switch (expression->literal.data_type)
@@ -272,6 +277,23 @@ static BinaryenExpressionRef generate_assignment_expression(Expr* expression)
   }
 }
 
+static BinaryenExpressionRef generate_call_expression(Expr* expression)
+{
+  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+
+  ArrayBinaryenExpressionRef arguments;
+  array_init(&arguments);
+
+  Expr* argument;
+  array_foreach(&expression->call.arguments, argument)
+  {
+    array_add(&arguments, generate_expression(argument));
+  }
+
+  return BinaryenCall(codegen.module, expression->call.name.lexeme, arguments.elems, arguments.size,
+                      type);
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -281,7 +303,7 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
   case EXPR_BINARY:
     return generate_binary_expression(expression);
   case EXPR_GROUP:
-    return generate_expression(expression->group.expr);
+    return generate_group_expression(expression);
   case EXPR_UNARY:
     return generate_unary_expression(expression);
   case EXPR_CAST:
@@ -290,6 +312,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_variable_expression(expression);
   case EXPR_ASSIGN:
     return generate_assignment_expression(expression);
+  case EXPR_CALL:
+    return generate_call_expression(expression);
 
   default:
     ERROR("Unhandled expression");
@@ -299,12 +323,20 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
 static BinaryenExpressionRef generate_expression_statement(Stmt* statement)
 {
   BinaryenExpressionRef expression = generate_expression(statement->expr.expr);
-  return BinaryenDrop(codegen.module, expression);
+  if (statement->expr.expr->data_type != TYPE_VOID)
+  {
+    expression = BinaryenDrop(codegen.module, expression);
+  }
+
+  return expression;
 }
 
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)
 {
-  BinaryenExpressionRef expression = generate_expression(statement->ret.expr);
+  BinaryenExpressionRef expression = NULL;
+  if (statement->ret.expr)
+    expression = generate_expression(statement->ret.expr);
+
   return BinaryenReturn(codegen.module, expression);
 }
 
@@ -326,8 +358,9 @@ static BinaryenExpressionRef generate_variable_declaration(Stmt* declaration)
 
   if (declaration->var.index == -1)
   {
+    const char* name = declaration->var.name.lexeme;
     BinaryenType type = data_type_to_binaryen_type(declaration->var.data_type);
-    BinaryenAddGlobal(codegen.module, declaration->var.name.lexeme, type, true, initializer);
+    BinaryenAddGlobal(codegen.module, name, type, true, initializer);
 
     if (declaration->var.initializer)
     {
@@ -437,7 +470,7 @@ void codegen_generate(void)
 
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleValidate(codegen.module);
-  // BinaryenModuleOptimize(codegen.module);
+  BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

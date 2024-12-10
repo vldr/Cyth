@@ -1,7 +1,10 @@
-int frank = 22
+int frank
 
-int square(int n)
-    int frank = 10
-    return n * frank * 2
+void init()
+    frank = 10
 
-frank = frank * 2
+int square()
+    frank = frank * 2
+    return frank
+
+init()

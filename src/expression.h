@@ -85,7 +85,7 @@ typedef struct
 
 typedef struct
 {
-  Token function;
+  Token name;
   ArrayExpr arguments;
 } CallExpr;
 

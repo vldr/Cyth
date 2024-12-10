@@ -12,8 +12,8 @@
   typedef struct                                                                                   \
   {                                                                                                \
     bool oom;                                                                                      \
-    size_t cap;                                                                                    \
-    size_t size;                                                                                   \
+    unsigned int cap;                                                                              \
+    unsigned int size;                                                                             \
     T* elems;                                                                                      \
   } Array##name
 
@@ -26,9 +26,9 @@
 #define array_add(a, k)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    const size_t _max = SIZE_MAX / sizeof(*(a)->elems);                                            \
-    size_t _cap;                                                                                   \
-    size_t _element_size;                                                                          \
+    const unsigned int _max = 0xffffffff / sizeof(*(a)->elems);                                    \
+    unsigned int _cap;                                                                             \
+    unsigned int _element_size;                                                                    \
     void* _p;                                                                                      \
                                                                                                    \
     if ((a)->cap == (a)->size)                                                                     \
@@ -67,10 +67,10 @@
 #define array_del(a, i)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    size_t idx = (i);                                                                              \
+    unsigned int idx = (i);                                                                        \
     assert(idx < (a)->size);                                                                       \
                                                                                                    \
-    const size_t _cnt = (a)->size - (idx) - 1;                                                     \
+    const unsigned int _cnt = (a)->size - (idx)-1;                                                 \
     if (_cnt > 0)                                                                                  \
     {                                                                                              \
       memmove(&((a)->elems[idx]), &((a)->elems[idx + 1]), _cnt * sizeof(*((a)->elems)));           \
@@ -81,7 +81,7 @@
 #define array_del_unordered(a, i)                                                                  \
   do                                                                                               \
   {                                                                                                \
-    size_t idx = (i);                                                                              \
+    unsigned int idx = (i);                                                                        \
     assert(idx < (a)->size);                                                                       \
     (a)->elems[idx] = (a)->elems[(--(a)->size)];                                                   \
   } while (0)
@@ -97,7 +97,7 @@
 
 #define array_last(a) (a)->elems[(a)->size - 1]
 #define array_foreach(a, elem)                                                                     \
-  for (size_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)                               \
+  for (unsigned int _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)                         \
     for ((elem) = (a)->elems[_i]; _k; _k = !_k)
 
 array_def(int, Int);

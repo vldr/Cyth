@@ -2,9 +2,9 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
+#include "main.h"
 #include "statement.h"
 
-#include <assert.h>
 #include <binaryen-c.h>
 #include <stdio.h>
 
@@ -12,7 +12,7 @@ array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenType, BinaryenType);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
-static BinaryenExpressionRef generate_statement(Stmt* statement);
+static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
 
 static struct
 {
@@ -34,7 +34,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
     return BinaryenTypeFloat32();
 
   default:
-    assert(!"Unhandled data type");
+    ERROR("Unhandled data type");
   }
 }
 
@@ -50,7 +50,7 @@ static BinaryenExpressionRef generate_literal_expression(Expr* expression)
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->literal.boolean));
 
   default:
-    assert(!"Unhandled literal value");
+    ERROR("Unhandled literal value");
   }
 }
 
@@ -70,7 +70,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenAddFloat32();
     else
-      assert(!"Unsupported binary type for +");
+      ERROR("Unsupported binary type for +");
 
     break;
   case TOKEN_MINUS:
@@ -79,7 +79,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenSubFloat32();
     else
-      assert(!"Unsupported binary type for -");
+      ERROR("Unsupported binary type for -");
 
     break;
   case TOKEN_STAR:
@@ -88,7 +88,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenMulFloat32();
     else
-      assert(!"Unsupported binary type for *");
+      ERROR("Unsupported binary type for *");
 
     break;
   case TOKEN_SLASH:
@@ -97,7 +97,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenDivFloat32();
     else
-      assert(!"Unsupported binary type for /");
+      ERROR("Unsupported binary type for /");
 
     break;
 
@@ -105,7 +105,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     if (data_type == TYPE_INTEGER)
       op = BinaryenRemSInt32();
     else
-      assert(!"Unsupported binary type for %");
+      ERROR("Unsupported binary type for %");
 
     break;
 
@@ -115,7 +115,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenEqFloat32();
     else
-      assert(!"Unsupported binary type for ==");
+      ERROR("Unsupported binary type for ==");
 
     break;
 
@@ -125,7 +125,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenNeFloat32();
     else
-      assert(!"Unsupported binary type for ==");
+      ERROR("Unsupported binary type for ==");
 
     break;
 
@@ -135,7 +135,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenLeFloat32();
     else
-      assert(!"Unsupported binary type for <=");
+      ERROR("Unsupported binary type for <=");
 
     break;
 
@@ -145,7 +145,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenGeFloat32();
     else
-      assert(!"Unsupported binary type for <=");
+      ERROR("Unsupported binary type for <=");
 
     break;
 
@@ -155,7 +155,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenLtFloat32();
     else
-      assert(!"Unsupported binary type for <");
+      ERROR("Unsupported binary type for <");
 
     break;
 
@@ -165,7 +165,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenGtFloat32();
     else
-      assert(!"Unsupported binary type for >");
+      ERROR("Unsupported binary type for >");
 
     break;
 
@@ -179,7 +179,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
       return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
-      assert(!"Unsupported binary type for AND");
+      ERROR("Unsupported binary type for AND");
 
     break;
 
@@ -193,13 +193,12 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
       return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
-      assert(!"Unsupported binary type for OR");
+      ERROR("Unsupported binary type for OR");
 
     break;
 
   default:
-    assert(!"Unhandled binary operation");
-    break;
+    ERROR("Unhandled binary operation");
   }
 
   return BinaryenBinary(codegen.module, op, left, right);
@@ -218,17 +217,17 @@ static BinaryenExpressionRef generate_unary_expression(Expr* expression)
     else if (expression->data_type == TYPE_FLOAT)
       return BinaryenUnary(codegen.module, BinaryenNegFloat32(), value);
     else
-      assert(!"Unsupported unary type for -");
+      ERROR("Unsupported unary type for -");
 
   case TOKEN_BANG:
   case TOKEN_NOT:
     if (expression->data_type == TYPE_BOOL)
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(), value);
     else
-      assert(!"Unsupported unary type for !");
+      ERROR("Unsupported unary type for !");
 
   default:
-    assert(!"Unhandled unary expression");
+    ERROR("Unhandled unary expression");
   }
 }
 
@@ -240,31 +239,37 @@ static BinaryenExpressionRef generate_cast_expression(Expr* expression)
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
   }
 
-  assert(!"Unsupported cast type");
+  ERROR("Unsupported cast type");
 }
 
 static BinaryenExpressionRef generate_variable_expression(Expr* expression)
 {
-  if (expression->var.index == -1)
-  {
-    assert(!"Invalid variable expression index");
-  }
+  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
-  return BinaryenLocalGet(codegen.module, expression->var.index,
-                          data_type_to_binaryen_type(expression->data_type));
+  if (expression->var.index == -1)
+    return BinaryenGlobalGet(codegen.module, expression->var.name.lexeme, type);
+  else
+    return BinaryenLocalGet(codegen.module, expression->var.index, type);
 }
 
 static BinaryenExpressionRef generate_assignment_expression(Expr* expression)
 {
-  if (expression->assign.index == -1)
-  {
-    assert(!"Invalid variable expression index");
-  }
-
   BinaryenExpressionRef value = generate_expression(expression->assign.value);
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
-  return BinaryenLocalTee(codegen.module, expression->assign.index, value, type);
+  if (expression->assign.index == -1)
+  {
+    BinaryenExpressionRef list[] = {
+      BinaryenGlobalSet(codegen.module, expression->assign.name.lexeme, value),
+      BinaryenGlobalGet(codegen.module, expression->assign.name.lexeme, type),
+    };
+
+    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof(*list), type);
+  }
+  else
+  {
+    return BinaryenLocalTee(codegen.module, expression->assign.index, value, type);
+  }
 }
 
 static BinaryenExpressionRef generate_expression(Expr* expression)
@@ -287,8 +292,7 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_assignment_expression(expression);
 
   default:
-    assert(!"Unhandled expression");
-    break;
+    ERROR("Unhandled expression");
   }
 }
 
@@ -304,68 +308,49 @@ static BinaryenExpressionRef generate_return_statement(Stmt* statement)
   return BinaryenReturn(codegen.module, expression);
 }
 
-static BinaryenExpressionRef generate_variable_declaration_statement(Stmt* statement)
+static BinaryenExpressionRef generate_variable_declaration(Stmt* declaration)
 {
   BinaryenExpressionRef initializer;
-  if (statement->var.initializer)
+  switch (declaration->var.data_type)
   {
-    initializer = generate_expression(statement->var.initializer);
+  case TYPE_INTEGER:
+  case TYPE_BOOL:
+    initializer = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
+    break;
+  case TYPE_FLOAT:
+    initializer = BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
+    break;
+  default:
+    ERROR("Unexpected default initializer");
+  }
+
+  if (declaration->var.index == -1)
+  {
+    BinaryenType type = data_type_to_binaryen_type(declaration->var.data_type);
+    BinaryenAddGlobal(codegen.module, declaration->var.name.lexeme, type, true, initializer);
+
+    if (declaration->var.initializer)
+    {
+      return BinaryenGlobalSet(codegen.module, declaration->var.name.lexeme,
+                               generate_expression(declaration->var.initializer));
+    }
+    else
+    {
+      return NULL;
+    }
   }
   else
   {
-    switch (statement->var.data_type)
+    if (declaration->var.initializer)
     {
-    case TYPE_INTEGER:
-    case TYPE_BOOL:
-      initializer = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
-      break;
-    case TYPE_FLOAT:
-      initializer = BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
-      break;
-    default:
-      initializer = BinaryenNop(codegen.module);
-      assert(!"Unexpected default initializer");
+      initializer = generate_expression(declaration->var.initializer);
     }
-  }
 
-  return BinaryenLocalSet(codegen.module, statement->var.index, initializer);
-}
-
-static BinaryenExpressionRef generate_statement(Stmt* statement)
-{
-  switch (statement->type)
-  {
-  case STMT_EXPR:
-    return generate_expression_statement(statement);
-  case STMT_RETURN:
-    return generate_return_statement(statement);
-  case STMT_VARIABLE_DECL:
-    return generate_variable_declaration_statement(statement);
-
-  default:
-    assert(!"Unhandled statement");
-    break;
+    return BinaryenLocalSet(codegen.module, declaration->var.index, initializer);
   }
 }
 
-static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
-{
-  ArrayBinaryenExpressionRef list;
-  array_init(&list);
-
-  Stmt* statement;
-  array_foreach(statements, statement)
-  {
-    array_add(&list, generate_statement(statement));
-  }
-
-  BinaryenExpressionRef block =
-    BinaryenBlock(codegen.module, NULL, list.elems, list.size, BinaryenTypeAuto());
-
-  return block;
-}
-
-static void generate_function_declaration(Stmt* declaration)
+static BinaryenExpressionRef generate_function_declaration(Stmt* declaration)
 {
   ArrayBinaryenType parameter_types;
   array_init(&parameter_types);
@@ -395,29 +380,47 @@ static void generate_function_declaration(Stmt* declaration)
   BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
                       variable_types.size, body);
   BinaryenAddFunctionExport(codegen.module, name, name);
+
+  return NULL;
 }
 
-static void generate_declaration(Stmt* declaration)
+static BinaryenExpressionRef generate_statement(Stmt* statement)
 {
-  switch (declaration->type)
+  switch (statement->type)
   {
+  case STMT_EXPR:
+    return generate_expression_statement(statement);
+  case STMT_RETURN:
+    return generate_return_statement(statement);
+  case STMT_VARIABLE_DECL:
+    return generate_variable_declaration(statement);
   case STMT_FUNCTION_DECL:
-    generate_function_declaration(declaration);
-    return;
+    return generate_function_declaration(statement);
 
   default:
-    assert(!"Unhandled declaration");
-    break;
+    ERROR("Unhandled statement");
   }
 }
 
-static void generate_declarations(void)
+static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
 {
-  Stmt* declaration;
-  array_foreach(&codegen.statements, declaration)
+  ArrayBinaryenExpressionRef list;
+  array_init(&list);
+
+  Stmt* statement;
+  array_foreach(statements, statement)
   {
-    generate_declaration(declaration);
+    BinaryenExpressionRef ref = generate_statement(statement);
+    if (ref)
+    {
+      array_add(&list, ref);
+    }
   }
+
+  BinaryenExpressionRef block =
+    BinaryenBlock(codegen.module, NULL, list.elems, list.size, BinaryenTypeAuto());
+
+  return block;
 }
 
 void codegen_init(ArrayStmt statements)
@@ -428,14 +431,11 @@ void codegen_init(ArrayStmt statements)
 
 void codegen_generate(void)
 {
-  generate_declarations();
+  BinaryenFunctionRef start =
+    BinaryenAddFunction(codegen.module, "~start", BinaryenTypeNone(), BinaryenTypeNone(), NULL, 0,
+                        generate_statements(&codegen.statements));
 
-  // BinaryenFunctionRef main =
-
-  // BinaryenSetStart(codegen.module, main);
-  // BinaryenAddMemoryImport(codegen.module, NULL, "env", "memory", 0);
-  // BinaryenAddTableImport(codegen.module, NULL, "env", "table");
-
+  BinaryenSetStart(codegen.module, start);
   BinaryenModuleValidate(codegen.module);
   // BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);

@@ -85,7 +85,6 @@ map_dec_strkey(Sll, sll, const char *, long long)
 
 map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
 map_dec_strkey(Expr, expr, const char*, struct _EXPR*)
-map_dec_strkey(Uint, uint, const char*, unsigned int)
 
 // clang-format on
 

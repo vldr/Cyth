@@ -7,11 +7,6 @@
 #include "memory.h"
 #include "statement.h"
 
-#include <assert.h>
-
-static DataType check_expression(Expr* expression);
-static void check_statement(Stmt* statement);
-
 typedef struct _ENVIRONMENT
 {
   MapStmt variables;
@@ -28,19 +23,13 @@ static Environment* environment_init(Environment* parent)
   return environment;
 }
 
-static struct
+static bool environment_check_variable(Environment* environment, const char* name)
 {
-  bool error;
-  ArrayStmt statements;
+  return map_get_stmt(&environment->variables, name) != NULL;
+}
 
-  Environment* environment;
-  Stmt* function;
-} checker;
-
-static Stmt* get_variable(const char* name)
+static Stmt* environment_get_variable(Environment* environment, const char* name)
 {
-  Environment* environment = checker.environment;
-
   while (environment)
   {
     Stmt* variable = map_get_stmt(&environment->variables, name);
@@ -55,10 +44,23 @@ static Stmt* get_variable(const char* name)
   return NULL;
 }
 
-static void set_variable(const char* name, Stmt* variable)
+static void environment_set_variable(Environment* environment, const char* name, Stmt* variable)
 {
-  map_put_stmt(&checker.environment->variables, name, variable);
+  map_put_stmt(&environment->variables, name, variable);
 }
+
+static struct
+{
+  bool error;
+  ArrayStmt statements;
+
+  Environment* environment;
+  Environment* global_environment;
+  Stmt* function;
+} checker;
+
+static DataType check_expression(Expr* expression);
+static void check_statement(Stmt* statement);
 
 static void error(Token token, const char* message)
 {
@@ -151,7 +153,7 @@ static DataType token_to_data_type(Token token)
     return TYPE_STRING;
 
   default:
-    assert(!"Unhandled data type");
+    ERROR("Unhandled data type");
   }
 }
 
@@ -258,7 +260,7 @@ static DataType check_variable_expression(Expr* expression)
 {
   const char* name = expression->var.name.lexeme;
 
-  Stmt* statement = get_variable(name);
+  Stmt* statement = environment_get_variable(checker.environment, name);
   if (!statement)
   {
     error_cannot_find_name(expression->var.name, name);
@@ -281,7 +283,7 @@ static DataType check_assignment_expression(Expr* expression)
 {
   const char* name = expression->assign.name.lexeme;
 
-  Stmt* statement = get_variable(name);
+  Stmt* statement = environment_get_variable(checker.environment, name);
   if (!statement)
   {
     error_cannot_find_name(expression->var.name, name);
@@ -327,7 +329,7 @@ static DataType check_expression(Expr* expression)
     return check_assignment_expression(expression);
 
   default:
-    assert(!"Unhandled expression");
+    ERROR("Unhandled expression");
   }
 }
 
@@ -356,14 +358,14 @@ static void check_return_statement(Stmt* statement)
 static void check_function_declaration(Stmt* statement)
 {
   const char* name = statement->func.name.lexeme;
-  if (get_variable(name))
+  if (environment_get_variable(checker.environment, name))
   {
     error_name_already_exists(statement->func.name, name);
     return;
   }
 
   statement->func.data_type = token_to_data_type(statement->func.type);
-  set_variable(name, statement);
+  environment_set_variable(checker.environment, name, statement);
 
   Stmt* previous_function = checker.function;
   Environment* previous_environment = checker.environment;
@@ -378,7 +380,7 @@ static void check_function_declaration(Stmt* statement)
     parameter->var.index = index++;
     parameter->var.data_type = token_to_data_type(parameter->var.type);
 
-    set_variable(parameter->var.name.lexeme, parameter);
+    environment_set_variable(checker.environment, parameter->var.name.lexeme, parameter);
   }
 
   Stmt* body_statement;
@@ -394,14 +396,22 @@ static void check_function_declaration(Stmt* statement)
 static void check_variable_declaration(Stmt* statement)
 {
   const char* name = statement->var.name.lexeme;
-  if (get_variable(name))
+  if (environment_check_variable(checker.environment, name))
   {
     error_name_already_exists(statement->var.name, name);
     return;
   }
 
-  statement->var.index =
-    array_size(&checker.function->func.variables) + array_size(&checker.function->func.parameters);
+  if (checker.function)
+  {
+    statement->var.index = array_size(&checker.function->func.variables) +
+                           array_size(&checker.function->func.parameters);
+  }
+  else
+  {
+    statement->var.index = -1;
+  }
+
   statement->var.data_type = token_to_data_type(statement->var.type);
 
   if (statement->var.initializer)
@@ -415,8 +425,12 @@ static void check_variable_declaration(Stmt* statement)
     }
   }
 
-  array_add(&checker.function->func.variables, statement);
-  set_variable(name, statement);
+  if (checker.function)
+  {
+    array_add(&checker.function->func.variables, statement);
+  }
+
+  environment_set_variable(checker.environment, name, statement);
 }
 
 static void check_statement(Stmt* statement)
@@ -440,7 +454,7 @@ static void check_statement(Stmt* statement)
     break;
 
   default:
-    assert(!"Unhandled statement");
+    ERROR("Unhandled statement");
   }
 }
 
@@ -450,6 +464,7 @@ void checker_init(ArrayStmt statements)
   checker.function = NULL;
   checker.statements = statements;
   checker.environment = environment_init(NULL);
+  checker.global_environment = checker.environment;
 }
 
 void checker_validate(void)

@@ -1,6 +1,24 @@
 #ifndef main_h
 #define main_h
 
+#include <assert.h>
+
+#ifdef _WIN32
+#define ERROR(message)                                                                             \
+  do                                                                                               \
+  {                                                                                                \
+    assert(!message);                                                                              \
+    __assume(0);                                                                                   \
+  } while (0)
+#else
+#define ERROR(message)                                                                             \
+  do                                                                                               \
+  {                                                                                                \
+    assert(!message);                                                                              \
+    __builtin_unreachable();                                                                       \
+  } while (0)
+#endif
+
 void report_error(int start_line, int start_column, int end_line, int end_column,
                   const char* message);
 

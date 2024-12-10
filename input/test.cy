@@ -1,7 +1,7 @@
-int main(int hello, int poop)
-    int a = hello * poop
-    int b = hello + poop
+int frank = 22
 
-    b = a = a*2
+int square(int n)
+    int frank = 10
+    return n * frank * 2
 
-    return a + b
+frank = frank * 2

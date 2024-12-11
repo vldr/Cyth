@@ -454,6 +454,23 @@ static Stmt* if_statement(void)
   return stmt;
 }
 
+static Stmt* while_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_WHILE;
+  stmt->loop.keyword = advance();
+  stmt->loop.condition = expression();
+
+  array_init(&stmt->loop.body);
+
+  consume(TOKEN_NEWLINE, "Expected newline after condition.");
+
+  if (check(TOKEN_INDENT))
+    stmt->loop.body = statements();
+
+  return stmt;
+}
+
 static Stmt* function_declaration_statement(Token type, Token name)
 {
   Stmt* stmt = STMT();
@@ -488,7 +505,9 @@ static Stmt* function_declaration_statement(Token type, Token name)
   consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
   consume(TOKEN_NEWLINE, "Expected newline after ')'.");
 
-  stmt->func.body = statements();
+  if (check(TOKEN_INDENT))
+    stmt->func.body = statements();
+
   return stmt;
 }
 
@@ -536,7 +555,8 @@ static Stmt* statement(void)
       return return_statement();
     case TOKEN_IF:
       return if_statement();
-
+    case TOKEN_WHILE:
+      return while_statement();
     default:
       return expression_statement();
     }

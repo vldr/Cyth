@@ -1,0 +1,13 @@
+int fib(int n)
+    int a
+    int b
+    int c = 1
+    int i = 1
+
+    while i < n
+        a = b
+        b = c
+        c = a + b
+        i = i + 1
+
+    return c

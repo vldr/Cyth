@@ -30,6 +30,13 @@ typedef struct
 
 typedef struct
 {
+  Token keyword;
+  Expr* condition;
+  ArrayStmt body;
+} WhileStmt;
+
+typedef struct
+{
   DataType data_type;
 
   Token type;
@@ -55,6 +62,7 @@ typedef enum
   STMT_EXPR,
   STMT_RETURN,
   STMT_IF,
+  STMT_WHILE,
   STMT_FUNCTION_DECL,
   STMT_VARIABLE_DECL,
 } StmtType;
@@ -69,6 +77,7 @@ struct _STMT
     VarStmt var;
     ReturnStmt ret;
     IfStmt cond;
+    WhileStmt loop;
   };
 };
 

@@ -3,6 +3,7 @@
 #include "expression.h"
 #include "lexer.h"
 #include "main.h"
+#include "memory.h"
 #include "statement.h"
 
 #include <binaryen-c.h>
@@ -18,6 +19,7 @@ static struct
 {
   BinaryenModuleRef module;
   ArrayStmt statements;
+  int loops;
 } codegen;
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -345,6 +347,23 @@ static BinaryenExpressionRef generate_if_statement(Stmt* statement)
   return BinaryenIf(codegen.module, condition, ifTrue, ifFalse);
 }
 
+static BinaryenExpressionRef generate_while_statement(Stmt* statement)
+{
+  codegen.loops++;
+
+  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops);
+  BinaryenExpressionRef condition = generate_expression(statement->loop.condition);
+  BinaryenExpressionRef body[] = {generate_statements(&statement->loop.body),
+                                  BinaryenBreak(codegen.module, name, condition, NULL)};
+
+  codegen.loops--;
+
+  BinaryenExpressionRef block =
+    BinaryenBlock(codegen.module, NULL, body, sizeof(body) / sizeof(*body), BinaryenTypeNone());
+
+  return BinaryenIf(codegen.module, condition, BinaryenLoop(codegen.module, name, block), NULL);
+}
+
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)
 {
   BinaryenExpressionRef expression = NULL;
@@ -420,13 +439,20 @@ static BinaryenExpressionRef generate_function_declaration(Stmt* declaration)
   }
 
   const char* name = declaration->func.name.lexeme;
-  BinaryenExpressionRef body = generate_statements(&declaration->func.body);
-  BinaryenType results = data_type_to_binaryen_type(declaration->func.data_type);
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
+  BinaryenType results = data_type_to_binaryen_type(declaration->func.data_type);
 
-  BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
-                      variable_types.size, body);
-  BinaryenAddFunctionExport(codegen.module, name, name);
+  if (declaration->func.body.elems)
+  {
+    BinaryenExpressionRef body = generate_statements(&declaration->func.body);
+    BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
+                        variable_types.size, body);
+    BinaryenAddFunctionExport(codegen.module, name, name);
+  }
+  else
+  {
+    BinaryenAddFunctionImport(codegen.module, name, "env", name, params, results);
+  }
 
   return NULL;
 }
@@ -439,6 +465,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_expression_statement(statement);
   case STMT_IF:
     return generate_if_statement(statement);
+  case STMT_WHILE:
+    return generate_while_statement(statement);
   case STMT_RETURN:
     return generate_return_statement(statement);
   case STMT_VARIABLE_DECL:
@@ -476,6 +504,7 @@ void codegen_init(ArrayStmt statements)
 {
   codegen.module = BinaryenModuleCreate();
   codegen.statements = statements;
+  codegen.loops = 0;
 }
 
 void codegen_generate(void)
@@ -486,7 +515,7 @@ void codegen_generate(void)
 
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleValidate(codegen.module);
-  BinaryenModuleOptimize(codegen.module);
+  // BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

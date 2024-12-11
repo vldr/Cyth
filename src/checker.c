@@ -105,12 +105,7 @@ static void error_unexpected_return(Token token)
   error(token, "A return statement can only appear inside a function.");
 }
 
-static void error_unexpected_if(Token token)
-{
-  error(token, "An if-statement can only appear inside a function.");
-}
-
-static void error_if_condition_is_not_bool(Token token)
+static void error_condition_is_not_bool(Token token)
 {
   error(token, "The condition expression must evaluate to a boolean.");
 }
@@ -420,17 +415,13 @@ static void check_return_statement(Stmt* statement)
 
 static void check_if_statement(Stmt* statement)
 {
-  if (!checker.function)
-  {
-    error_unexpected_if(statement->cond.keyword);
-    return;
-  }
-
   DataType data_type = check_expression(statement->cond.condition);
   if (data_type != TYPE_BOOL)
   {
-    error_if_condition_is_not_bool(statement->cond.keyword);
+    error_condition_is_not_bool(statement->cond.keyword);
   }
+
+  checker.environment = environment_init(checker.environment);
 
   Stmt* body_statement;
   array_foreach(&statement->cond.then_branch, body_statement)
@@ -438,14 +429,39 @@ static void check_if_statement(Stmt* statement)
     check_statement(body_statement);
   }
 
+  checker.environment = checker.environment->parent;
+
   if (statement->cond.else_branch.elems)
   {
+    checker.environment = environment_init(checker.environment);
+
     Stmt* body_statement;
     array_foreach(&statement->cond.else_branch, body_statement)
     {
       check_statement(body_statement);
     }
+
+    checker.environment = checker.environment->parent;
   }
+}
+
+static void check_while_statement(Stmt* statement)
+{
+  DataType data_type = check_expression(statement->loop.condition);
+  if (data_type != TYPE_BOOL)
+  {
+    error_condition_is_not_bool(statement->loop.keyword);
+  }
+
+  checker.environment = environment_init(checker.environment);
+
+  Stmt* body_statement;
+  array_foreach(&statement->loop.body, body_statement)
+  {
+    check_statement(body_statement);
+  }
+
+  checker.environment = checker.environment->parent;
 }
 
 static void check_function_declaration(Stmt* statement)
@@ -461,7 +477,6 @@ static void check_function_declaration(Stmt* statement)
   environment_set_variable(checker.environment, name, statement);
 
   Stmt* previous_function = checker.function;
-  Environment* previous_environment = checker.environment;
 
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
@@ -483,7 +498,7 @@ static void check_function_declaration(Stmt* statement)
   }
 
   checker.function = previous_function;
-  checker.environment = previous_environment;
+  checker.environment = checker.environment->parent;
 }
 
 static void check_variable_declaration(Stmt* statement)
@@ -536,6 +551,9 @@ static void check_statement(Stmt* statement)
     break;
   case STMT_IF:
     check_if_statement(statement);
+    break;
+  case STMT_WHILE:
+    check_while_statement(statement);
     break;
   case STMT_RETURN:
     check_return_statement(statement);

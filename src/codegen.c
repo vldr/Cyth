@@ -331,6 +331,20 @@ static BinaryenExpressionRef generate_expression_statement(Stmt* statement)
   return expression;
 }
 
+static BinaryenExpressionRef generate_if_statement(Stmt* statement)
+{
+  BinaryenExpressionRef condition = generate_expression(statement->cond.condition);
+  BinaryenExpressionRef ifTrue = generate_statements(&statement->cond.then_branch);
+  BinaryenExpressionRef ifFalse = NULL;
+
+  if (statement->cond.else_branch.elems)
+  {
+    ifFalse = generate_statements(&statement->cond.else_branch);
+  }
+
+  return BinaryenIf(codegen.module, condition, ifTrue, ifFalse);
+}
+
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)
 {
   BinaryenExpressionRef expression = NULL;
@@ -423,6 +437,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
   {
   case STMT_EXPR:
     return generate_expression_statement(statement);
+  case STMT_IF:
+    return generate_if_statement(statement);
   case STMT_RETURN:
     return generate_return_statement(statement);
   case STMT_VARIABLE_DECL:

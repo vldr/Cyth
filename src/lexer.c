@@ -238,12 +238,6 @@ static void comment(void)
 {
   while (peek() != '\n' && peek() != '\0')
     advance();
-
-  if (peek() == '\n')
-  {
-    advance();
-    newline();
-  }
 }
 
 static void scan_token(void)
@@ -385,10 +379,15 @@ static void scan_indentation(void)
 
   int indentation = 0;
 
-  while (peek() == ' ' || peek() == '\t' || peek() == '\r' || peek() == '\n')
+  while (peek() == ' ' || peek() == '\t' || peek() == '\r' || peek() == '\n' || peek() == '#')
   {
     switch (peek())
     {
+    case '#':
+      advance();
+      comment();
+
+      break;
     case '\n':
       indentation = 0;
 
@@ -413,7 +412,7 @@ static void scan_indentation(void)
     }
   }
 
-  if (eof() || peek() == '#')
+  if (eof())
   {
     return;
   }

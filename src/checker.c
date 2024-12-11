@@ -102,7 +102,17 @@ static void error_not_a_function(Token token, const char* name)
 
 static void error_unexpected_return(Token token)
 {
-  error(token, "A return statement can only appear inside functions.");
+  error(token, "A return statement can only appear inside a function.");
+}
+
+static void error_unexpected_if(Token token)
+{
+  error(token, "An if-statement can only appear inside a function.");
+}
+
+static void error_if_condition_is_not_bool(Token token)
+{
+  error(token, "The condition expression must evaluate to a boolean.");
 }
 
 static void error_invalid_return_type(Token token)
@@ -408,6 +418,36 @@ static void check_return_statement(Stmt* statement)
   }
 }
 
+static void check_if_statement(Stmt* statement)
+{
+  if (!checker.function)
+  {
+    error_unexpected_if(statement->cond.keyword);
+    return;
+  }
+
+  DataType data_type = check_expression(statement->cond.condition);
+  if (data_type != TYPE_BOOL)
+  {
+    error_if_condition_is_not_bool(statement->cond.keyword);
+  }
+
+  Stmt* body_statement;
+  array_foreach(&statement->cond.then_branch, body_statement)
+  {
+    check_statement(body_statement);
+  }
+
+  if (statement->cond.else_branch.elems)
+  {
+    Stmt* body_statement;
+    array_foreach(&statement->cond.else_branch, body_statement)
+    {
+      check_statement(body_statement);
+    }
+  }
+}
+
 static void check_function_declaration(Stmt* statement)
 {
   const char* name = statement->func.name.lexeme;
@@ -494,10 +534,12 @@ static void check_statement(Stmt* statement)
   case STMT_EXPR:
     check_expression_statement(statement);
     break;
+  case STMT_IF:
+    check_if_statement(statement);
+    break;
   case STMT_RETURN:
     check_return_statement(statement);
     break;
-
   case STMT_FUNCTION_DECL:
     check_function_declaration(statement);
     break;

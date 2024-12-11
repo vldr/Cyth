@@ -22,6 +22,14 @@ typedef struct
 
 typedef struct
 {
+  Token keyword;
+  Expr* condition;
+  ArrayStmt then_branch;
+  ArrayStmt else_branch;
+} IfStmt;
+
+typedef struct
+{
   DataType data_type;
 
   Token type;
@@ -46,6 +54,7 @@ typedef enum
 {
   STMT_EXPR,
   STMT_RETURN,
+  STMT_IF,
   STMT_FUNCTION_DECL,
   STMT_VARIABLE_DECL,
 } StmtType;
@@ -59,6 +68,7 @@ struct _STMT
     FuncStmt func;
     VarStmt var;
     ReturnStmt ret;
+    IfStmt cond;
   };
 };
 

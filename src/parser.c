@@ -7,8 +7,8 @@
 #include <stdio.h>
 
 static Expr* expression(void);
-static Stmt* declaration(void);
 static Stmt* statement(void);
+static ArrayStmt statements(void);
 
 static struct
 {
@@ -395,6 +395,18 @@ static Expr* expression(void)
   return assignment();
 }
 
+static Stmt* expression_statement(void)
+{
+  Expr* expr = expression();
+  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+
+  Stmt* stmt = STMT();
+  stmt->type = STMT_EXPR;
+  stmt->expr.expr = expr;
+
+  return stmt;
+}
+
 static Stmt* return_statement(void)
 {
   Token keyword = advance();
@@ -414,50 +426,35 @@ static Stmt* return_statement(void)
   return stmt;
 }
 
-static Stmt* expression_statement(void)
+static Stmt* if_statement(void)
 {
-  Expr* expr = expression();
-  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
-
   Stmt* stmt = STMT();
-  stmt->type = STMT_EXPR;
-  stmt->expr.expr = expr;
+  stmt->type = STMT_IF;
+  stmt->cond.keyword = advance();
+  stmt->cond.condition = expression();
+
+  consume(TOKEN_NEWLINE, "Expected newline after condition.");
+  stmt->cond.then_branch = statements();
+
+  array_init(&stmt->cond.else_branch);
+
+  if (match(TOKEN_ELSE))
+  {
+    if (check(TOKEN_IF))
+    {
+      array_add(&stmt->cond.else_branch, if_statement());
+    }
+    else
+    {
+      consume(TOKEN_NEWLINE, "Expected newline after else.");
+      stmt->cond.else_branch = statements();
+    }
+  }
 
   return stmt;
 }
 
-static Stmt* statement(void)
-{
-  Token token = peek();
-
-  switch (token.type)
-  {
-  case TOKEN_RETURN:
-    return return_statement();
-
-  default:
-    return expression_statement();
-  }
-}
-
-static ArrayStmt statements(void)
-{
-  ArrayStmt statements;
-  array_init(&statements);
-
-  consume(TOKEN_INDENT, "Expected an indent.");
-
-  while (!eof() && !check(TOKEN_DEDENT))
-  {
-    array_add(&statements, declaration());
-  }
-
-  consume(TOKEN_DEDENT, "Expected a dedent.");
-
-  return statements;
-}
-
-static Stmt* function_declaration(Token type, Token name)
+static Stmt* function_declaration_statement(Token type, Token name)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_FUNCTION_DECL;
@@ -495,7 +492,7 @@ static Stmt* function_declaration(Token type, Token name)
   return stmt;
 }
 
-static Stmt* variable_declaration(Token type, Token name)
+static Stmt* variable_declaration_statement(Token type, Token name)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_VARIABLE_DECL;
@@ -512,22 +509,62 @@ static Stmt* variable_declaration(Token type, Token name)
   return stmt;
 }
 
-static Stmt* declaration(void)
+static Stmt* statement(void)
 {
   if (is_data_type_and_identifier())
   {
     Token type = consume_data_type("Expected a type.");
     Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
-    if (check(TOKEN_LEFT_PAREN))
-      return function_declaration(type, name);
-    else
-      return variable_declaration(type, name);
+    Token token = peek();
+
+    switch (token.type)
+    {
+    case TOKEN_LEFT_PAREN:
+      return function_declaration_statement(type, name);
+    default:
+      return variable_declaration_statement(type, name);
+    }
   }
   else
   {
-    return statement();
+    Token token = peek();
+
+    switch (token.type)
+    {
+    case TOKEN_RETURN:
+      return return_statement();
+    case TOKEN_IF:
+      return if_statement();
+
+    default:
+      return expression_statement();
+    }
   }
+}
+
+static ArrayStmt statements(void)
+{
+  ArrayStmt statements;
+  array_init(&statements);
+
+  consume(TOKEN_INDENT, "Expected an indent.");
+
+  while (!eof() && !check(TOKEN_DEDENT))
+  {
+    array_add(&statements, statement());
+
+    if (parser.error)
+    {
+      synchronize();
+
+      parser.error = false;
+    }
+  }
+
+  consume(TOKEN_DEDENT, "Expected a dedent.");
+
+  return statements;
 }
 
 void parser_init(ArrayToken tokens)
@@ -544,7 +581,7 @@ ArrayStmt parser_parse(void)
 
   while (!eof())
   {
-    array_add(&statements, declaration());
+    array_add(&statements, statement());
 
     if (parser.error)
     {

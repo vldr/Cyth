@@ -349,19 +349,19 @@ static BinaryenExpressionRef generate_if_statement(Stmt* statement)
 
 static BinaryenExpressionRef generate_while_statement(Stmt* statement)
 {
-  codegen.loops++;
+  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops++);
 
-  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops);
-  BinaryenExpressionRef condition = generate_expression(statement->loop.condition);
   BinaryenExpressionRef body[] = {generate_statements(&statement->loop.body),
-                                  BinaryenBreak(codegen.module, name, condition, NULL)};
+                                  BinaryenBreak(codegen.module, name, NULL, NULL)};
+  BinaryenExpressionRef body_block =
+    BinaryenBlock(codegen.module, NULL, body, sizeof(body) / sizeof(*body), BinaryenTypeNone());
+
+  BinaryenExpressionRef condition = generate_expression(statement->loop.condition);
+  BinaryenExpressionRef loop = BinaryenIf(codegen.module, condition, body_block, NULL);
 
   codegen.loops--;
 
-  BinaryenExpressionRef block =
-    BinaryenBlock(codegen.module, NULL, body, sizeof(body) / sizeof(*body), BinaryenTypeNone());
-
-  return BinaryenIf(codegen.module, condition, BinaryenLoop(codegen.module, name, block), NULL);
+  return BinaryenLoop(codegen.module, name, loop);
 }
 
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)
@@ -515,7 +515,7 @@ void codegen_generate(void)
 
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleValidate(codegen.module);
-  // BinaryenModuleOptimize(codegen.module);
+  BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

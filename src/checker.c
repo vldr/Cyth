@@ -101,6 +101,11 @@ static void error_not_a_function(Token token, const char* name)
   error(token, memory_sprintf(&memory, "The name '%s' is not a function.", name));
 }
 
+static void error_unexpected_function(Token token)
+{
+  error(token, "A function declaration is not allowed here.");
+}
+
 static void error_unexpected_return(Token token)
 {
   error(token, "A return statement can only appear inside a function.");
@@ -496,15 +501,11 @@ static void check_while_statement(Stmt* statement)
 
 static void check_function_declaration(Stmt* statement)
 {
-  const char* name = statement->func.name.lexeme;
-  if (environment_get_variable(checker.environment, name))
+  if (checker.function)
   {
-    error_name_already_exists(statement->func.name, name);
+    error_unexpected_function(statement->func.name);
     return;
   }
-
-  statement->func.data_type = token_to_data_type(statement->func.type);
-  environment_set_variable(checker.environment, name, statement);
 
   Stmt* previous_function = checker.function;
 
@@ -606,6 +607,34 @@ static void check_statement(Stmt* statement)
   }
 }
 
+static void init_function_declaration(Stmt* statement)
+{
+  const char* name = statement->func.name.lexeme;
+  if (environment_get_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->func.name, name);
+    return;
+  }
+
+  statement->func.data_type = token_to_data_type(statement->func.type);
+  environment_set_variable(checker.environment, name, statement);
+}
+
+static void init_statement(Stmt* statement)
+{
+  checker.error = false;
+
+  switch (statement->type)
+  {
+  case STMT_FUNCTION_DECL:
+    init_function_declaration(statement);
+    break;
+
+  default:
+    break;
+  }
+}
+
 void checker_init(ArrayStmt statements)
 {
   checker.error = false;
@@ -618,6 +647,11 @@ void checker_init(ArrayStmt statements)
 void checker_validate(void)
 {
   Stmt* statement;
+  array_foreach(&checker.statements, statement)
+  {
+    init_statement(statement);
+  }
+
   array_foreach(&checker.statements, statement)
   {
     check_statement(statement);

@@ -56,6 +56,7 @@ static struct
 
   Environment* environment;
   Stmt* function;
+  Stmt* loop;
 } checker;
 
 static DataType check_expression(Expr* expression);
@@ -103,6 +104,16 @@ static void error_not_a_function(Token token, const char* name)
 static void error_unexpected_return(Token token)
 {
   error(token, "A return statement can only appear inside a function.");
+}
+
+static void error_unexpected_continue(Token token)
+{
+  error(token, "A continue statement can only appear inside a loop.");
+}
+
+static void error_unexpected_break(Token token)
+{
+  error(token, "A break statement can only appear inside a loop.");
 }
 
 static void error_condition_is_not_bool(Token token)
@@ -167,7 +178,7 @@ static DataType token_to_data_type(Token token)
     return TYPE_STRING;
 
   default:
-    ERROR("Unhandled data type");
+    UNREACHABLE("Unhandled data type");
   }
 }
 
@@ -382,7 +393,7 @@ static DataType check_expression(Expr* expression)
     return check_call_expression(expression);
 
   default:
-    ERROR("Unhandled expression");
+    UNREACHABLE("Unhandled expression");
   }
 }
 
@@ -410,6 +421,22 @@ static void check_return_statement(Stmt* statement)
   {
     error_invalid_return_type(checker.function->func.type);
     return;
+  }
+}
+
+static void check_continue_statement(Stmt* statement)
+{
+  if (!checker.loop)
+  {
+    error_unexpected_continue(statement->ret.keyword);
+  }
+}
+
+static void check_break_statement(Stmt* statement)
+{
+  if (!checker.loop)
+  {
+    error_unexpected_break(statement->ret.keyword);
   }
 }
 
@@ -453,7 +480,9 @@ static void check_while_statement(Stmt* statement)
     error_condition_is_not_bool(statement->loop.keyword);
   }
 
+  Stmt* previous_loop = checker.loop;
   checker.environment = environment_init(checker.environment);
+  checker.loop = statement;
 
   Stmt* body_statement;
   array_foreach(&statement->loop.body, body_statement)
@@ -461,6 +490,7 @@ static void check_while_statement(Stmt* statement)
     check_statement(body_statement);
   }
 
+  checker.loop = previous_loop;
   checker.environment = checker.environment->parent;
 }
 
@@ -558,6 +588,12 @@ static void check_statement(Stmt* statement)
   case STMT_RETURN:
     check_return_statement(statement);
     break;
+  case STMT_CONTINUE:
+    check_continue_statement(statement);
+    break;
+  case STMT_BREAK:
+    check_break_statement(statement);
+    break;
   case STMT_FUNCTION_DECL:
     check_function_declaration(statement);
     break;
@@ -566,7 +602,7 @@ static void check_statement(Stmt* statement)
     break;
 
   default:
-    ERROR("Unhandled statement");
+    UNREACHABLE("Unhandled statement");
   }
 }
 
@@ -574,6 +610,7 @@ void checker_init(ArrayStmt statements)
 {
   checker.error = false;
   checker.function = NULL;
+  checker.loop = NULL;
   checker.statements = statements;
   checker.environment = environment_init(NULL);
 }

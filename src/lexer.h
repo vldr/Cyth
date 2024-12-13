@@ -67,6 +67,8 @@ typedef enum
   TOKEN_THIS,
   TOKEN_TRUE,
   TOKEN_WHILE,
+  TOKEN_CONTINUE,
+  TOKEN_BREAK,
 
   TOKEN_EOF
 } TokenType;

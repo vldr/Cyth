@@ -36,7 +36,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
     return BinaryenTypeFloat32();
 
   default:
-    ERROR("Unhandled data type");
+    UNREACHABLE("Unhandled data type");
   }
 }
 
@@ -57,7 +57,7 @@ static BinaryenExpressionRef generate_literal_expression(Expr* expression)
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->literal.boolean));
 
   default:
-    ERROR("Unhandled literal value");
+    UNREACHABLE("Unhandled literal value");
   }
 }
 
@@ -77,7 +77,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenAddFloat32();
     else
-      ERROR("Unsupported binary type for +");
+      UNREACHABLE("Unsupported binary type for +");
 
     break;
   case TOKEN_MINUS:
@@ -86,7 +86,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenSubFloat32();
     else
-      ERROR("Unsupported binary type for -");
+      UNREACHABLE("Unsupported binary type for -");
 
     break;
   case TOKEN_STAR:
@@ -95,7 +95,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenMulFloat32();
     else
-      ERROR("Unsupported binary type for *");
+      UNREACHABLE("Unsupported binary type for *");
 
     break;
   case TOKEN_SLASH:
@@ -104,7 +104,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenDivFloat32();
     else
-      ERROR("Unsupported binary type for /");
+      UNREACHABLE("Unsupported binary type for /");
 
     break;
 
@@ -112,7 +112,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     if (data_type == TYPE_INTEGER)
       op = BinaryenRemSInt32();
     else
-      ERROR("Unsupported binary type for %");
+      UNREACHABLE("Unsupported binary type for %");
 
     break;
 
@@ -122,7 +122,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenEqFloat32();
     else
-      ERROR("Unsupported binary type for ==");
+      UNREACHABLE("Unsupported binary type for ==");
 
     break;
 
@@ -132,7 +132,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenNeFloat32();
     else
-      ERROR("Unsupported binary type for ==");
+      UNREACHABLE("Unsupported binary type for ==");
 
     break;
 
@@ -142,7 +142,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenLeFloat32();
     else
-      ERROR("Unsupported binary type for <=");
+      UNREACHABLE("Unsupported binary type for <=");
 
     break;
 
@@ -152,7 +152,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenGeFloat32();
     else
-      ERROR("Unsupported binary type for <=");
+      UNREACHABLE("Unsupported binary type for <=");
 
     break;
 
@@ -162,7 +162,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenLtFloat32();
     else
-      ERROR("Unsupported binary type for <");
+      UNREACHABLE("Unsupported binary type for <");
 
     break;
 
@@ -172,7 +172,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     else if (data_type == TYPE_FLOAT)
       op = BinaryenGtFloat32();
     else
-      ERROR("Unsupported binary type for >");
+      UNREACHABLE("Unsupported binary type for >");
 
     break;
 
@@ -186,7 +186,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
       return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
-      ERROR("Unsupported binary type for AND");
+      UNREACHABLE("Unsupported binary type for AND");
 
     break;
 
@@ -200,12 +200,12 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
       return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
     }
     else
-      ERROR("Unsupported binary type for OR");
+      UNREACHABLE("Unsupported binary type for OR");
 
     break;
 
   default:
-    ERROR("Unhandled binary operation");
+    UNREACHABLE("Unhandled binary operation");
   }
 
   return BinaryenBinary(codegen.module, op, left, right);
@@ -224,17 +224,17 @@ static BinaryenExpressionRef generate_unary_expression(Expr* expression)
     else if (expression->data_type == TYPE_FLOAT)
       return BinaryenUnary(codegen.module, BinaryenNegFloat32(), value);
     else
-      ERROR("Unsupported unary type for -");
+      UNREACHABLE("Unsupported unary type for -");
 
   case TOKEN_BANG:
   case TOKEN_NOT:
     if (expression->data_type == TYPE_BOOL)
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(), value);
     else
-      ERROR("Unsupported unary type for !");
+      UNREACHABLE("Unsupported unary type for !");
 
   default:
-    ERROR("Unhandled unary expression");
+    UNREACHABLE("Unhandled unary expression");
   }
 }
 
@@ -246,7 +246,7 @@ static BinaryenExpressionRef generate_cast_expression(Expr* expression)
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
   }
 
-  ERROR("Unsupported cast type");
+  UNREACHABLE("Unsupported cast type");
 }
 
 static BinaryenExpressionRef generate_variable_expression(Expr* expression)
@@ -318,7 +318,7 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_call_expression(expression);
 
   default:
-    ERROR("Unhandled expression");
+    UNREACHABLE("Unhandled expression");
   }
 }
 
@@ -349,19 +349,24 @@ static BinaryenExpressionRef generate_if_statement(Stmt* statement)
 
 static BinaryenExpressionRef generate_while_statement(Stmt* statement)
 {
-  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops++);
+  codegen.loops++;
 
-  BinaryenExpressionRef body[] = {generate_statements(&statement->loop.body),
-                                  BinaryenBreak(codegen.module, name, NULL, NULL)};
-  BinaryenExpressionRef body_block =
-    BinaryenBlock(codegen.module, NULL, body, sizeof(body) / sizeof(*body), BinaryenTypeNone());
+  const char* break_name = memory_sprintf(&memory, "break|%d", codegen.loops);
+  const char* loop_name = memory_sprintf(&memory, "loop|%d", codegen.loops);
 
-  BinaryenExpressionRef condition = generate_expression(statement->loop.condition);
-  BinaryenExpressionRef loop = BinaryenIf(codegen.module, condition, body_block, NULL);
+  BinaryenExpressionRef loop_block_list[] = {generate_statements(&statement->loop.body),
+                                             BinaryenBreak(codegen.module, loop_name, NULL, NULL)};
+  BinaryenExpressionRef loop_block =
+    BinaryenBlock(codegen.module, NULL, loop_block_list,
+                  sizeof(loop_block_list) / sizeof(*loop_block_list), BinaryenTypeNone());
+
+  BinaryenExpressionRef loop_body =
+    BinaryenIf(codegen.module, generate_expression(statement->loop.condition), loop_block, NULL);
+  BinaryenExpressionRef loop = BinaryenLoop(codegen.module, loop_name, loop_body);
 
   codegen.loops--;
 
-  return BinaryenLoop(codegen.module, name, loop);
+  return BinaryenBlock(codegen.module, break_name, &loop, 1, BinaryenTypeNone());
 }
 
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)
@@ -371,6 +376,18 @@ static BinaryenExpressionRef generate_return_statement(Stmt* statement)
     expression = generate_expression(statement->ret.expr);
 
   return BinaryenReturn(codegen.module, expression);
+}
+
+static BinaryenExpressionRef generate_continue_statement(void)
+{
+  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops);
+  return BinaryenBreak(codegen.module, name, NULL, NULL);
+}
+
+static BinaryenExpressionRef generate_break_statement(void)
+{
+  const char* name = memory_sprintf(&memory, "break|%d", codegen.loops);
+  return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 
 static BinaryenExpressionRef generate_variable_declaration(Stmt* declaration)
@@ -386,7 +403,7 @@ static BinaryenExpressionRef generate_variable_declaration(Stmt* declaration)
     initializer = BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
     break;
   default:
-    ERROR("Unexpected default initializer");
+    UNREACHABLE("Unexpected default initializer");
   }
 
   if (declaration->var.index == -1)
@@ -469,13 +486,17 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_while_statement(statement);
   case STMT_RETURN:
     return generate_return_statement(statement);
+  case STMT_CONTINUE:
+    return generate_continue_statement();
+  case STMT_BREAK:
+    return generate_break_statement();
   case STMT_VARIABLE_DECL:
     return generate_variable_declaration(statement);
   case STMT_FUNCTION_DECL:
     return generate_function_declaration(statement);
 
   default:
-    ERROR("Unhandled statement");
+    UNREACHABLE("Unhandled statement");
   }
 }
 
@@ -504,7 +525,7 @@ void codegen_init(ArrayStmt statements)
 {
   codegen.module = BinaryenModuleCreate();
   codegen.statements = statements;
-  codegen.loops = 0;
+  codegen.loops = -1;
 }
 
 void codegen_generate(void)

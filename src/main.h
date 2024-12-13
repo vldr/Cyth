@@ -4,14 +4,14 @@
 #include <assert.h>
 
 #ifdef _WIN32
-#define ERROR(message)                                                                             \
+#define UNREACHABLE(message)                                                                       \
   do                                                                                               \
   {                                                                                                \
     assert(!message);                                                                              \
     __assume(0);                                                                                   \
   } while (0)
 #else
-#define ERROR(message)                                                                             \
+#define UNREACHABLE(message)                                                                       \
   do                                                                                               \
   {                                                                                                \
     assert(!message);                                                                              \

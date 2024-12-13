@@ -23,6 +23,16 @@ typedef struct
 typedef struct
 {
   Token keyword;
+} ContinueStmt;
+
+typedef struct
+{
+  Token keyword;
+} BreakStmt;
+
+typedef struct
+{
+  Token keyword;
   Expr* condition;
   ArrayStmt then_branch;
   ArrayStmt else_branch;
@@ -61,6 +71,8 @@ typedef enum
 {
   STMT_EXPR,
   STMT_RETURN,
+  STMT_CONTINUE,
+  STMT_BREAK,
   STMT_IF,
   STMT_WHILE,
   STMT_FUNCTION_DECL,
@@ -78,6 +90,8 @@ struct _STMT
     ReturnStmt ret;
     IfStmt cond;
     WhileStmt loop;
+    BreakStmt brk;
+    ContinueStmt cont;
   };
 };
 

@@ -159,10 +159,29 @@ static void literal(void)
   default:
     KEYWORD_GROUP('a')
     KEYWORD("and", TOKEN_AND)
+
     KEYWORD_GROUP('b')
-    KEYWORD("bool", TOKEN_IDENTIFIER_BOOL)
+    switch (lexer.start[1])
+    {
+    default:
+      KEYWORD_GROUP('o')
+      KEYWORD("bool", TOKEN_IDENTIFIER_BOOL)
+
+      KEYWORD_GROUP('r')
+      KEYWORD("break", TOKEN_BREAK)
+    }
+
     KEYWORD_GROUP('c')
-    KEYWORD("class", TOKEN_CLASS)
+    switch (lexer.start[1])
+    {
+    default:
+      KEYWORD_GROUP('l')
+      KEYWORD("class", TOKEN_CLASS)
+
+      KEYWORD_GROUP('o')
+      KEYWORD("continue", TOKEN_CONTINUE)
+    }
+
     KEYWORD_GROUP('e')
     KEYWORD("else", TOKEN_ELSE)
 

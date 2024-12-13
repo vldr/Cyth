@@ -415,13 +415,35 @@ static Stmt* return_statement(void)
   if (!match(TOKEN_NEWLINE))
   {
     expr = expression();
-    consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+    consume(TOKEN_NEWLINE, "Expected a newline after 'return' statement.");
   }
 
   Stmt* stmt = STMT();
   stmt->type = STMT_RETURN;
   stmt->ret.expr = expr;
   stmt->ret.keyword = keyword;
+
+  return stmt;
+}
+
+static Stmt* continue_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_CONTINUE;
+  stmt->cont.keyword = advance();
+
+  consume(TOKEN_NEWLINE, "Expected a newline after continue statement.");
+
+  return stmt;
+}
+
+static Stmt* break_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_BREAK;
+  stmt->cont.keyword = advance();
+
+  consume(TOKEN_NEWLINE, "Expected a newline after break statement.");
 
   return stmt;
 }
@@ -553,6 +575,10 @@ static Stmt* statement(void)
     {
     case TOKEN_RETURN:
       return return_statement();
+    case TOKEN_CONTINUE:
+      return continue_statement();
+    case TOKEN_BREAK:
+      return break_statement();
     case TOKEN_IF:
       return if_statement();
     case TOKEN_WHILE:

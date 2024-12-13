@@ -14,6 +14,19 @@ typedef struct _ENVIRONMENT
   struct _ENVIRONMENT* parent;
 } Environment;
 
+static struct
+{
+  bool error;
+  ArrayStmt statements;
+
+  Environment* environment;
+  Stmt* function;
+  Stmt* loop;
+} checker;
+
+static DataType check_expression(Expr* expression);
+static void check_statement(Stmt* statement);
+
 static Environment* environment_init(Environment* parent)
 {
   Environment* environment = ALLOC(Environment);
@@ -48,19 +61,6 @@ static void environment_set_variable(Environment* environment, const char* name,
 {
   map_put_stmt(&environment->variables, name, variable);
 }
-
-static struct
-{
-  bool error;
-  ArrayStmt statements;
-
-  Environment* environment;
-  Stmt* function;
-  Stmt* loop;
-} checker;
-
-static DataType check_expression(Expr* expression);
-static void check_statement(Stmt* statement);
 
 static void error(Token token, const char* message)
 {

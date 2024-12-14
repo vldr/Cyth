@@ -13,6 +13,7 @@ array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenType, BinaryenType);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
+static BinaryenExpressionRef generate_statement(Stmt* statement);
 static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
 
 static struct
@@ -354,19 +355,38 @@ static BinaryenExpressionRef generate_while_statement(Stmt* statement)
   const char* break_name = memory_sprintf(&memory, "break|%d", codegen.loops);
   const char* loop_name = memory_sprintf(&memory, "loop|%d", codegen.loops);
 
-  BinaryenExpressionRef loop_block_list[] = {generate_statements(&statement->loop.body),
-                                             BinaryenBreak(codegen.module, loop_name, NULL, NULL)};
-  BinaryenExpressionRef loop_block =
-    BinaryenBlock(codegen.module, NULL, loop_block_list,
-                  sizeof(loop_block_list) / sizeof(*loop_block_list), BinaryenTypeNone());
+  ArrayBinaryenExpressionRef loop_block_list;
+  array_init(&loop_block_list);
+  array_add(&loop_block_list, generate_statements(&statement->loop.body));
+
+  if (statement->loop.incrementer)
+  {
+    array_add(&loop_block_list, generate_statement(statement->loop.incrementer));
+  }
+
+  array_add(&loop_block_list, BinaryenBreak(codegen.module, loop_name, NULL, NULL));
+
+  BinaryenExpressionRef loop_block = BinaryenBlock(codegen.module, NULL, loop_block_list.elems,
+                                                   loop_block_list.size, BinaryenTypeNone());
 
   BinaryenExpressionRef loop_body =
     BinaryenIf(codegen.module, generate_expression(statement->loop.condition), loop_block, NULL);
   BinaryenExpressionRef loop = BinaryenLoop(codegen.module, loop_name, loop_body);
 
+  ArrayBinaryenExpressionRef block_list;
+  array_init(&block_list);
+
+  if (statement->loop.initializer)
+  {
+    array_add(&block_list, generate_statement(statement->loop.initializer));
+  }
+
+  array_add(&block_list, loop);
+
   codegen.loops--;
 
-  return BinaryenBlock(codegen.module, break_name, &loop, 1, BinaryenTypeNone());
+  return BinaryenBlock(codegen.module, break_name, block_list.elems, block_list.size,
+                       BinaryenTypeNone());
 }
 
 static BinaryenExpressionRef generate_return_statement(Stmt* statement)

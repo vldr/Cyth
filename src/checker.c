@@ -479,6 +479,13 @@ static void check_if_statement(Stmt* statement)
 
 static void check_while_statement(Stmt* statement)
 {
+  checker.environment = environment_init(checker.environment);
+
+  if (statement->loop.initializer)
+  {
+    check_statement(statement->loop.initializer);
+  }
+
   DataType data_type = check_expression(statement->loop.condition);
   if (data_type != TYPE_BOOL)
   {
@@ -497,11 +504,18 @@ static void check_while_statement(Stmt* statement)
 
   checker.loop = previous_loop;
   checker.environment = checker.environment->parent;
+
+  if (statement->loop.incrementer)
+  {
+    check_statement(statement->loop.incrementer);
+  }
+
+  checker.environment = checker.environment->parent;
 }
 
 static void check_function_declaration(Stmt* statement)
 {
-  if (checker.function)
+  if (checker.function || checker.loop)
   {
     error_unexpected_function(statement->func.name);
     return;
@@ -535,19 +549,26 @@ static void check_function_declaration(Stmt* statement)
 static void check_variable_declaration(Stmt* statement)
 {
   const char* name = statement->var.name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->var.name, name);
-    return;
-  }
 
   if (checker.function)
   {
+    if (environment_check_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->var.name, name);
+      return;
+    }
+
     statement->var.index = array_size(&checker.function->func.variables) +
                            array_size(&checker.function->func.parameters);
   }
   else
   {
+    if (environment_get_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->var.name, name);
+      return;
+    }
+
     statement->var.index = -1;
   }
 

@@ -26,7 +26,9 @@
 #define array_add(a, k)                                                                            \
   do                                                                                               \
   {                                                                                                \
+    /* NOLINTBEGIN */                                                                              \
     const unsigned int _max = 0xffffffff / sizeof(*(a)->elems);                                    \
+    /* NOLINTEND */                                                                                \
     unsigned int _cap;                                                                             \
     unsigned int _element_size;                                                                    \
     void* _p;                                                                                      \
@@ -40,7 +42,9 @@
       }                                                                                            \
                                                                                                    \
       _cap = (a)->cap == 0 ? 8 : (a)->cap * 2;                                                     \
+      /* NOLINTBEGIN */                                                                            \
       _element_size = sizeof(*((a)->elems));                                                       \
+      /* NOLINTEND */                                                                              \
       _p = memory_realloc(&memory, (a)->elems, (a)->cap * _element_size, _cap * _element_size);    \
       if (_p == NULL)                                                                              \
       {                                                                                            \

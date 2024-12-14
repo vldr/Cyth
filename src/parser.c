@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "main.h"
 #include "statement.h"
+
 #include <stdio.h>
 
 static Expr* expression(void);
@@ -126,8 +127,10 @@ static void synchronize(void)
     {
     case TOKEN_CLASS:
     case TOKEN_FOR:
-    case TOKEN_IF:
     case TOKEN_WHILE:
+    case TOKEN_IF:
+    case TOKEN_BREAK:
+    case TOKEN_CONTINUE:
     case TOKEN_RETURN:
       return;
     default:
@@ -395,10 +398,74 @@ static Expr* expression(void)
   return assignment();
 }
 
-static Stmt* expression_statement(void)
+static Stmt* function_declaration_statement(Token type, Token name)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_FUNCTION_DECL;
+  stmt->func.type = type;
+  stmt->func.name = name;
+
+  array_init(&stmt->func.parameters);
+  array_init(&stmt->func.body);
+  array_init(&stmt->func.variables);
+
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+
+  if (!check(TOKEN_RIGHT_PAREN))
+  {
+    do
+    {
+      Token type = consume_data_type("Expected a type after '('");
+      Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
+
+      Stmt* parameter = STMT();
+      parameter->type = STMT_VARIABLE_DECL;
+      parameter->var.type = type;
+      parameter->var.name = name;
+      parameter->var.index = -1;
+      parameter->var.initializer = NULL;
+
+      array_add(&stmt->func.parameters, parameter);
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
+  consume(TOKEN_NEWLINE, "Expected newline after ')'.");
+
+  if (check(TOKEN_INDENT))
+    stmt->func.body = statements();
+
+  return stmt;
+}
+
+static Stmt* variable_declaration_statement(Token type, Token name, bool newline)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_VARIABLE_DECL;
+  stmt->var.type = type;
+  stmt->var.name = name;
+
+  if (match(TOKEN_EQUAL))
+    stmt->var.initializer = expression();
+  else
+    stmt->var.initializer = NULL;
+
+  if (newline)
+    consume(TOKEN_NEWLINE, "Expected a newline after variable declaration.");
+  else
+    consume(TOKEN_SEMICOLON, "Expected a semicolon after variable declaration.");
+
+  return stmt;
+}
+
+static Stmt* expression_statement(bool newline)
 {
   Expr* expr = expression();
-  consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+
+  if (newline)
+    consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
+  else
+    consume(TOKEN_SEMICOLON, "Expected a semicolon after an expression.");
 
   Stmt* stmt = STMT();
   stmt->type = STMT_EXPR;
@@ -482,6 +549,8 @@ static Stmt* while_statement(void)
   stmt->type = STMT_WHILE;
   stmt->loop.keyword = advance();
   stmt->loop.condition = expression();
+  stmt->loop.initializer = NULL;
+  stmt->loop.incrementer = NULL;
 
   array_init(&stmt->loop.body);
 
@@ -493,59 +562,63 @@ static Stmt* while_statement(void)
   return stmt;
 }
 
-static Stmt* function_declaration_statement(Token type, Token name)
+static Stmt* for_statement(void)
 {
   Stmt* stmt = STMT();
-  stmt->type = STMT_FUNCTION_DECL;
-  stmt->func.type = type;
-  stmt->func.name = name;
+  stmt->type = STMT_WHILE;
+  stmt->loop.keyword = advance();
 
-  array_init(&stmt->func.parameters);
-  array_init(&stmt->func.body);
-  array_init(&stmt->func.variables);
-
-  consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
-
-  if (!check(TOKEN_RIGHT_PAREN))
+  if (match(TOKEN_SEMICOLON))
   {
-    do
+    stmt->loop.initializer = NULL;
+  }
+  else
+  {
+    if (is_data_type_and_identifier())
     {
-      Token type = consume_data_type("Expected a type after '('");
-      Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
+      Token type = consume_data_type("Expected a type.");
+      Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
-      Stmt* parameter = STMT();
-      parameter->type = STMT_VARIABLE_DECL;
-      parameter->var.type = type;
-      parameter->var.name = name;
-      parameter->var.index = -1;
-      parameter->var.initializer = NULL;
-
-      array_add(&stmt->func.parameters, parameter);
-    } while (match(TOKEN_COMMA));
+      stmt->loop.initializer = variable_declaration_statement(type, name, false);
+    }
+    else
+    {
+      stmt->loop.initializer = expression_statement(false);
+    }
   }
 
-  consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
-  consume(TOKEN_NEWLINE, "Expected newline after ')'.");
+  if (check(TOKEN_SEMICOLON))
+  {
+    Expr* expr = EXPR();
+    expr->type = EXPR_LITERAL;
+    expr->literal.data_type = TYPE_BOOL;
+    expr->literal.boolean = true;
+
+    stmt->loop.condition = expr;
+  }
+  else
+  {
+    stmt->loop.condition = expression();
+  }
+
+  consume(TOKEN_SEMICOLON, "Expected a semicolon after condition.");
+
+  if (!check(TOKEN_NEWLINE))
+  {
+    stmt->loop.incrementer = expression_statement(true);
+  }
+  else
+  {
+    stmt->loop.incrementer = NULL;
+    consume(TOKEN_NEWLINE, "Expected newline after incrementer.");
+  }
+
+  array_init(&stmt->loop.body);
 
   if (check(TOKEN_INDENT))
-    stmt->func.body = statements();
-
-  return stmt;
-}
-
-static Stmt* variable_declaration_statement(Token type, Token name)
-{
-  Stmt* stmt = STMT();
-  stmt->type = STMT_VARIABLE_DECL;
-  stmt->var.type = type;
-  stmt->var.name = name;
-
-  if (match(TOKEN_EQUAL))
-    stmt->var.initializer = expression();
-  else
-    stmt->var.initializer = NULL;
-
-  consume(TOKEN_NEWLINE, "Expected newline after variable declaration.");
+  {
+    stmt->loop.body = statements();
+  }
 
   return stmt;
 }
@@ -564,7 +637,7 @@ static Stmt* statement(void)
     case TOKEN_LEFT_PAREN:
       return function_declaration_statement(type, name);
     default:
-      return variable_declaration_statement(type, name);
+      return variable_declaration_statement(type, name, true);
     }
   }
   else
@@ -583,8 +656,10 @@ static Stmt* statement(void)
       return if_statement();
     case TOKEN_WHILE:
       return while_statement();
+    case TOKEN_FOR:
+      return for_statement();
     default:
-      return expression_statement();
+      return expression_statement(true);
     }
   }
 }

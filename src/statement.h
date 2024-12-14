@@ -42,6 +42,8 @@ typedef struct
 {
   Token keyword;
   Expr* condition;
+  Stmt* initializer;
+  Stmt* incrementer;
   ArrayStmt body;
 } WhileStmt;
 

@@ -1,4 +1,5 @@
 void print(int n)
+void printf(float n)
 
 int sqrt(int x)
     int s
@@ -31,3 +32,29 @@ int result = pow(result2, 2)
 
 print(result2)
 print(result)
+
+float sqrtf(float n)
+    float x = n
+    float y = 1.0
+    float e = 0.000001
+
+    while x - y > e 
+        x = (x + y) / 2.0
+        y = n / x
+
+    return x
+
+printf(sqrtf(50.0))
+
+float exponential(float n, float x)
+    float sum = 1.0
+  
+    for float i = n - 1; i > 0; i = i - 1
+        sum = (x * sum / i) + 1.0  
+  
+    return sum  
+ 
+float n = 10.0
+float x = 1.0
+
+printf(exponential(n, x))

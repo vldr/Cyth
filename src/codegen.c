@@ -25,10 +25,9 @@ static struct
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
 {
-  switch (data_type)
+  switch (data_type.kind)
   {
   case TYPE_VOID:
-  case TYPE_NULL:
     return BinaryenTypeNone();
   case TYPE_BOOL:
   case TYPE_INTEGER:
@@ -48,7 +47,7 @@ static BinaryenExpressionRef generate_group_expression(Expr* expression)
 
 static BinaryenExpressionRef generate_literal_expression(Expr* expression)
 {
-  switch (expression->literal.data_type)
+  switch (expression->literal.data_type.kind)
   {
   case TYPE_INTEGER:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->literal.integer));
@@ -73,36 +72,36 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
   switch (expression->binary.op.type)
   {
   case TOKEN_PLUS:
-    if (data_type == TYPE_INTEGER)
+    if (data_type.kind == TYPE_INTEGER)
       op = BinaryenAddInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenAddFloat32();
     else
       UNREACHABLE("Unsupported binary type for +");
 
     break;
   case TOKEN_MINUS:
-    if (data_type == TYPE_INTEGER)
+    if (data_type.kind == TYPE_INTEGER)
       op = BinaryenSubInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenSubFloat32();
     else
       UNREACHABLE("Unsupported binary type for -");
 
     break;
   case TOKEN_STAR:
-    if (data_type == TYPE_INTEGER)
+    if (data_type.kind == TYPE_INTEGER)
       op = BinaryenMulInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenMulFloat32();
     else
       UNREACHABLE("Unsupported binary type for *");
 
     break;
   case TOKEN_SLASH:
-    if (data_type == TYPE_INTEGER)
+    if (data_type.kind == TYPE_INTEGER)
       op = BinaryenDivSInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenDivFloat32();
     else
       UNREACHABLE("Unsupported binary type for /");
@@ -110,7 +109,7 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_PERCENT:
-    if (data_type == TYPE_INTEGER)
+    if (data_type.kind == TYPE_INTEGER)
       op = BinaryenRemSInt32();
     else
       UNREACHABLE("Unsupported binary type for %");
@@ -118,9 +117,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_EQUAL_EQUAL:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenEqInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenEqFloat32();
     else
       UNREACHABLE("Unsupported binary type for ==");
@@ -128,9 +127,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_BANG_EQUAL:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenNeInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenNeFloat32();
     else
       UNREACHABLE("Unsupported binary type for ==");
@@ -138,9 +137,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_LESS_EQUAL:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenLeSInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenLeFloat32();
     else
       UNREACHABLE("Unsupported binary type for <=");
@@ -148,9 +147,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_GREATER_EQUAL:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenGeSInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenGeFloat32();
     else
       UNREACHABLE("Unsupported binary type for <=");
@@ -158,9 +157,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_LESS:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenLtSInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenLtFloat32();
     else
       UNREACHABLE("Unsupported binary type for <");
@@ -168,9 +167,9 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_GREATER:
-    if (data_type == TYPE_INTEGER || data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_INTEGER || data_type.kind == TYPE_BOOL)
       op = BinaryenGtSInt32();
-    else if (data_type == TYPE_FLOAT)
+    else if (data_type.kind == TYPE_FLOAT)
       op = BinaryenGtFloat32();
     else
       UNREACHABLE("Unsupported binary type for >");
@@ -178,13 +177,12 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_AND:
-    if (data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_BOOL)
     {
-      BinaryenExpressionRef zero = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
-      BinaryenExpressionRef ifTrue = right;
-      BinaryenExpressionRef ifFalse = zero;
+      BinaryenExpressionRef if_true = right;
+      BinaryenExpressionRef if_false = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
 
-      return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
+      return BinaryenIf(codegen.module, left, if_true, if_false);
     }
     else
       UNREACHABLE("Unsupported binary type for AND");
@@ -192,13 +190,12 @@ static BinaryenExpressionRef generate_binary_expression(Expr* expression)
     break;
 
   case TOKEN_OR:
-    if (data_type == TYPE_BOOL)
+    if (data_type.kind == TYPE_BOOL)
     {
-      BinaryenExpressionRef one = BinaryenConst(codegen.module, BinaryenLiteralInt32(1));
-      BinaryenExpressionRef ifTrue = one;
-      BinaryenExpressionRef ifFalse = right;
+      BinaryenExpressionRef if_true = BinaryenConst(codegen.module, BinaryenLiteralInt32(1));
+      BinaryenExpressionRef if_false = right;
 
-      return BinaryenIf(codegen.module, left, ifTrue, ifFalse);
+      return BinaryenIf(codegen.module, left, if_true, if_false);
     }
     else
       UNREACHABLE("Unsupported binary type for OR");
@@ -219,17 +216,17 @@ static BinaryenExpressionRef generate_unary_expression(Expr* expression)
   switch (expression->unary.op.type)
   {
   case TOKEN_MINUS:
-    if (expression->data_type == TYPE_INTEGER)
+    if (expression->data_type.kind == TYPE_INTEGER)
       return BinaryenBinary(codegen.module, BinaryenSubInt32(),
                             BinaryenConst(codegen.module, BinaryenLiteralInt32(0)), value);
-    else if (expression->data_type == TYPE_FLOAT)
+    else if (expression->data_type.kind == TYPE_FLOAT)
       return BinaryenUnary(codegen.module, BinaryenNegFloat32(), value);
     else
       UNREACHABLE("Unsupported unary type for -");
 
   case TOKEN_BANG:
   case TOKEN_NOT:
-    if (expression->data_type == TYPE_BOOL)
+    if (expression->data_type.kind == TYPE_BOOL)
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(), value);
     else
       UNREACHABLE("Unsupported unary type for !");
@@ -241,7 +238,8 @@ static BinaryenExpressionRef generate_unary_expression(Expr* expression)
 
 static BinaryenExpressionRef generate_cast_expression(Expr* expression)
 {
-  if (expression->data_type == TYPE_FLOAT && expression->cast.expr->data_type == TYPE_INTEGER)
+  if (expression->data_type.kind == TYPE_FLOAT &&
+      expression->cast.expr->data_type.kind == TYPE_INTEGER)
   {
     BinaryenExpressionRef value = generate_expression(expression->cast.expr);
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
@@ -326,7 +324,7 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
 static BinaryenExpressionRef generate_expression_statement(Stmt* statement)
 {
   BinaryenExpressionRef expression = generate_expression(statement->expr.expr);
-  if (statement->expr.expr->data_type != TYPE_VOID)
+  if (statement->expr.expr->data_type.kind != TYPE_VOID)
   {
     expression = BinaryenDrop(codegen.module, expression);
   }
@@ -413,7 +411,7 @@ static BinaryenExpressionRef generate_break_statement(void)
 static BinaryenExpressionRef generate_variable_declaration(Stmt* declaration)
 {
   BinaryenExpressionRef initializer;
-  switch (declaration->var.data_type)
+  switch (declaration->var.data_type.kind)
   {
   case TYPE_INTEGER:
   case TYPE_BOOL:

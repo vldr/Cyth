@@ -3,6 +3,7 @@
 
 #include "lexer.h"
 
+#define DATA_TYPE(a) ((DataType){ .kind = a })
 #define EXPR() (ALLOC(Expr))
 #define BINARY_EXPR(destination, op, l, r)                                                         \
   do                                                                                               \
@@ -28,14 +29,23 @@
 typedef struct _EXPR Expr;
 array_def(Expr*, Expr);
 
-typedef enum _DATA_TYPE
+typedef struct _DATA_TYPE
 {
-  TYPE_VOID,
-  TYPE_NULL,
-  TYPE_BOOL,
-  TYPE_INTEGER,
-  TYPE_FLOAT,
-  TYPE_STRING,
+  enum
+  {
+    TYPE_VOID,
+    TYPE_BOOL,
+    TYPE_INTEGER,
+    TYPE_FLOAT,
+    TYPE_STRING,
+    TYPE_OBJECT,
+    TYPE_ARRAY,
+  } kind;
+
+  union {
+    const char* object;
+    struct _DATA_TYPE* array;
+  };
 } DataType;
 
 typedef struct

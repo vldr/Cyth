@@ -69,6 +69,14 @@ typedef struct
   Expr* initializer;
 } VarStmt;
 
+typedef struct
+{
+  Token name;
+  ArrayStmt variables;
+  ArrayStmt functions;
+  ArrayStmt body;
+} ClassStmt;
+
 typedef enum
 {
   STMT_EXPR,

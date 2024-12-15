@@ -136,17 +136,54 @@ static void error_invalid_arity(Token token, int expected, int got)
   error(token, memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
 }
 
+bool equal_data_type(DataType left, DataType right)
+{
+  if (left.kind == right.kind)
+  {
+    if (left.kind == TYPE_OBJECT)
+    {
+      return strcmp(left.object, right.object) == 0;
+    }
+    else
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static DataType token_to_data_type(Token token)
+{
+  switch (token.type)
+  {
+  case TOKEN_IDENTIFIER_BOOL:
+    return DATA_TYPE(TYPE_BOOL);
+  case TOKEN_IDENTIFIER_VOID:
+    return DATA_TYPE(TYPE_VOID);
+  case TOKEN_IDENTIFIER_INT:
+    return DATA_TYPE(TYPE_INTEGER);
+  case TOKEN_IDENTIFIER_FLOAT:
+    return DATA_TYPE(TYPE_FLOAT);
+  case TOKEN_IDENTIFIER_STRING:
+    return DATA_TYPE(TYPE_STRING);
+
+  default:
+    UNREACHABLE("Unhandled data type");
+  }
+}
+
 static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
 {
   Expr** target;
   DataType* target_type;
 
-  if (*left == from && *right == to)
+  if (equal_data_type(*left, from) && equal_data_type(*right, to))
   {
     target_type = left;
     target = &expression->binary.left;
   }
-  else if (*left == to && *right == from)
+  else if (equal_data_type(*left, to) && equal_data_type(*right, from))
   {
     target_type = right;
     target = &expression->binary.right;
@@ -165,26 +202,6 @@ static bool upcast(Expr* expression, DataType* left, DataType* right, DataType f
   *target_type = to;
 
   return true;
-}
-
-static DataType token_to_data_type(Token token)
-{
-  switch (token.type)
-  {
-  case TOKEN_IDENTIFIER_BOOL:
-    return TYPE_BOOL;
-  case TOKEN_IDENTIFIER_VOID:
-    return TYPE_VOID;
-  case TOKEN_IDENTIFIER_INT:
-    return TYPE_INTEGER;
-  case TOKEN_IDENTIFIER_FLOAT:
-    return TYPE_FLOAT;
-  case TOKEN_IDENTIFIER_STRING:
-    return TYPE_STRING;
-
-  default:
-    UNREACHABLE("Unhandled data type");
-  }
 }
 
 static DataType check_cast_expression(Expr* expression)
@@ -211,12 +228,13 @@ static DataType check_unary_expression(Expr* expression)
 
   if (op.type == TOKEN_MINUS)
   {
-    if (type != TYPE_INTEGER && type != TYPE_FLOAT)
+    if (!equal_data_type(type, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(type, DATA_TYPE(TYPE_FLOAT)))
       error_type_mismatch(op);
   }
   else if (op.type == TOKEN_BANG || op.type == TOKEN_NOT)
   {
-    if (type != TYPE_BOOL)
+    if (!equal_data_type(type, DATA_TYPE(TYPE_BOOL)))
       error_type_mismatch(op);
   }
 
@@ -230,9 +248,9 @@ static DataType check_binary_expression(Expr* expression)
   DataType left = check_expression(expression->binary.left);
   DataType right = check_expression(expression->binary.right);
 
-  if (left != right)
+  if (!equal_data_type(left, right))
   {
-    if (!upcast(expression, &left, &right, TYPE_INTEGER, TYPE_FLOAT))
+    if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)))
     {
       error_type_mismatch(expression->binary.op);
     }
@@ -245,7 +263,7 @@ static DataType check_binary_expression(Expr* expression)
   {
   case TOKEN_AND:
   case TOKEN_OR:
-    if (left != TYPE_BOOL)
+    if (!equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
       error_operation_not_defined(op, "'bool'");
 
     break;
@@ -255,22 +273,25 @@ static DataType check_binary_expression(Expr* expression)
   case TOKEN_GREATER_EQUAL:
   case TOKEN_LESS:
   case TOKEN_LESS_EQUAL:
-    if (left != TYPE_INTEGER && left != TYPE_FLOAT && left != TYPE_BOOL)
+    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
       error_operation_not_defined(op, "'int', 'float', 'bool");
 
-    expression->data_type = TYPE_BOOL;
+    expression->data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_PLUS:
   case TOKEN_MINUS:
   case TOKEN_STAR:
   case TOKEN_SLASH:
-    if (left != TYPE_INTEGER && left != TYPE_FLOAT)
+    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)))
       error_operation_not_defined(op, "'int' and 'float'");
 
     break;
 
   case TOKEN_PERCENT:
-    if (left != TYPE_INTEGER)
+    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)))
       error_operation_not_defined(op, "'int'");
 
     break;
@@ -290,13 +311,13 @@ static DataType check_variable_expression(Expr* expression)
   if (!statement)
   {
     error_cannot_find_name(expression->var.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   if (statement->type != STMT_VARIABLE_DECL)
   {
     error_not_a_variable(expression->var.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   expression->var.index = statement->var.index;
@@ -313,18 +334,18 @@ static DataType check_assignment_expression(Expr* expression)
   if (!statement)
   {
     error_cannot_find_name(expression->assign.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   if (statement->type != STMT_VARIABLE_DECL)
   {
     error_not_a_variable(expression->assign.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   DataType data_type = check_expression(expression->assign.value);
 
-  if (statement->var.data_type != data_type)
+  if (!equal_data_type(statement->var.data_type, data_type))
   {
     error_type_mismatch(expression->assign.name);
   }
@@ -343,13 +364,13 @@ static DataType check_call_expression(Expr* expression)
   if (!statement)
   {
     error_cannot_find_name(expression->call.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   if (statement->type != STMT_FUNCTION_DECL)
   {
     error_not_a_function(expression->call.name, name);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   int number_of_arguments = array_size(&expression->call.arguments);
@@ -358,7 +379,7 @@ static DataType check_call_expression(Expr* expression)
   if (number_of_arguments != expected_number_of_arguments)
   {
     error_invalid_arity(expression->call.name, expected_number_of_arguments, number_of_arguments);
-    return TYPE_VOID;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   for (int i = 0; i < number_of_arguments; i++)
@@ -366,7 +387,7 @@ static DataType check_call_expression(Expr* expression)
     Expr* argument = expression->call.arguments.elems[i];
     Stmt* parameter = statement->func.parameters.elems[i];
 
-    if (check_expression(argument) != token_to_data_type(parameter->var.type))
+    if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->var.type)))
     {
       error_type_mismatch(expression->call.name);
     }
@@ -420,9 +441,9 @@ static void check_return_statement(Stmt* statement)
   if (statement->ret.expr)
     data_type = check_expression(statement->ret.expr);
   else
-    data_type = TYPE_VOID;
+    data_type = DATA_TYPE(TYPE_VOID);
 
-  if (checker.function->func.data_type != data_type)
+  if (!equal_data_type(checker.function->func.data_type, data_type))
   {
     error_invalid_return_type(checker.function->func.type);
     return;
@@ -448,7 +469,7 @@ static void check_break_statement(Stmt* statement)
 static void check_if_statement(Stmt* statement)
 {
   DataType data_type = check_expression(statement->cond.condition);
-  if (data_type != TYPE_BOOL)
+  if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
     error_condition_is_not_bool(statement->cond.keyword);
   }
@@ -487,7 +508,7 @@ static void check_while_statement(Stmt* statement)
   }
 
   DataType data_type = check_expression(statement->loop.condition);
-  if (data_type != TYPE_BOOL)
+  if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
     error_condition_is_not_bool(statement->loop.keyword);
   }
@@ -578,7 +599,7 @@ static void check_variable_declaration(Stmt* statement)
   {
     DataType data_type = check_expression(statement->var.initializer);
 
-    if (statement->var.data_type != data_type)
+    if (!equal_data_type(statement->var.data_type, data_type))
     {
       error_type_mismatch(statement->var.type);
     }

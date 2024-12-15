@@ -151,7 +151,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_BOOL;
+    expr->literal.data_type = DATA_TYPE(TYPE_BOOL);
     expr->literal.boolean = true;
 
     break;
@@ -159,7 +159,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_BOOL;
+    expr->literal.data_type = DATA_TYPE(TYPE_BOOL);
     expr->literal.boolean = false;
 
     break;
@@ -167,14 +167,14 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_NULL;
+    expr->literal.data_type = DATA_TYPE(TYPE_OBJECT);
 
     break;
   case TOKEN_INTEGER:
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_INTEGER;
+    expr->literal.data_type = DATA_TYPE(TYPE_INTEGER);
     expr->literal.integer = strtol(token.lexeme, NULL, 10);
 
     break;
@@ -182,7 +182,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_FLOAT;
+    expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
     expr->literal.floating = (float)strtod(token.lexeme, NULL);
 
     break;
@@ -190,7 +190,7 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_STRING;
+    expr->literal.data_type = DATA_TYPE(TYPE_STRING);
     expr->literal.string = token.lexeme;
 
     break;
@@ -430,7 +430,7 @@ static Stmt* function_declaration_statement(Token type, Token name)
   }
 
   consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
-  consume(TOKEN_NEWLINE, "Expected newline after ')'.");
+  consume(TOKEN_NEWLINE, "Expected a newline after ')'.");
 
   if (check(TOKEN_INDENT))
     stmt->func.body = statements();
@@ -522,7 +522,7 @@ static Stmt* if_statement(void)
   stmt->cond.keyword = advance();
   stmt->cond.condition = expression();
 
-  consume(TOKEN_NEWLINE, "Expected newline after condition.");
+  consume(TOKEN_NEWLINE, "Expected a newline after condition.");
   stmt->cond.then_branch = statements();
 
   array_init(&stmt->cond.else_branch);
@@ -535,7 +535,7 @@ static Stmt* if_statement(void)
     }
     else
     {
-      consume(TOKEN_NEWLINE, "Expected newline after else.");
+      consume(TOKEN_NEWLINE, "Expected a newline after else.");
       stmt->cond.else_branch = statements();
     }
   }
@@ -554,7 +554,7 @@ static Stmt* while_statement(void)
 
   array_init(&stmt->loop.body);
 
-  consume(TOKEN_NEWLINE, "Expected newline after condition.");
+  consume(TOKEN_NEWLINE, "Expected a newline after condition.");
 
   if (check(TOKEN_INDENT))
     stmt->loop.body = statements();
@@ -591,7 +591,7 @@ static Stmt* for_statement(void)
   {
     Expr* expr = EXPR();
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = TYPE_BOOL;
+    expr->literal.data_type = DATA_TYPE(TYPE_BOOL);
     expr->literal.boolean = true;
 
     stmt->loop.condition = expr;
@@ -610,7 +610,7 @@ static Stmt* for_statement(void)
   else
   {
     stmt->loop.incrementer = NULL;
-    consume(TOKEN_NEWLINE, "Expected newline after incrementer.");
+    consume(TOKEN_NEWLINE, "Expected a newline after incrementer.");
   }
 
   array_init(&stmt->loop.body);

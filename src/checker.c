@@ -9,7 +9,7 @@
 
 typedef struct _ENVIRONMENT
 {
-  MapStmt variables;
+  MapVarStmt variables;
 
   struct _ENVIRONMENT* parent;
 } Environment;
@@ -20,8 +20,9 @@ static struct
   ArrayStmt statements;
 
   Environment* environment;
-  Stmt* function;
-  Stmt* loop;
+  FuncStmt* function;
+  ClassStmt* class;
+  WhileStmt* loop;
 } checker;
 
 static DataType check_expression(Expr* expression);
@@ -31,21 +32,21 @@ static Environment* environment_init(Environment* parent)
 {
   Environment* environment = ALLOC(Environment);
   environment->parent = parent;
-  map_init_stmt(&environment->variables, 0, 0);
+  map_init_var_stmt(&environment->variables, 0, 0);
 
   return environment;
 }
 
 static bool environment_check_variable(Environment* environment, const char* name)
 {
-  return map_get_stmt(&environment->variables, name) != NULL;
+  return map_get_var_stmt(&environment->variables, name) != NULL;
 }
 
-static Stmt* environment_get_variable(Environment* environment, const char* name)
+static VarStmt* environment_get_variable(Environment* environment, const char* name)
 {
   while (environment)
   {
-    Stmt* variable = map_get_stmt(&environment->variables, name);
+    VarStmt* variable = map_get_var_stmt(&environment->variables, name);
     if (variable)
     {
       return variable;
@@ -57,9 +58,9 @@ static Stmt* environment_get_variable(Environment* environment, const char* name
   return NULL;
 }
 
-static void environment_set_variable(Environment* environment, const char* name, Stmt* variable)
+static void environment_set_variable(Environment* environment, const char* name, VarStmt* variable)
 {
-  map_put_stmt(&environment->variables, name, variable);
+  map_put_var_stmt(&environment->variables, name, variable);
 }
 
 static void error(Token token, const char* message)
@@ -106,6 +107,11 @@ static void error_unexpected_function(Token token)
   error(token, "A function declaration is not allowed here.");
 }
 
+static void error_unexpected_class(Token token)
+{
+  error(token, "A class declaration is not allowed here.");
+}
+
 static void error_unexpected_return(Token token)
 {
   error(token, "A return statement can only appear inside a function.");
@@ -138,19 +144,7 @@ static void error_invalid_arity(Token token, int expected, int got)
 
 bool equal_data_type(DataType left, DataType right)
 {
-  if (left.kind == right.kind)
-  {
-    if (left.kind == TYPE_OBJECT)
-    {
-      return strcmp(left.object, right.object) == 0;
-    }
-    else
-    {
-      return true;
-    }
-  }
-
-  return false;
+  return left.type == right.type;
 }
 
 static DataType token_to_data_type(Token token)
@@ -173,7 +167,8 @@ static DataType token_to_data_type(Token token)
   }
 }
 
-static bool upcast(Expr* expression, DataType* left, DataType* right, DataType from, DataType to)
+static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, DataType from,
+                   DataType to)
 {
   Expr** target;
   DataType* target_type;
@@ -181,12 +176,12 @@ static bool upcast(Expr* expression, DataType* left, DataType* right, DataType f
   if (equal_data_type(*left, from) && equal_data_type(*right, to))
   {
     target_type = left;
-    target = &expression->binary.left;
+    target = &expression->left;
   }
   else if (equal_data_type(*left, to) && equal_data_type(*right, from))
   {
     target_type = right;
-    target = &expression->binary.right;
+    target = &expression->right;
   }
   else
   {
@@ -195,7 +190,8 @@ static bool upcast(Expr* expression, DataType* left, DataType* right, DataType f
 
   Expr* cast_expression = EXPR();
   cast_expression->type = EXPR_CAST;
-  cast_expression->data_type = to;
+  cast_expression->cast.from_data_type = from;
+  cast_expression->cast.to_data_type = to;
   cast_expression->cast.expr = *target;
 
   *target = cast_expression;
@@ -204,27 +200,27 @@ static bool upcast(Expr* expression, DataType* left, DataType* right, DataType f
   return true;
 }
 
-static DataType check_cast_expression(Expr* expression)
+static DataType check_cast_expression(CastExpr* expression)
+{
+  return expression->to_data_type;
+}
+
+static DataType check_literal_expression(LiteralExpr* expression)
 {
   return expression->data_type;
 }
 
-static DataType check_literal_expression(Expr* expression)
+static DataType check_group_expression(GroupExpr* expression)
 {
-  expression->data_type = expression->literal.data_type;
+  expression->data_type = check_expression(expression->expr);
+
   return expression->data_type;
 }
 
-static DataType check_group_expression(Expr* expression)
+static DataType check_unary_expression(UnaryExpr* expression)
 {
-  expression->data_type = check_expression(expression->group.expr);
-  return expression->data_type;
-}
-
-static DataType check_unary_expression(Expr* expression)
-{
-  Token op = expression->unary.op;
-  DataType type = check_expression(expression->unary.expr);
+  Token op = expression->op;
+  DataType type = check_expression(expression->expr);
 
   if (op.type == TOKEN_MINUS)
   {
@@ -242,22 +238,22 @@ static DataType check_unary_expression(Expr* expression)
   return type;
 }
 
-static DataType check_binary_expression(Expr* expression)
+static DataType check_binary_expression(BinaryExpr* expression)
 {
-  Token op = expression->binary.op;
-  DataType left = check_expression(expression->binary.left);
-  DataType right = check_expression(expression->binary.right);
+  Token op = expression->op;
+  DataType left = check_expression(expression->left);
+  DataType right = check_expression(expression->right);
 
   if (!equal_data_type(left, right))
   {
     if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)))
     {
-      error_type_mismatch(expression->binary.op);
+      error_type_mismatch(expression->op);
     }
   }
 
-  expression->binary.data_type = left;
   expression->data_type = left;
+  expression->operand_data_type = left;
 
   switch (op.type)
   {
@@ -303,97 +299,98 @@ static DataType check_binary_expression(Expr* expression)
   return expression->data_type;
 }
 
-static DataType check_variable_expression(Expr* expression)
+static DataType check_variable_expression(VarExpr* expression)
 {
-  const char* name = expression->var.name.lexeme;
+  const char* name = expression->name.lexeme;
 
-  Stmt* statement = environment_get_variable(checker.environment, name);
-  if (!statement)
+  VarStmt* variable = environment_get_variable(checker.environment, name);
+  if (!variable)
   {
-    error_cannot_find_name(expression->var.name, name);
+    error_cannot_find_name(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (statement->type != STMT_VARIABLE_DECL)
+  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
   {
-    error_not_a_variable(expression->var.name, name);
+    error_not_a_variable(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  expression->var.index = statement->var.index;
-  expression->data_type = statement->var.data_type;
+  expression->index = variable->index;
+  expression->data_type = variable->data_type;
 
   return expression->data_type;
 }
 
-static DataType check_assignment_expression(Expr* expression)
+static DataType check_assignment_expression(AssignExpr* expression)
 {
-  const char* name = expression->assign.name.lexeme;
+  const char* name = expression->name.lexeme;
 
-  Stmt* statement = environment_get_variable(checker.environment, name);
-  if (!statement)
+  VarStmt* variable = environment_get_variable(checker.environment, name);
+  if (!variable)
   {
-    error_cannot_find_name(expression->assign.name, name);
+    error_cannot_find_name(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (statement->type != STMT_VARIABLE_DECL)
+  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
   {
-    error_not_a_variable(expression->assign.name, name);
+    error_not_a_variable(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  DataType data_type = check_expression(expression->assign.value);
+  DataType data_type = check_expression(expression->value);
 
-  if (!equal_data_type(statement->var.data_type, data_type))
+  if (!equal_data_type(variable->data_type, data_type))
   {
-    error_type_mismatch(expression->assign.name);
+    error_type_mismatch(expression->name);
   }
 
   expression->data_type = data_type;
-  expression->assign.index = statement->var.index;
+  expression->index = variable->index;
 
   return expression->data_type;
 }
 
-static DataType check_call_expression(Expr* expression)
+static DataType check_call_expression(CallExpr* expression)
 {
-  const char* name = expression->call.name.lexeme;
+  const char* name = expression->name.lexeme;
+  VarStmt* variable = environment_get_variable(checker.environment, name);
 
-  Stmt* statement = environment_get_variable(checker.environment, name);
-  if (!statement)
+  if (!variable)
   {
-    error_cannot_find_name(expression->call.name, name);
+    error_cannot_find_name(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (statement->type != STMT_FUNCTION_DECL)
+  if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
   {
-    error_not_a_function(expression->call.name, name);
+    error_not_a_function(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  int number_of_arguments = array_size(&expression->call.arguments);
-  int expected_number_of_arguments = array_size(&statement->func.parameters);
+  FuncStmt* function = variable->data_type.function;
+  int number_of_arguments = array_size(&expression->arguments);
+  int expected_number_of_arguments = array_size(&function->parameters);
 
   if (number_of_arguments != expected_number_of_arguments)
   {
-    error_invalid_arity(expression->call.name, expected_number_of_arguments, number_of_arguments);
+    error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
     return DATA_TYPE(TYPE_VOID);
   }
 
   for (int i = 0; i < number_of_arguments; i++)
   {
-    Expr* argument = expression->call.arguments.elems[i];
-    Stmt* parameter = statement->func.parameters.elems[i];
+    Expr* argument = expression->arguments.elems[i];
+    VarStmt* parameter = function->parameters.elems[i];
 
-    if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->var.type)))
+    if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
     {
-      error_type_mismatch(expression->call.name);
+      error_type_mismatch(expression->name);
     }
   }
 
-  expression->data_type = statement->func.data_type;
+  expression->data_type = function->data_type;
   return expression->data_type;
 }
 
@@ -402,94 +399,94 @@ static DataType check_expression(Expr* expression)
   switch (expression->type)
   {
   case EXPR_CAST:
-    return check_cast_expression(expression);
+    return check_cast_expression(&expression->cast);
   case EXPR_LITERAL:
-    return check_literal_expression(expression);
+    return check_literal_expression(&expression->literal);
   case EXPR_GROUP:
-    return check_group_expression(expression);
+    return check_group_expression(&expression->group);
   case EXPR_BINARY:
-    return check_binary_expression(expression);
+    return check_binary_expression(&expression->binary);
   case EXPR_UNARY:
-    return check_unary_expression(expression);
+    return check_unary_expression(&expression->unary);
   case EXPR_VAR:
-    return check_variable_expression(expression);
+    return check_variable_expression(&expression->var);
   case EXPR_ASSIGN:
-    return check_assignment_expression(expression);
+    return check_assignment_expression(&expression->assign);
   case EXPR_CALL:
-    return check_call_expression(expression);
+    return check_call_expression(&expression->call);
 
   default:
     UNREACHABLE("Unhandled expression");
   }
 }
 
-static void check_expression_statement(Stmt* statement)
+static void check_expression_statement(ExprStmt* statement)
 {
-  check_expression(statement->expr.expr);
+  statement->data_type = check_expression(statement->expr);
 }
 
-static void check_return_statement(Stmt* statement)
+static void check_return_statement(ReturnStmt* statement)
 {
   if (!checker.function)
   {
-    error_unexpected_return(statement->ret.keyword);
+    error_unexpected_return(statement->keyword);
     return;
   }
 
   DataType data_type;
 
-  if (statement->ret.expr)
-    data_type = check_expression(statement->ret.expr);
+  if (statement->expr)
+    data_type = check_expression(statement->expr);
   else
     data_type = DATA_TYPE(TYPE_VOID);
 
-  if (!equal_data_type(checker.function->func.data_type, data_type))
+  if (!equal_data_type(checker.function->data_type, data_type))
   {
-    error_invalid_return_type(checker.function->func.type);
+    error_invalid_return_type(checker.function->type);
     return;
   }
 }
 
-static void check_continue_statement(Stmt* statement)
+static void check_continue_statement(ContinueStmt* statement)
 {
   if (!checker.loop)
   {
-    error_unexpected_continue(statement->ret.keyword);
+    error_unexpected_continue(statement->keyword);
   }
 }
 
-static void check_break_statement(Stmt* statement)
+static void check_break_statement(BreakStmt* statement)
 {
   if (!checker.loop)
   {
-    error_unexpected_break(statement->ret.keyword);
+    error_unexpected_break(statement->keyword);
   }
 }
 
-static void check_if_statement(Stmt* statement)
+static void check_if_statement(IfStmt* statement)
 {
-  DataType data_type = check_expression(statement->cond.condition);
+  DataType data_type = check_expression(statement->condition);
   if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
-    error_condition_is_not_bool(statement->cond.keyword);
+    error_condition_is_not_bool(statement->keyword);
   }
 
   checker.environment = environment_init(checker.environment);
 
   Stmt* body_statement;
-  array_foreach(&statement->cond.then_branch, body_statement)
+  array_foreach(&statement->then_branch, body_statement)
   {
     check_statement(body_statement);
   }
 
   checker.environment = checker.environment->parent;
 
-  if (statement->cond.else_branch.elems)
+  if (statement->else_branch.elems)
   {
     checker.environment = environment_init(checker.environment);
 
     Stmt* body_statement;
-    array_foreach(&statement->cond.else_branch, body_statement)
+    array_foreach(&statement->else_branch, body_statement)
     {
       check_statement(body_statement);
     }
@@ -498,27 +495,27 @@ static void check_if_statement(Stmt* statement)
   }
 }
 
-static void check_while_statement(Stmt* statement)
+static void check_while_statement(WhileStmt* statement)
 {
   checker.environment = environment_init(checker.environment);
 
-  if (statement->loop.initializer)
+  if (statement->initializer)
   {
-    check_statement(statement->loop.initializer);
+    check_statement(statement->initializer);
   }
 
-  DataType data_type = check_expression(statement->loop.condition);
+  DataType data_type = check_expression(statement->condition);
   if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
-    error_condition_is_not_bool(statement->loop.keyword);
+    error_condition_is_not_bool(statement->keyword);
   }
 
-  Stmt* previous_loop = checker.loop;
+  WhileStmt* previous_loop = checker.loop;
   checker.environment = environment_init(checker.environment);
   checker.loop = statement;
 
   Stmt* body_statement;
-  array_foreach(&statement->loop.body, body_statement)
+  array_foreach(&statement->body, body_statement)
   {
     check_statement(body_statement);
   }
@@ -526,39 +523,93 @@ static void check_while_statement(Stmt* statement)
   checker.loop = previous_loop;
   checker.environment = checker.environment->parent;
 
-  if (statement->loop.incrementer)
+  if (statement->incrementer)
   {
-    check_statement(statement->loop.incrementer);
+    check_statement(statement->incrementer);
   }
 
   checker.environment = checker.environment->parent;
 }
 
-static void check_function_declaration(Stmt* statement)
+static void check_variable_declaration(VarStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+
+  if (checker.function)
+  {
+    if (environment_check_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->name, name);
+      return;
+    }
+
+    statement->index =
+      array_size(&checker.function->variables) + array_size(&checker.function->parameters);
+  }
+  else
+  {
+    if (environment_get_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->name, name);
+      return;
+    }
+
+    statement->index = -1;
+  }
+
+  statement->data_type = token_to_data_type(statement->type);
+
+  if (statement->initializer)
+  {
+    DataType data_type = check_expression(statement->initializer);
+
+    if (!equal_data_type(statement->data_type, data_type))
+    {
+      error_type_mismatch(statement->type);
+    }
+  }
+
+  if (checker.function)
+  {
+    array_add(&checker.function->variables, statement);
+  }
+
+  environment_set_variable(checker.environment, name, statement);
+}
+
+static void check_function_declaration(FuncStmt* statement)
 {
   if (checker.function || checker.loop)
   {
-    error_unexpected_function(statement->func.name);
+    error_unexpected_function(statement->name);
     return;
   }
 
-  Stmt* previous_function = checker.function;
+  FuncStmt* previous_function = checker.function;
 
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
 
   int index = 0;
-  Stmt* parameter;
-  array_foreach(&statement->func.parameters, parameter)
-  {
-    parameter->var.index = index++;
-    parameter->var.data_type = token_to_data_type(parameter->var.type);
+  VarStmt* parameter;
 
-    environment_set_variable(checker.environment, parameter->var.name.lexeme, parameter);
+  array_foreach(&statement->parameters, parameter)
+  {
+    const char* name = parameter->name.lexeme;
+    if (environment_check_variable(checker.environment, name))
+    {
+      error_name_already_exists(parameter->name, name);
+      continue;
+    }
+
+    parameter->index = index++;
+    parameter->data_type = token_to_data_type(parameter->type);
+
+    environment_set_variable(checker.environment, name, parameter);
   }
 
   Stmt* body_statement;
-  array_foreach(&statement->func.body, body_statement)
+  array_foreach(&statement->body, body_statement)
   {
     check_statement(body_statement);
   }
@@ -567,50 +618,29 @@ static void check_function_declaration(Stmt* statement)
   checker.environment = checker.environment->parent;
 }
 
-static void check_variable_declaration(Stmt* statement)
+static void check_class_declaration(ClassStmt* statement)
 {
-  const char* name = statement->var.name.lexeme;
-
-  if (checker.function)
+  if (checker.function || checker.loop || checker.class)
   {
-    if (environment_check_variable(checker.environment, name))
-    {
-      error_name_already_exists(statement->var.name, name);
-      return;
-    }
-
-    statement->var.index = array_size(&checker.function->func.variables) +
-                           array_size(&checker.function->func.parameters);
-  }
-  else
-  {
-    if (environment_get_variable(checker.environment, name))
-    {
-      error_name_already_exists(statement->var.name, name);
-      return;
-    }
-
-    statement->var.index = -1;
+    error_unexpected_class(statement->name);
+    return;
   }
 
-  statement->var.data_type = token_to_data_type(statement->var.type);
+  checker.environment = environment_init(checker.environment);
+  checker.class = statement;
 
-  if (statement->var.initializer)
+  FuncStmt* function_statement;
+  array_foreach(&statement->functions, function_statement)
   {
-    DataType data_type = check_expression(statement->var.initializer);
+    const char* class_name = statement->name.lexeme;
+    const char* function_name = function_statement->name.lexeme;
+    function_statement->name.lexeme = memory_sprintf(&memory, "%s~%s", class_name, function_name);
 
-    if (!equal_data_type(statement->var.data_type, data_type))
-    {
-      error_type_mismatch(statement->var.type);
-    }
+    check_function_declaration(function_statement);
   }
 
-  if (checker.function)
-  {
-    array_add(&checker.function->func.variables, statement);
-  }
-
-  environment_set_variable(checker.environment, name, statement);
+  checker.class = NULL;
+  checker.environment = checker.environment->parent;
 }
 
 static void check_statement(Stmt* statement)
@@ -620,28 +650,31 @@ static void check_statement(Stmt* statement)
   switch (statement->type)
   {
   case STMT_EXPR:
-    check_expression_statement(statement);
+    check_expression_statement(&statement->expr);
     break;
   case STMT_IF:
-    check_if_statement(statement);
+    check_if_statement(&statement->cond);
     break;
   case STMT_WHILE:
-    check_while_statement(statement);
+    check_while_statement(&statement->loop);
     break;
   case STMT_RETURN:
-    check_return_statement(statement);
+    check_return_statement(&statement->ret);
     break;
   case STMT_CONTINUE:
-    check_continue_statement(statement);
+    check_continue_statement(&statement->cont);
     break;
   case STMT_BREAK:
-    check_break_statement(statement);
+    check_break_statement(&statement->brk);
     break;
   case STMT_FUNCTION_DECL:
-    check_function_declaration(statement);
+    check_function_declaration(&statement->func);
     break;
   case STMT_VARIABLE_DECL:
-    check_variable_declaration(statement);
+    check_variable_declaration(&statement->var);
+    break;
+  case STMT_CLASS_DECL:
+    check_class_declaration(&statement->class);
     break;
 
   default:
@@ -649,17 +682,27 @@ static void check_statement(Stmt* statement)
   }
 }
 
-static void init_function_declaration(Stmt* statement)
+static void init_function_declaration(FuncStmt* statement)
 {
-  const char* name = statement->func.name.lexeme;
+  const char* name = statement->name.lexeme;
   if (environment_get_variable(checker.environment, name))
   {
-    error_name_already_exists(statement->func.name, name);
+    error_name_already_exists(statement->name, name);
     return;
   }
 
-  statement->func.data_type = token_to_data_type(statement->func.type);
-  environment_set_variable(checker.environment, name, statement);
+  statement->data_type = token_to_data_type(statement->type);
+
+  Stmt* function = STMT();
+  function->type = STMT_VARIABLE_DECL;
+  function->var.name = statement->name;
+  function->var.type = statement->type;
+  function->var.initializer = NULL;
+  function->var.index = -1;
+  function->var.data_type = DATA_TYPE(TYPE_FUNCTION);
+  function->var.data_type.function = statement;
+
+  environment_set_variable(checker.environment, name, &function->var);
 }
 
 static void init_statement(Stmt* statement)
@@ -669,7 +712,7 @@ static void init_statement(Stmt* statement)
   switch (statement->type)
   {
   case STMT_FUNCTION_DECL:
-    init_function_declaration(statement);
+    init_function_declaration(&statement->func);
     break;
 
   default:
@@ -681,6 +724,7 @@ void checker_init(ArrayStmt statements)
 {
   checker.error = false;
   checker.function = NULL;
+  checker.class = NULL;
   checker.loop = NULL;
   checker.statements = statements;
   checker.environment = environment_init(NULL);

@@ -3,7 +3,6 @@
 
 #include "lexer.h"
 
-#define DATA_TYPE(a) ((DataType){ .kind = a })
 #define EXPR() (ALLOC(Expr))
 #define BINARY_EXPR(destination, op, l, r)                                                         \
   do                                                                                               \
@@ -26,6 +25,8 @@
     destination = _;                                                                               \
   } while (0)
 
+#define DATA_TYPE(a) ((DataType){ .type = a })
+
 typedef struct _EXPR Expr;
 array_def(Expr*, Expr);
 
@@ -38,12 +39,14 @@ typedef struct _DATA_TYPE
     TYPE_INTEGER,
     TYPE_FLOAT,
     TYPE_STRING,
+    TYPE_FUNCTION,
     TYPE_OBJECT,
     TYPE_ARRAY,
-  } kind;
+  } type;
 
   union {
-    const char* object;
+    struct _CLASS_STMT* object;
+    struct _FUNC_STMT* function;
     struct _DATA_TYPE* array;
   };
 } DataType;
@@ -63,6 +66,7 @@ typedef struct
 typedef struct
 {
   DataType data_type;
+  DataType operand_data_type;
 
   Expr* left;
   Token op;
@@ -71,23 +75,31 @@ typedef struct
 
 typedef struct
 {
+  DataType data_type;
+
   Token op;
   Expr* expr;
 } UnaryExpr;
 
 typedef struct
 {
+  DataType data_type;
+
   Expr* expr;
 } GroupExpr;
 
 typedef struct
 {
+  DataType data_type;
+
   int index;
   Token name;
 } VarExpr;
 
 typedef struct
 {
+  DataType data_type;
+
   int index;
   Token name;
   Expr* value;
@@ -95,31 +107,33 @@ typedef struct
 
 typedef struct
 {
+  DataType data_type;
+
   Token name;
   ArrayExpr arguments;
 } CallExpr;
 
 typedef struct
 {
+  DataType from_data_type;
+  DataType to_data_type;
+
   Expr* expr;
 } CastExpr;
 
-typedef enum
-{
-  EXPR_LITERAL,
-  EXPR_BINARY,
-  EXPR_UNARY,
-  EXPR_GROUP,
-  EXPR_CAST,
-  EXPR_VAR,
-  EXPR_ASSIGN,
-  EXPR_CALL,
-} ExprType;
-
 struct _EXPR
 {
-  ExprType type;
-  DataType data_type;
+  enum
+  {
+    EXPR_LITERAL,
+    EXPR_BINARY,
+    EXPR_UNARY,
+    EXPR_GROUP,
+    EXPR_CAST,
+    EXPR_VAR,
+    EXPR_ASSIGN,
+    EXPR_CALL,
+  } type;
 
   union {
     BinaryExpr binary;

@@ -425,7 +425,7 @@ static Stmt* function_declaration_statement(Token type, Token name)
       parameter->var.index = -1;
       parameter->var.initializer = NULL;
 
-      array_add(&stmt->func.parameters, parameter);
+      array_add(&stmt->func.parameters, &parameter->var);
     } while (match(TOKEN_COMMA));
   }
 
@@ -454,6 +454,47 @@ static Stmt* variable_declaration_statement(Token type, Token name, bool newline
     consume(TOKEN_NEWLINE, "Expected a newline after variable declaration.");
   else
     consume(TOKEN_SEMICOLON, "Expected a semicolon after variable declaration.");
+
+  return stmt;
+}
+
+static Stmt* class_declaration_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_CLASS_DECL;
+  stmt->class.keyword = advance();
+  stmt->class.name = consume(TOKEN_IDENTIFIER, "Expected class name.");
+
+  array_init(&stmt->class.variables);
+  array_init(&stmt->class.functions);
+
+  consume(TOKEN_NEWLINE, "Expected a newline.");
+
+  if (check(TOKEN_INDENT))
+  {
+    consume(TOKEN_INDENT, "Expected an indent.");
+
+    while (!eof() && !check(TOKEN_DEDENT))
+    {
+      if (is_data_type_and_identifier())
+      {
+        Token type = consume_data_type("Expected a type.");
+        Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
+        Token token = peek();
+
+        if (token.type == TOKEN_LEFT_PAREN)
+          array_add(&stmt->class.functions, &function_declaration_statement(type, name)->func);
+        else
+          array_add(&stmt->class.variables, &variable_declaration_statement(type, name, true)->var);
+      }
+      else
+      {
+        error(advance(), "Only function and variable declarations can appear inside classes.");
+      }
+    }
+
+    consume(TOKEN_DEDENT, "Expected a dedent.");
+  }
 
   return stmt;
 }
@@ -658,6 +699,8 @@ static Stmt* statement(void)
       return while_statement();
     case TOKEN_FOR:
       return for_statement();
+    case TOKEN_CLASS:
+      return class_declaration_statement();
     default:
       return expression_statement(true);
     }

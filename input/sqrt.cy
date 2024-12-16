@@ -1,5 +1,4 @@
-void print(int n)
-void printf(float n)
+void log(float n)
 
 int sqrt(int x)
     int s
@@ -30,8 +29,8 @@ int pow(int base, int exp)
 int result2 = sqrt(456420496)
 int result = pow(result2, 2)
 
-print(result2)
-print(result)
+log(result2 + 0.0)
+log(result + 0.0)
 
 float sqrtf(float n)
     float x = n
@@ -44,7 +43,7 @@ float sqrtf(float n)
 
     return x
 
-printf(sqrtf(50.0))
+log(sqrtf(50.0))
 
 float exponential(float n, float x)
     float sum = 1.0
@@ -57,4 +56,4 @@ float exponential(float n, float x)
 float n = 10.0
 float x = 1.0
 
-printf(exponential(n, x))
+log(exponential(n, x))

@@ -49,7 +49,8 @@
   static const struct map_item_##name empty_items_##name[2];                                       \
                                                                                                    \
   static const struct map_##name map_empty_##name = {                                              \
-    .cap = 1, .mem = (struct map_item_##name*)&empty_items_##name[1]};                             \
+    .cap = 1, .mem = (struct map_item_##name*)&empty_items_##name[1]                               \
+  };                                                                                               \
                                                                                                    \
   static void* map_alloc_##name(uint32_t* cap, uint32_t factor)                                    \
   {                                                                                                \
@@ -402,6 +403,7 @@ map_def_strkey(s64, const char *, uint64_t, map_streq, murmurhash)
 map_def_strkey(sll, const char *, long long, map_streq, murmurhash)
 
 map_def_strkey(stmt, const char *, struct _STMT*, map_streq, murmurhash)
+map_def_strkey(var_stmt, const char *, struct _VAR_STMT*, map_streq, murmurhash)
 map_def_strkey(expr, const char *, struct _EXPR*, map_streq, murmurhash)
 
   // clang-format on

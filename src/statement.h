@@ -7,30 +7,33 @@
 #define STMT() (ALLOC(Stmt))
 
 typedef struct _STMT Stmt;
-array_def(Stmt*, Stmt);
+array_def(struct _STMT*, Stmt);
+array_def(struct _VAR_STMT*, VarStmt);
+array_def(struct _FUNC_STMT*, FuncStmt);
 
-typedef struct
+typedef struct _EXPR_STMT
 {
+  DataType data_type;
   Expr* expr;
 } ExprStmt;
 
-typedef struct
+typedef struct _RETURN_STMT
 {
   Token keyword;
   Expr* expr;
 } ReturnStmt;
 
-typedef struct
+typedef struct _CONTINUE_STMT
 {
   Token keyword;
 } ContinueStmt;
 
-typedef struct
+typedef struct _BREAK_STMT
 {
   Token keyword;
 } BreakStmt;
 
-typedef struct
+typedef struct _IF_STMT
 {
   Token keyword;
   Expr* condition;
@@ -38,7 +41,7 @@ typedef struct
   ArrayStmt else_branch;
 } IfStmt;
 
-typedef struct
+typedef struct _WHILE_STMT
 {
   Token keyword;
   Expr* condition;
@@ -47,19 +50,19 @@ typedef struct
   ArrayStmt body;
 } WhileStmt;
 
-typedef struct
+typedef struct _FUNC_STMT
 {
   DataType data_type;
 
   Token type;
   Token name;
 
-  ArrayStmt variables;
-  ArrayStmt parameters;
+  ArrayVarStmt variables;
+  ArrayVarStmt parameters;
   ArrayStmt body;
 } FuncStmt;
 
-typedef struct
+typedef struct _VAR_STMT
 {
   int index;
   DataType data_type;
@@ -69,29 +72,28 @@ typedef struct
   Expr* initializer;
 } VarStmt;
 
-typedef struct
+typedef struct _CLASS_STMT
 {
+  Token keyword;
   Token name;
-  ArrayStmt variables;
-  ArrayStmt functions;
-  ArrayStmt body;
+  ArrayVarStmt variables;
+  ArrayFuncStmt functions;
 } ClassStmt;
-
-typedef enum
-{
-  STMT_EXPR,
-  STMT_RETURN,
-  STMT_CONTINUE,
-  STMT_BREAK,
-  STMT_IF,
-  STMT_WHILE,
-  STMT_FUNCTION_DECL,
-  STMT_VARIABLE_DECL,
-} StmtType;
 
 struct _STMT
 {
-  StmtType type;
+  enum
+  {
+    STMT_EXPR,
+    STMT_RETURN,
+    STMT_CONTINUE,
+    STMT_BREAK,
+    STMT_IF,
+    STMT_WHILE,
+    STMT_FUNCTION_DECL,
+    STMT_VARIABLE_DECL,
+    STMT_CLASS_DECL,
+  } type;
 
   union {
     ExprStmt expr;
@@ -102,6 +104,7 @@ struct _STMT
     WhileStmt loop;
     BreakStmt brk;
     ContinueStmt cont;
+    ClassStmt class;
   };
 };
 

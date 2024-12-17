@@ -87,6 +87,11 @@ static void error_name_already_exists(Token token, const char* name)
   error(token, memory_sprintf(&memory, "The name '%s' already exists.", name));
 }
 
+static void error_type_cannot_be_void(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "The type %s cannot be used here", name));
+}
+
 static void error_cannot_find_name(Token token, const char* name)
 {
   error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
@@ -546,6 +551,14 @@ static void check_variable_declaration(VarStmt* statement)
     statement->index =
       array_size(&checker.function->variables) + array_size(&checker.function->parameters);
   }
+  else if (checker.class)
+  {
+    if (environment_check_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->name, name);
+      return;
+    }
+  }
   else
   {
     if (environment_get_variable(checker.environment, name))
@@ -559,11 +572,17 @@ static void check_variable_declaration(VarStmt* statement)
 
   statement->data_type = token_to_data_type(statement->type);
 
+  if (equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)))
+  {
+    error_type_cannot_be_void(statement->type, statement->type.lexeme);
+    return;
+  }
+
   if (statement->initializer)
   {
-    DataType data_type = check_expression(statement->initializer);
+    DataType initializer_data_type = check_expression(statement->initializer);
 
-    if (!equal_data_type(statement->data_type, data_type))
+    if (!equal_data_type(statement->data_type, initializer_data_type))
     {
       error_type_mismatch(statement->type);
     }
@@ -626,15 +645,30 @@ static void check_class_declaration(ClassStmt* statement)
     return;
   }
 
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
   checker.environment = environment_init(checker.environment);
   checker.class = statement;
+
+  int variable_index = 0;
+  VarStmt* variable_statement;
+  array_foreach(&statement->variables, variable_statement)
+  {
+    variable_statement->index = variable_index++;
+
+    check_variable_declaration(variable_statement);
+  }
 
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
   {
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
-    function_statement->name.lexeme = memory_sprintf(&memory, "%s~%s", class_name, function_name);
+    function_statement->name.lexeme = memory_sprintf(&memory, "%s:%s", class_name, function_name);
 
     check_function_declaration(function_statement);
   }
@@ -693,16 +727,15 @@ static void init_function_declaration(FuncStmt* statement)
 
   statement->data_type = token_to_data_type(statement->type);
 
-  Stmt* function = STMT();
-  function->type = STMT_VARIABLE_DECL;
-  function->var.name = statement->name;
-  function->var.type = statement->type;
-  function->var.initializer = NULL;
-  function->var.index = -1;
-  function->var.data_type = DATA_TYPE(TYPE_FUNCTION);
-  function->var.data_type.function = statement;
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->type;
+  variable->initializer = NULL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_FUNCTION);
+  variable->data_type.function = statement;
 
-  environment_set_variable(checker.environment, name, &function->var);
+  environment_set_variable(checker.environment, name, variable);
 }
 
 static void init_statement(Stmt* statement)

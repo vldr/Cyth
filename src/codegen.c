@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
+array_def(BinaryenPackedType, BinaryenPackedType);
 array_def(BinaryenType, BinaryenType);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
@@ -37,6 +38,20 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
 
   default:
     UNREACHABLE("Unhandled data type");
+  }
+}
+
+static BinaryenExpressionRef generate_default_initialization(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_INTEGER:
+  case TYPE_BOOL:
+    return BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
+  case TYPE_FLOAT:
+    return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
+  default:
+    UNREACHABLE("Unexpected default initializer");
   }
 }
 
@@ -270,7 +285,7 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
       BinaryenGlobalGet(codegen.module, expression->name.lexeme, type),
     };
 
-    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof(*list), type);
+    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
   }
   else
   {
@@ -410,19 +425,7 @@ static BinaryenExpressionRef generate_break_statement(void)
 
 static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
 {
-  BinaryenExpressionRef initializer;
-  switch (statement->data_type.type)
-  {
-  case TYPE_INTEGER:
-  case TYPE_BOOL:
-    initializer = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
-    break;
-  case TYPE_FLOAT:
-    initializer = BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
-    break;
-  default:
-    UNREACHABLE("Unexpected default initializer");
-  }
+  BinaryenExpressionRef initializer = generate_default_initialization(statement->data_type);
 
   if (statement->index == -1)
   {
@@ -492,6 +495,61 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   return NULL;
 }
 
+static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
+{
+  ArrayBinaryenType types;
+  ArrayBinaryenPackedType packed_types;
+  ArrayBool mutables;
+  ArrayBinaryenExpressionRef initializers;
+
+  array_init(&types);
+  array_init(&packed_types);
+  array_init(&mutables);
+  array_init(&initializers);
+
+  VarStmt* variable;
+  array_foreach(&statement->variables, variable)
+  {
+    BinaryenType type = data_type_to_binaryen_type(variable->data_type);
+    BinaryenType packed_type = BinaryenPackedTypeNotPacked();
+    bool mutable = true;
+
+    array_add(&types, type);
+    array_add(&packed_types, packed_type);
+    array_add(&mutables, mutable);
+
+    if (variable->initializer)
+    {
+      array_add(&initializers, generate_expression(variable->initializer));
+    }
+    else
+    {
+      array_add(&initializers, generate_default_initialization(variable->data_type));
+    }
+  }
+
+  FuncStmt* function;
+  array_foreach(&statement->functions, function)
+  {
+    generate_function_declaration(function);
+  }
+
+  TypeBuilderRef type_builder = TypeBuilderCreate(1);
+  TypeBuilderSetStructType(type_builder, 0, types.elems, packed_types.elems, mutables.elems,
+                           types.size);
+
+  BinaryenHeapType heap_type;
+  TypeBuilderBuildAndDispose(type_builder, &heap_type, 0, 0);
+
+  BinaryenExpressionRef constructor =
+    BinaryenStructNew(codegen.module, initializers.elems, initializers.size, heap_type);
+
+  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(),
+                      BinaryenTypeFromHeapType(heap_type, false), NULL, 0, constructor);
+
+  return NULL;
+}
+
 static BinaryenExpressionRef generate_statement(Stmt* statement)
 {
   switch (statement->type)
@@ -512,6 +570,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_variable_declaration(&statement->var);
   case STMT_FUNCTION_DECL:
     return generate_function_declaration(&statement->func);
+  case STMT_CLASS_DECL:
+    return generate_class_declaration(&statement->class);
 
   default:
     UNREACHABLE("Unhandled statement");
@@ -553,8 +613,9 @@ void codegen_generate(void)
                         generate_statements(&codegen.statements));
 
   BinaryenSetStart(codegen.module, start);
+  BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC());
   BinaryenModuleValidate(codegen.module);
-  BinaryenModuleOptimize(codegen.module);
+  // BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

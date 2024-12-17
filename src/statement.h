@@ -76,6 +76,7 @@ typedef struct _CLASS_STMT
 {
   Token keyword;
   Token name;
+
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
 } ClassStmt;

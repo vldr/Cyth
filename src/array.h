@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define sizeof_ptr(a) (/* NOLINTBEGIN */ sizeof(*a) /* NOLINTEND */)
+
 #define array_def(T, name)                                                                         \
   typedef struct                                                                                   \
   {                                                                                                \
@@ -26,9 +28,7 @@
 #define array_add(a, k)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    /* NOLINTBEGIN */                                                                              \
-    const unsigned int _max = 0xffffffff / sizeof(*(a)->elems);                                    \
-    /* NOLINTEND */                                                                                \
+    const unsigned int _max = 0xffffffff / sizeof_ptr((a)->elems);                                 \
     unsigned int _cap;                                                                             \
     unsigned int _element_size;                                                                    \
     void* _p;                                                                                      \
@@ -42,9 +42,7 @@
       }                                                                                            \
                                                                                                    \
       _cap = (a)->cap == 0 ? 8 : (a)->cap * 2;                                                     \
-      /* NOLINTBEGIN */                                                                            \
-      _element_size = sizeof(*((a)->elems));                                                       \
-      /* NOLINTEND */                                                                              \
+      _element_size = sizeof_ptr(((a)->elems));                                                    \
       _p = memory_realloc(&memory, (a)->elems, (a)->cap * _element_size, _cap * _element_size);    \
       if (_p == NULL)                                                                              \
       {                                                                                            \
@@ -114,6 +112,7 @@ array_def(uint32_t, 32);
 array_def(uint64_t, 64);
 array_def(double, Double);
 array_def(const char*, Str);
+array_def(bool, Bool);
 array_def(void*, Ptr);
 
 #endif

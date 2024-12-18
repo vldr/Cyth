@@ -1,17 +1,15 @@
 void log(int n)
 
-int test = 20
-
 class Hello
     int test = 20
     float a
     float b = 4.25
 
-    void test()
+    void test2()
         log(10)
 
-    int hi()
-        return 10
+Hello test()
+    Hello a = Hello()
+    Hello b = a
 
-# int Hello()
-#     return 10
+    return a

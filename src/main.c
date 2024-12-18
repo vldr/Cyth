@@ -23,41 +23,9 @@ void report_error(int start_line, int start_column, int end_line, int end_column
   error = true;
 }
 
-static char* read_file(const char* path)
+void run_source(const char* source)
 {
-  FILE* file = fopen(path, "rb");
-  if (!file)
-  {
-    fprintf(stderr, "Could not open file: %s\n", path);
-    return NULL;
-  }
-
-  fseek(file, 0L, SEEK_END);
-  size_t file_size = ftell(file);
-  rewind(file);
-
-  char* buffer = memory_alloc(&memory, file_size + 1);
-  size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
-
-  if (file_size != bytes_read)
-  {
-    fprintf(stderr, "Could not read file: %s\n", path);
-    return NULL;
-  }
-
-  fclose(file);
-
-  file_name = path;
-  buffer[file_size] = '\0';
-
-  return buffer;
-}
-
-static void run_file(const char* path)
-{
-  char* source = read_file(path);
-  if (!source)
-    return;
+  error = false;
 
   lexer_init(source);
   ArrayToken tokens = lexer_scan();
@@ -79,6 +47,36 @@ static void run_file(const char* path)
 
   codegen_init(statements);
   codegen_generate();
+}
+
+void run_file(const char* path)
+{
+  FILE* file = fopen(path, "rb");
+  if (!file)
+  {
+    fprintf(stderr, "Could not open file: %s\n", path);
+    return;
+  }
+
+  fseek(file, 0L, SEEK_END);
+  size_t file_size = ftell(file);
+  rewind(file);
+
+  char* source = memory_alloc(&memory, file_size + 1);
+  size_t bytes_read = fread(source, sizeof(char), file_size, file);
+
+  if (file_size != bytes_read)
+  {
+    fprintf(stderr, "Could not read file: %s\n", path);
+    return;
+  }
+
+  fclose(file);
+
+  file_name = path;
+  source[file_size] = '\0';
+
+  run_source(source);
 }
 
 int main(int argc, char* argv[])

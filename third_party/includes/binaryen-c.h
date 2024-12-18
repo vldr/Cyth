@@ -2539,7 +2539,7 @@ extern "C"
 
   // Clears all arbitrary pass arguments.
   // Applies to all modules, globally.
-  BINARYEN_API void BinaryenClearPassArguments();
+  BINARYEN_API void BinaryenClearPassArguments(void);
 
   // Gets whether a pass is in the set of passes to skip.
   // Applies to all modules, globally.
@@ -2941,14 +2941,14 @@ typedef struct CExpressionRunner* ExpressionRunnerRef;
   // By default, just evaluate the expression, i.e. all we want to know is whether
   // it computes down to a concrete value, where it is not necessary to preserve
   // side effects like those of a `local.tee`.
-  BINARYEN_API ExpressionRunnerFlags ExpressionRunnerFlagsDefault();
+  BINARYEN_API ExpressionRunnerFlags ExpressionRunnerFlagsDefault(void);
 
   // Be very careful to preserve any side effects. For example, if we are
   // intending to replace the expression with a constant afterwards, even if we
   // can technically evaluate down to a constant, we still cannot replace the
   // expression if it also sets a local, which must be preserved in this scenario
   // so subsequent code keeps functioning.
-  BINARYEN_API ExpressionRunnerFlags ExpressionRunnerFlagsPreserveSideeffects();
+  BINARYEN_API ExpressionRunnerFlags ExpressionRunnerFlagsPreserveSideeffects(void);
 
   // Creates an ExpressionRunner instance
   BINARYEN_API ExpressionRunnerRef ExpressionRunnerCreate(BinaryenModuleRef module,
@@ -3065,7 +3065,7 @@ typedef struct TypeBuilder* TypeBuilderRef;
   BINARYEN_API void BinaryenSetColorsEnabled(bool enabled);
 
   // Query whether color is enable for the Wasm printer
-  BINARYEN_API bool BinaryenAreColorsEnabled();
+  BINARYEN_API bool BinaryenAreColorsEnabled(void);
 #ifdef __cplusplus
 } // extern "C"
 #endif

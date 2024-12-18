@@ -35,6 +35,8 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
     return BinaryenTypeInt32();
   case TYPE_FLOAT:
     return BinaryenTypeFloat32();
+  case TYPE_OBJECT:
+    return data_type.class->type;
 
   default:
     UNREACHABLE("Unhandled data type");
@@ -50,6 +52,8 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
+  case TYPE_OBJECT:
+    return BinaryenRefNull(codegen.module, data_type.class->type);
   default:
     UNREACHABLE("Unexpected default initializer");
   }
@@ -511,7 +515,7 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   array_foreach(&statement->variables, variable)
   {
     BinaryenType type = data_type_to_binaryen_type(variable->data_type);
-    BinaryenType packed_type = BinaryenPackedTypeNotPacked();
+    BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
     bool mutable = true;
 
     array_add(&types, type);
@@ -541,11 +545,13 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   BinaryenHeapType heap_type;
   TypeBuilderBuildAndDispose(type_builder, &heap_type, 0, 0);
 
+  statement->type = BinaryenTypeFromHeapType(heap_type, true);
+
   BinaryenExpressionRef constructor =
     BinaryenStructNew(codegen.module, initializers.elems, initializers.size, heap_type);
 
-  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(),
-                      BinaryenTypeFromHeapType(heap_type, false), NULL, 0, constructor);
+  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(), statement->type,
+                      NULL, 0, constructor);
 
   return NULL;
 }

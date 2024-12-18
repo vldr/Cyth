@@ -40,12 +40,13 @@ typedef struct _DATA_TYPE
     TYPE_FLOAT,
     TYPE_STRING,
     TYPE_FUNCTION,
+    TYPE_PROTOTYPE,
     TYPE_OBJECT,
     TYPE_ARRAY,
   } type;
 
   union {
-    struct _CLASS_STMT* object;
+    struct _CLASS_STMT* class;
     struct _FUNC_STMT* function;
     struct _DATA_TYPE* array;
   };

@@ -97,9 +97,19 @@ static void error_cannot_find_name(Token token, const char* name)
   error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
 }
 
+static void error_cannot_find_type(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "Undeclared type '%s'.", name));
+}
+
 static void error_not_a_variable(Token token, const char* name)
 {
   error(token, memory_sprintf(&memory, "The name '%s' is not a variable.", name));
+}
+
+static void error_not_a_type(Token token, const char* name)
+{
+  error(token, memory_sprintf(&memory, "The name '%s' is not a type.", name));
 }
 
 static void error_not_a_function(Token token, const char* name)
@@ -166,7 +176,25 @@ static DataType token_to_data_type(Token token)
     return DATA_TYPE(TYPE_FLOAT);
   case TOKEN_IDENTIFIER_STRING:
     return DATA_TYPE(TYPE_STRING);
+  case TOKEN_IDENTIFIER: {
+    VarStmt* variable = environment_get_variable(checker.environment, token.lexeme);
+    if (!variable)
+    {
+      error_cannot_find_type(token, token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
 
+    if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+    {
+      error_not_a_type(token, token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    DataType object = DATA_TYPE(TYPE_OBJECT);
+    object.class = variable->data_type.class;
+
+    return object;
+  }
   default:
     UNREACHABLE("Unhandled data type");
   }
@@ -368,35 +396,51 @@ static DataType check_call_expression(CallExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
+  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
+  {
+    FuncStmt* function = variable->data_type.function;
+    int number_of_arguments = array_size(&expression->arguments);
+    int expected_number_of_arguments = array_size(&function->parameters);
+
+    if (number_of_arguments != expected_number_of_arguments)
+    {
+      error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    for (int i = 0; i < number_of_arguments; i++)
+    {
+      Expr* argument = expression->arguments.elems[i];
+      VarStmt* parameter = function->parameters.elems[i];
+
+      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+      {
+        error_type_mismatch(expression->name);
+      }
+    }
+
+    expression->data_type = function->data_type;
+    return expression->data_type;
+  }
+  else if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+  {
+    int number_of_arguments = array_size(&expression->arguments);
+    int expected_number_of_arguments = 0;
+
+    if (number_of_arguments != expected_number_of_arguments)
+    {
+      error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->data_type = token_to_data_type(variable->name);
+    return expression->data_type;
+  }
+  else
   {
     error_not_a_function(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
-
-  FuncStmt* function = variable->data_type.function;
-  int number_of_arguments = array_size(&expression->arguments);
-  int expected_number_of_arguments = array_size(&function->parameters);
-
-  if (number_of_arguments != expected_number_of_arguments)
-  {
-    error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
-    return DATA_TYPE(TYPE_VOID);
-  }
-
-  for (int i = 0; i < number_of_arguments; i++)
-  {
-    Expr* argument = expression->arguments.elems[i];
-    VarStmt* parameter = function->parameters.elems[i];
-
-    if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
-    {
-      error_type_mismatch(expression->name);
-    }
-  }
-
-  expression->data_type = function->data_type;
-  return expression->data_type;
 }
 
 static DataType check_expression(Expr* expression)
@@ -645,20 +689,14 @@ static void check_class_declaration(ClassStmt* statement)
     return;
   }
 
-  const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
   checker.environment = environment_init(checker.environment);
   checker.class = statement;
 
-  int variable_index = 0;
+  int count = 0;
   VarStmt* variable_statement;
   array_foreach(&statement->variables, variable_statement)
   {
-    variable_statement->index = variable_index++;
+    variable_statement->index = count++;
 
     check_variable_declaration(variable_statement);
   }
@@ -666,6 +704,15 @@ static void check_class_declaration(ClassStmt* statement)
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
   {
+    const char* name = function_statement->name.lexeme;
+    if (environment_get_variable(checker.environment, name))
+    {
+      error_name_already_exists(statement->name, name);
+      return;
+    }
+
+    function_statement->data_type = token_to_data_type(function_statement->type);
+
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
     function_statement->name.lexeme = memory_sprintf(&memory, "%s:%s", class_name, function_name);
@@ -738,6 +785,25 @@ static void init_function_declaration(FuncStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
+static void init_class_declaration(ClassStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->name;
+  variable->initializer = NULL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
+  variable->data_type.class = statement;
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
 static void init_statement(Stmt* statement)
 {
   checker.error = false;
@@ -747,7 +813,9 @@ static void init_statement(Stmt* statement)
   case STMT_FUNCTION_DECL:
     init_function_declaration(&statement->func);
     break;
-
+  case STMT_CLASS_DECL:
+    init_class_declaration(&statement->class);
+    break;
   default:
     break;
   }

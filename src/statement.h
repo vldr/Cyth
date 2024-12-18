@@ -79,6 +79,8 @@ typedef struct _CLASS_STMT
 
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
+
+  uintptr_t type;
 } ClassStmt;
 
 struct _STMT

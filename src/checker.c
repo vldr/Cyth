@@ -659,17 +659,14 @@ static void check_function_declaration(FuncStmt* statement)
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
 
-  int index = 0;
-  VarStmt* parameter;
-
   if (checker.class)
   {
     VarStmt* parameter = ALLOC(VarStmt);
     parameter->name = (Token){ .lexeme = "this" };
     parameter->type = checker.class->name;
     parameter->initializer = NULL;
+    parameter->index = -1;
     parameter->scope = SCOPE_LOCAL;
-    parameter->index = index++;
     parameter->data_type = DATA_TYPE(TYPE_OBJECT);
     parameter->data_type.class = checker.class;
 
@@ -683,6 +680,9 @@ static void check_function_declaration(FuncStmt* statement)
 
     statement->parameters = parameters;
   }
+
+  int index = 0;
+  VarStmt* parameter;
 
   array_foreach(&statement->parameters, parameter)
   {

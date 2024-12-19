@@ -65,6 +65,7 @@ typedef struct _FUNC_STMT
 typedef struct _VAR_STMT
 {
   int index;
+  Scope scope;
   DataType data_type;
 
   Token type;

@@ -30,6 +30,13 @@
 typedef struct _EXPR Expr;
 array_def(Expr*, Expr);
 
+typedef enum _SCOPE
+{
+  SCOPE_LOCAL,
+  SCOPE_GLOBAL,
+  SCOPE_CLASS
+} Scope;
+
 typedef struct _DATA_TYPE
 {
   enum
@@ -94,6 +101,7 @@ typedef struct
   DataType data_type;
 
   int index;
+  Scope scope;
   Token name;
 } VarExpr;
 
@@ -102,6 +110,7 @@ typedef struct
   DataType data_type;
 
   int index;
+  Scope scope;
   Token name;
   Expr* value;
 } AssignExpr;

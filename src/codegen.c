@@ -20,8 +20,10 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
 static struct
 {
   BinaryenModuleRef module;
-  ArrayStmt statements;
+  BinaryenType class;
+
   int loops;
+  ArrayStmt statements;
 } codegen;
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -271,10 +273,18 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
 {
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
-  if (expression->index == -1)
-    return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
-  else
+  switch (expression->scope)
+  {
+  case SCOPE_LOCAL:
     return BinaryenLocalGet(codegen.module, expression->index, type);
+  case SCOPE_GLOBAL:
+    return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
+  case SCOPE_CLASS:
+    return BinaryenStructGet(codegen.module, expression->index,
+                             BinaryenLocalGet(codegen.module, 0, codegen.class), type, false);
+  default:
+    UNREACHABLE("Unhandled scope type");
+  }
 }
 
 static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expression)
@@ -282,8 +292,12 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
   BinaryenExpressionRef value = generate_expression(expression->value);
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
-  if (expression->index == -1)
+  switch (expression->scope)
   {
+  case SCOPE_LOCAL:
+    return BinaryenLocalTee(codegen.module, expression->index, value, type);
+
+  case SCOPE_GLOBAL: {
     BinaryenExpressionRef list[] = {
       BinaryenGlobalSet(codegen.module, expression->name.lexeme, value),
       BinaryenGlobalGet(codegen.module, expression->name.lexeme, type),
@@ -291,9 +305,19 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
   }
-  else
-  {
-    return BinaryenLocalTee(codegen.module, expression->index, value, type);
+
+  case SCOPE_CLASS: {
+    BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, codegen.class);
+    BinaryenExpressionRef list[] = {
+      BinaryenStructSet(codegen.module, expression->index, ref, value),
+      BinaryenStructGet(codegen.module, expression->index, ref, codegen.class, false),
+    };
+
+    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
+  }
+
+  default:
+    UNREACHABLE("Unhandled scope type");
   }
 }
 
@@ -431,7 +455,7 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
 {
   BinaryenExpressionRef initializer = generate_default_initialization(statement->data_type);
 
-  if (statement->index == -1)
+  if (statement->scope == SCOPE_GLOBAL)
   {
     const char* name = statement->name.lexeme;
     BinaryenType type = data_type_to_binaryen_type(statement->data_type);
@@ -447,7 +471,7 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
       return NULL;
     }
   }
-  else
+  else if (statement->scope == SCOPE_LOCAL)
   {
     if (statement->initializer)
     {
@@ -455,6 +479,10 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
     }
 
     return BinaryenLocalSet(codegen.module, statement->index, initializer);
+  }
+  else
+  {
+    UNREACHABLE("Unexpected scope type");
   }
 }
 
@@ -532,12 +560,6 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     }
   }
 
-  FuncStmt* function;
-  array_foreach(&statement->functions, function)
-  {
-    generate_function_declaration(function);
-  }
-
   TypeBuilderRef type_builder = TypeBuilderCreate(1);
   TypeBuilderSetStructType(type_builder, 0, types.elems, packed_types.elems, mutables.elems,
                            types.size);
@@ -552,6 +574,17 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
 
   BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(), statement->type,
                       NULL, 0, constructor);
+
+  BinaryenType previous_class = codegen.class;
+  codegen.class = statement->type;
+
+  FuncStmt* function;
+  array_foreach(&statement->functions, function)
+  {
+    generate_function_declaration(function);
+  }
+
+  codegen.class = previous_class;
 
   return NULL;
 }
@@ -608,6 +641,7 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
 void codegen_init(ArrayStmt statements)
 {
   codegen.module = BinaryenModuleCreate();
+  codegen.class = BinaryenTypeNone();
   codegen.statements = statements;
   codegen.loops = -1;
 }

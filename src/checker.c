@@ -349,6 +349,7 @@ static DataType check_variable_expression(VarExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
+  expression->scope = variable->scope;
   expression->index = variable->index;
   expression->data_type = variable->data_type;
 
@@ -379,8 +380,9 @@ static DataType check_assignment_expression(AssignExpr* expression)
     error_type_mismatch(expression->name);
   }
 
-  expression->data_type = data_type;
+  expression->scope = variable->scope;
   expression->index = variable->index;
+  expression->data_type = data_type;
 
   return expression->data_type;
 }
@@ -592,6 +594,7 @@ static void check_variable_declaration(VarStmt* statement)
       return;
     }
 
+    statement->scope = SCOPE_LOCAL;
     statement->index =
       array_size(&checker.function->variables) + array_size(&checker.function->parameters);
   }
@@ -602,6 +605,8 @@ static void check_variable_declaration(VarStmt* statement)
       error_name_already_exists(statement->name, name);
       return;
     }
+
+    statement->scope = SCOPE_CLASS;
   }
   else
   {
@@ -611,6 +616,7 @@ static void check_variable_declaration(VarStmt* statement)
       return;
     }
 
+    statement->scope = SCOPE_GLOBAL;
     statement->index = -1;
   }
 
@@ -653,6 +659,28 @@ static void check_function_declaration(FuncStmt* statement)
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
 
+  if (checker.class)
+  {
+    VarStmt* parameter = ALLOC(VarStmt);
+    parameter->name = (Token){ .lexeme = "this" };
+    parameter->type = checker.class->name;
+    parameter->initializer = NULL;
+    parameter->index = -1;
+    parameter->scope = SCOPE_LOCAL;
+    parameter->data_type = DATA_TYPE(TYPE_OBJECT);
+    parameter->data_type.class = checker.class;
+
+    ArrayVarStmt parameters;
+    array_init(&parameters);
+    array_add(&parameters, parameter);
+    array_foreach(&statement->parameters, parameter)
+    {
+      array_add(&parameters, parameter);
+    }
+
+    statement->parameters = parameters;
+  }
+
   int index = 0;
   VarStmt* parameter;
 
@@ -665,6 +693,7 @@ static void check_function_declaration(FuncStmt* statement)
       continue;
     }
 
+    parameter->scope = SCOPE_LOCAL;
     parameter->index = index++;
     parameter->data_type = token_to_data_type(parameter->type);
 
@@ -707,15 +736,15 @@ static void check_class_declaration(ClassStmt* statement)
     const char* name = function_statement->name.lexeme;
     if (environment_get_variable(checker.environment, name))
     {
-      error_name_already_exists(statement->name, name);
+      error_name_already_exists(function_statement->name, name);
       return;
     }
 
-    function_statement->data_type = token_to_data_type(function_statement->type);
-
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
-    function_statement->name.lexeme = memory_sprintf(&memory, "%s:%s", class_name, function_name);
+
+    function_statement->data_type = token_to_data_type(function_statement->type);
+    function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
 
     check_function_declaration(function_statement);
   }
@@ -778,6 +807,7 @@ static void init_function_declaration(FuncStmt* statement)
   variable->name = statement->name;
   variable->type = statement->type;
   variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
   variable->data_type = DATA_TYPE(TYPE_FUNCTION);
   variable->data_type.function = statement;
@@ -797,6 +827,7 @@ static void init_class_declaration(ClassStmt* statement)
   variable->name = statement->name;
   variable->type = statement->name;
   variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
   variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
   variable->data_type.class = statement;

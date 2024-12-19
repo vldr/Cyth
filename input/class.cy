@@ -1,15 +1,17 @@
-void log(int n)
+void log(float n)
 
 class Hello
-    int test = 20
-    float a
+    int a
     float b = 4.25
+    int f
 
-    void test2()
-        log(10)
+    void test()
+        b = 20.0
 
-Hello test()
-    Hello a = Hello()
-    Hello b = a
+    int poop(int poop)
+        int a = 10
+        a = 12
 
-    return a
+        return a + poop + f
+
+int a

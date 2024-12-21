@@ -1,17 +1,23 @@
 void log(float n)
 
 class Hello
-    int a
     float b = 4.25
     int f
 
     void test()
         b = 20.0
 
-    int poop(int poop)
+    int c(int c)
         int a = 10
         a = 12
 
-        return a + poop + f
+        return a + c + f
 
-int a
+Hello main()
+    Hello a
+    a = Hello()
+
+    return a
+    # a.test()
+
+main()

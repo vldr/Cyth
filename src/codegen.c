@@ -323,7 +323,22 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 
 static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 {
-  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+  const char* name;
+  DataType callee_data_type = expression->callee_data_type;
+
+  switch (callee_data_type.type)
+  {
+  case TYPE_FUNCTION:
+    name = callee_data_type.function->name.lexeme;
+    break;
+  case TYPE_PROTOTYPE:
+    name = callee_data_type.class->name.lexeme;
+    break;
+  default:
+    UNREACHABLE("Unhandled data type");
+  }
+
+  BinaryenType return_type = data_type_to_binaryen_type(expression->return_data_type);
 
   ArrayBinaryenExpressionRef arguments;
   array_init(&arguments);
@@ -334,8 +349,7 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
     array_add(&arguments, generate_expression(argument));
   }
 
-  return BinaryenCall(codegen.module, expression->name.lexeme, arguments.elems, arguments.size,
-                      type);
+  return BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
 }
 
 static BinaryenExpressionRef generate_expression(Expr* expression)

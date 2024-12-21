@@ -1,18 +1,11 @@
 #include "checker.h"
 #include "array.h"
+#include "environment.h"
 #include "expression.h"
 #include "lexer.h"
 #include "main.h"
-#include "map.h"
 #include "memory.h"
 #include "statement.h"
-
-typedef struct _ENVIRONMENT
-{
-  MapVarStmt variables;
-
-  struct _ENVIRONMENT* parent;
-} Environment;
 
 static struct
 {
@@ -27,41 +20,6 @@ static struct
 
 static DataType check_expression(Expr* expression);
 static void check_statement(Stmt* statement);
-
-static Environment* environment_init(Environment* parent)
-{
-  Environment* environment = ALLOC(Environment);
-  environment->parent = parent;
-  map_init_var_stmt(&environment->variables, 0, 0);
-
-  return environment;
-}
-
-static bool environment_check_variable(Environment* environment, const char* name)
-{
-  return map_get_var_stmt(&environment->variables, name) != NULL;
-}
-
-static VarStmt* environment_get_variable(Environment* environment, const char* name)
-{
-  while (environment)
-  {
-    VarStmt* variable = map_get_var_stmt(&environment->variables, name);
-    if (variable)
-    {
-      return variable;
-    }
-
-    environment = environment->parent;
-  }
-
-  return NULL;
-}
-
-static void environment_set_variable(Environment* environment, const char* name, VarStmt* variable)
-{
-  map_put_var_stmt(&environment->variables, name, variable);
-}
 
 static void error(Token token, const char* message)
 {
@@ -112,9 +70,9 @@ static void error_not_a_type(Token token, const char* name)
   error(token, memory_sprintf(&memory, "The name '%s' is not a type.", name));
 }
 
-static void error_not_a_function(Token token, const char* name)
+static void error_not_a_function(Token token)
 {
-  error(token, memory_sprintf(&memory, "The name '%s' is not a function.", name));
+  error(token, "The expression is not a function.");
 }
 
 static void error_unexpected_function(Token token)
@@ -285,7 +243,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     }
   }
 
-  expression->data_type = left;
+  expression->return_data_type = left;
   expression->operand_data_type = left;
 
   switch (op.type)
@@ -307,7 +265,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
       error_operation_not_defined(op, "'int', 'float', 'bool");
 
-    expression->data_type = DATA_TYPE(TYPE_BOOL);
+    expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_PLUS:
   case TOKEN_MINUS:
@@ -329,7 +287,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     error_operation_not_defined(op, "'unknown'");
   }
 
-  return expression->data_type;
+  return expression->return_data_type;
 }
 
 static DataType check_variable_expression(VarExpr* expression)
@@ -340,12 +298,6 @@ static DataType check_variable_expression(VarExpr* expression)
   if (!variable)
   {
     error_cannot_find_name(expression->name, name);
-    return DATA_TYPE(TYPE_VOID);
-  }
-
-  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
-  {
-    error_not_a_variable(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
   }
 
@@ -389,24 +341,17 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
 static DataType check_call_expression(CallExpr* expression)
 {
-  const char* name = expression->name.lexeme;
-  VarStmt* variable = environment_get_variable(checker.environment, name);
+  DataType callee_data_type = check_expression(expression->callee);
 
-  if (!variable)
+  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION)))
   {
-    error_cannot_find_name(expression->name, name);
-    return DATA_TYPE(TYPE_VOID);
-  }
-
-  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
-  {
-    FuncStmt* function = variable->data_type.function;
+    FuncStmt* function = callee_data_type.function;
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = array_size(&function->parameters);
 
     if (number_of_arguments != expected_number_of_arguments)
     {
-      error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
+      error_invalid_arity(function->name, expected_number_of_arguments, number_of_arguments);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -417,30 +362,36 @@ static DataType check_call_expression(CallExpr* expression)
 
       if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
       {
-        error_type_mismatch(expression->name);
+        error_type_mismatch(function->name);
       }
     }
 
-    expression->data_type = function->data_type;
-    return expression->data_type;
+    expression->return_data_type = function->data_type;
+    expression->callee_data_type = callee_data_type;
+
+    return expression->return_data_type;
   }
-  else if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE)))
   {
+    ClassStmt* class = callee_data_type.class;
+
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = 0;
 
     if (number_of_arguments != expected_number_of_arguments)
     {
-      error_invalid_arity(expression->name, expected_number_of_arguments, number_of_arguments);
+      error_invalid_arity(class->name, expected_number_of_arguments, number_of_arguments);
       return DATA_TYPE(TYPE_VOID);
     }
 
-    expression->data_type = token_to_data_type(variable->name);
-    return expression->data_type;
+    expression->callee_data_type = callee_data_type;
+    expression->return_data_type = token_to_data_type(class->name);
+
+    return expression->return_data_type;
   }
   else
   {
-    error_not_a_function(expression->name, name);
+    error_not_a_function(expression->callee_token);
     return DATA_TYPE(TYPE_VOID);
   }
 }
@@ -847,6 +798,7 @@ static void init_statement(Stmt* statement)
   case STMT_CLASS_DECL:
     init_class_declaration(&statement->class);
     break;
+
   default:
     break;
   }

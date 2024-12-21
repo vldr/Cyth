@@ -73,7 +73,7 @@ typedef struct
 
 typedef struct
 {
-  DataType data_type;
+  DataType return_data_type;
   DataType operand_data_type;
 
   Expr* left;
@@ -117,9 +117,11 @@ typedef struct
 
 typedef struct
 {
-  DataType data_type;
+  DataType callee_data_type;
+  DataType return_data_type;
 
-  Token name;
+  Token callee_token;
+  Expr* callee;
   ArrayExpr arguments;
 } CallExpr;
 
@@ -130,6 +132,14 @@ typedef struct
 
   Expr* expr;
 } CastExpr;
+
+typedef struct
+{
+  DataType data_type;
+
+  Expr* expr;
+  Token name;
+} AccessExpr;
 
 struct _EXPR
 {
@@ -143,6 +153,7 @@ struct _EXPR
     EXPR_VAR,
     EXPR_ASSIGN,
     EXPR_CALL,
+    EXPR_ACCESS,
   } type;
 
   union {
@@ -154,6 +165,7 @@ struct _EXPR
     AssignExpr assign;
     CallExpr call;
     CastExpr cast;
+    AccessExpr access;
   };
 };
 

@@ -221,17 +221,15 @@ static Expr* primary(void)
 
 static Expr* call(void)
 {
+  Token start_token = peek();
   Expr* expr = primary();
 
   for (;;)
   {
+    Token end_token = previous();
+
     if (match(TOKEN_LEFT_PAREN))
     {
-      if (expr->type != EXPR_VAR)
-      {
-        error(previous(), "Expected a variable.");
-      }
-
       ArrayExpr arguments;
       array_init(&arguments);
 
@@ -248,9 +246,21 @@ static Expr* call(void)
       Expr* call = EXPR();
       call->type = EXPR_CALL;
       call->call.arguments = arguments;
-      call->call.name = expr->var.name;
+      call->call.callee = expr;
+      call->call.callee_token =
+        (Token){ TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
+                 end_token.end_line, end_token.end_column,   "" };
 
       expr = call;
+    }
+    else if (match(TOKEN_DOT))
+    {
+      Expr* access = EXPR();
+      access->type = EXPR_ACCESS;
+      access->access.expr = expr;
+      access->access.name = consume(TOKEN_IDENTIFIER, "Expected an identifier.");
+
+      expr = access;
     }
     else
     {

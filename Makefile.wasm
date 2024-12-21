@@ -1,7 +1,7 @@
 OUTPUT = output/cyth.html
 CXX = emcc
 CXXFLAGS = -Ithird_party/includes -MMD -ffunction-sections -flto -fno-rtti -Oz -Wall -Wextra -pedantic 
-LINKFLAGS = --closure 1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -sEXPORTED_FUNCTIONS=_run_source -Wl,--gc-sections -Lthird_party/libs -lbinaryen
+LINKFLAGS = --closure 1 -sFILESYSTEM=0 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -sEXPORTED_FUNCTIONS=_run_source -Wl,--gc-sections -Lthird_party/libs -lbinaryen
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(patsubst src/%, objs/%, $(patsubst %.c, %.o, $(SRCS)))

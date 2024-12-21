@@ -22,6 +22,7 @@
     <ClInclude Include="src\array.h" />
     <ClInclude Include="src\checker.h" />
     <ClInclude Include="src\codegen.h" />
+    <ClInclude Include="src\environment.h" />
     <ClInclude Include="src\expression.h" />
     <ClInclude Include="src\lexer.h" />
     <ClInclude Include="src\main.h" />
@@ -34,6 +35,7 @@
   <ItemGroup>
     <ClCompile Include="src\checker.c" />
     <ClCompile Include="src\codegen.c" />
+    <ClCompile Include="src\environment.c" />
     <ClCompile Include="src\lexer.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\map.c" />

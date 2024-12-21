@@ -20,7 +20,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4.6.4
+      - name: Sync files
+        uses: pressidium/lftp-mirror-action@v1
         with:
-          folder: input/
+          host: ${{ secrets.sftp_host }}
+          user: ${{ secrets.sftp_username }}
+          pass: ${{ secrets.sftp_password }}
+          port: ${{ secrets.sftp_port }}
+          localDir: "input/"
+          remoteDir: "/cyth/"

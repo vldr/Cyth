@@ -1,19 +1,15 @@
 void log(int n)
 
 class Hello
-    float b = 4.25
-    int f = 12
+    int data
+    Hello next
 
-    void test()
-        b = 20.0
+    int getData()
+        return data
 
-    int c(int c)
-        int a = 10
-        a = 12
+    Hello getNext()
+        return next
 
-        return a + c + f
-
-Hello a
-a = Hello()
-
-log(a.f + 10)
+Hello main()
+    Hello a
+    return a.getNext()

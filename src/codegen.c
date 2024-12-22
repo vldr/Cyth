@@ -19,12 +19,11 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
 
 static struct
 {
-  const char* prefix;
-  int loops;
-
   BinaryenModuleRef module;
   BinaryenType class;
+
   ArrayStmt statements;
+  int loops;
 } codegen;
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -534,11 +533,6 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   }
 
   const char* name = statement->name.lexeme;
-  if (codegen.prefix)
-  {
-    name = memory_sprintf(&memory, "%s.%s", codegen.prefix, statement->name.lexeme);
-  }
-
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
   BinaryenType results = data_type_to_binaryen_type(statement->data_type);
 
@@ -559,15 +553,19 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
 
 static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
 {
+  TypeBuilderRef type_builder = TypeBuilderCreate(1);
+  BinaryenHeapType temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, 0);
+  BinaryenType temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, true);
+
+  statement->ref = temporary_type;
+
   ArrayBinaryenType types;
   ArrayBinaryenPackedType packed_types;
   ArrayBool mutables;
-  ArrayBinaryenExpressionRef initializers;
 
   array_init(&types);
   array_init(&packed_types);
   array_init(&mutables);
-  array_init(&initializers);
 
   VarStmt* variable;
   array_foreach(&statement->variables, variable)
@@ -579,37 +577,37 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     array_add(&types, type);
     array_add(&packed_types, packed_type);
     array_add(&mutables, mutable);
-
-    if (variable->initializer)
-    {
-      array_add(&initializers, generate_expression(variable->initializer));
-    }
-    else
-    {
-      array_add(&initializers, generate_default_initialization(variable->data_type));
-    }
   }
 
-  TypeBuilderRef type_builder = TypeBuilderCreate(1);
   TypeBuilderSetStructType(type_builder, 0, types.elems, packed_types.elems, mutables.elems,
                            types.size);
 
   BinaryenHeapType heap_type;
   TypeBuilderBuildAndDispose(type_builder, &heap_type, 0, 0);
 
-  statement->ref = BinaryenTypeFromHeapType(heap_type, true);
+  BinaryenType type = BinaryenTypeFromHeapType(heap_type, true);
+  statement->ref = type;
 
-  BinaryenExpressionRef constructor =
+  BinaryenType previous_class = codegen.class;
+  codegen.class = type;
+
+  ArrayBinaryenExpressionRef initializers;
+  array_init(&initializers);
+  array_foreach(&statement->variables, variable)
+  {
+    if (variable->initializer)
+      array_add(&initializers, generate_expression(variable->initializer));
+    else
+      array_add(&initializers, generate_default_initialization(variable->data_type));
+  }
+
+  const char* initalizer_name = statement->name.lexeme;
+  BinaryenExpressionRef initalizer =
     BinaryenStructNew(codegen.module, initializers.elems, initializers.size, heap_type);
 
-  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(), statement->ref,
-                      NULL, 0, constructor);
-
-  const char* previous_prefix = codegen.prefix;
-  BinaryenType previous_class = codegen.class;
-
-  codegen.class = statement->ref;
-  codegen.prefix = statement->name.lexeme;
+  BinaryenAddFunction(codegen.module, initalizer_name, BinaryenTypeNone(), type, NULL, 0,
+                      initalizer);
+  BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
   FuncStmt* function;
   array_foreach(&statement->functions, function)
@@ -617,9 +615,7 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     generate_function_declaration(function);
   }
 
-  codegen.prefix = previous_prefix;
   codegen.class = previous_class;
-
   return NULL;
 }
 
@@ -689,7 +685,7 @@ void codegen_generate(void)
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC());
   BinaryenModuleValidate(codegen.module);
-  BinaryenModuleOptimize(codegen.module);
+  // BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

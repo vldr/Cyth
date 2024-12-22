@@ -210,20 +210,43 @@ static void init_function_declaration(FuncStmt* statement)
     return;
   }
 
+  if (checker.class)
+  {
+    VarStmt* parameter = ALLOC(VarStmt);
+    parameter->name = (Token){ .lexeme = "this" };
+    parameter->type = checker.class->name;
+    parameter->initializer = NULL;
+    parameter->index = -1;
+    parameter->scope = SCOPE_LOCAL;
+    parameter->data_type = DATA_TYPE(TYPE_OBJECT);
+    parameter->data_type.class = checker.class;
+
+    ArrayVarStmt parameters;
+    array_init(&parameters);
+    array_add(&parameters, parameter);
+    array_foreach(&statement->parameters, parameter)
+    {
+      array_add(&parameters, parameter);
+    }
+
+    statement->parameters = parameters;
+  }
+
   statement->data_type = token_to_data_type(statement->type);
+
+  if (checker.class)
+    statement->scope = SCOPE_CLASS;
+  else
+    statement->scope = SCOPE_GLOBAL;
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
   variable->type = statement->type;
+  variable->scope = statement->scope;
   variable->initializer = NULL;
   variable->index = -1;
   variable->data_type = DATA_TYPE(TYPE_FUNCTION);
   variable->data_type.function = statement;
-
-  if (checker.class)
-    variable->scope = SCOPE_CLASS;
-  else
-    variable->scope = SCOPE_GLOBAL;
 
   environment_set_variable(checker.environment, name, variable);
 }
@@ -416,16 +439,59 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
 static DataType check_call_expression(CallExpr* expression)
 {
-  DataType callee_data_type = check_expression(expression->callee);
+  Expr* callee = expression->callee;
+  DataType callee_data_type = check_expression(callee);
 
   if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION)))
   {
     FuncStmt* function = callee_data_type.function;
+
+    if (function->scope == SCOPE_CLASS)
+    {
+      Expr* argument;
+
+      if (checker.class)
+      {
+        argument = EXPR();
+        argument->type = EXPR_VAR;
+        argument->var.name = (Token){ .lexeme = "this" };
+        argument->var.index = 0;
+        argument->var.scope = SCOPE_LOCAL;
+        argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
+        argument->var.data_type.class = checker.class;
+      }
+      else if (callee->type == EXPR_ACCESS)
+      {
+        argument = callee->access.expr;
+      }
+      else
+      {
+        error(function->name, "idk");
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      ArrayExpr arguments;
+      array_init(&arguments);
+      array_add(&arguments, argument);
+      array_foreach(&expression->arguments, argument)
+      {
+        array_add(&arguments, argument);
+      }
+
+      expression->arguments = arguments;
+    }
+
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = array_size(&function->parameters);
 
     if (number_of_arguments != expected_number_of_arguments)
     {
+      if (function->scope == SCOPE_CLASS)
+      {
+        number_of_arguments -= 1;
+        expected_number_of_arguments -= 1;
+      }
+
       error_invalid_arity(function->name, expected_number_of_arguments, number_of_arguments);
       return DATA_TYPE(TYPE_VOID);
     }
@@ -716,28 +782,6 @@ static void check_function_declaration(FuncStmt* statement)
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
 
-  if (checker.class)
-  {
-    VarStmt* parameter = ALLOC(VarStmt);
-    parameter->name = (Token){ .lexeme = "this" };
-    parameter->type = checker.class->name;
-    parameter->initializer = NULL;
-    parameter->index = -1;
-    parameter->scope = SCOPE_LOCAL;
-    parameter->data_type = DATA_TYPE(TYPE_OBJECT);
-    parameter->data_type.class = checker.class;
-
-    ArrayVarStmt parameters;
-    array_init(&parameters);
-    array_add(&parameters, parameter);
-    array_foreach(&statement->parameters, parameter)
-    {
-      array_add(&parameters, parameter);
-    }
-
-    statement->parameters = parameters;
-  }
-
   int index = 0;
   VarStmt* parameter;
 
@@ -791,6 +835,16 @@ static void check_class_declaration(ClassStmt* statement)
   array_foreach(&statement->functions, function_statement)
   {
     init_function_declaration(function_statement);
+
+    const char* class_name = statement->name.lexeme;
+    const char* function_name = function_statement->name.lexeme;
+
+    function_statement->data_type = token_to_data_type(function_statement->type);
+    function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
+  }
+
+  array_foreach(&statement->functions, function_statement)
+  {
     check_function_declaration(function_statement);
   }
 

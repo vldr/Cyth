@@ -1,8 +1,8 @@
-void log(float n)
+void log(int n)
 
 class Hello
     float b = 4.25
-    int f
+    int f = 12
 
     void test()
         b = 20.0
@@ -13,11 +13,7 @@ class Hello
 
         return a + c + f
 
-Hello main()
-    Hello a
-    a = Hello()
+Hello a
+a = Hello()
 
-    return a
-    # a.test()
-
-main()
+log(a.f + 10)

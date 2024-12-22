@@ -120,8 +120,8 @@ typedef struct
   DataType callee_data_type;
   DataType return_data_type;
 
-  Token callee_token;
   Expr* callee;
+  Token callee_token;
   ArrayExpr arguments;
 } CallExpr;
 
@@ -138,6 +138,9 @@ typedef struct
   DataType data_type;
 
   Expr* expr;
+  Token expr_token;
+
+  int index;
   Token name;
 } AccessExpr;
 

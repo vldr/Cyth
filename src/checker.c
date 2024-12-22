@@ -55,6 +55,11 @@ static void error_cannot_find_name(Token token, const char* name)
   error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
 }
 
+static void error_cannot_find_member_name(Token token, const char* name, const char* class_name)
+{
+  error(token, memory_sprintf(&memory, "No member named '%s' in '%s'.", name, class_name));
+}
+
 static void error_cannot_find_type(Token token, const char* name)
 {
   error(token, memory_sprintf(&memory, "Undeclared type '%s'.", name));
@@ -73,6 +78,11 @@ static void error_not_a_type(Token token, const char* name)
 static void error_not_a_function(Token token)
 {
   error(token, "The expression is not a function.");
+}
+
+static void error_not_an_object(Token token)
+{
+  error(token, "The expression is not an object.");
 }
 
 static void error_unexpected_function(Token token)
@@ -189,6 +199,71 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   *target_type = to;
 
   return true;
+}
+
+static void init_function_declaration(FuncStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_get_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+    return;
+  }
+
+  statement->data_type = token_to_data_type(statement->type);
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->type;
+  variable->initializer = NULL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_FUNCTION);
+  variable->data_type.function = statement;
+
+  if (checker.class)
+    variable->scope = SCOPE_CLASS;
+  else
+    variable->scope = SCOPE_GLOBAL;
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
+static void init_class_declaration(ClassStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->name;
+  variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
+  variable->data_type.class = statement;
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
+static void init_statement(Stmt* statement)
+{
+  checker.error = false;
+
+  switch (statement->type)
+  {
+  case STMT_FUNCTION_DECL:
+    init_function_declaration(&statement->func);
+    break;
+  case STMT_CLASS_DECL:
+    init_class_declaration(&statement->class);
+    break;
+
+  default:
+    break;
+  }
 }
 
 static DataType check_cast_expression(CastExpr* expression)
@@ -396,6 +471,35 @@ static DataType check_call_expression(CallExpr* expression)
   }
 }
 
+static DataType check_access_expression(AccessExpr* expression)
+{
+  DataType data_type = check_expression(expression->expr);
+
+  if (equal_data_type(data_type, DATA_TYPE(TYPE_OBJECT)))
+  {
+    const char* name = expression->name.lexeme;
+
+    ClassStmt* class = data_type.class;
+    VarStmt* variable = map_get_var_stmt(&class->members, name);
+
+    if (!variable)
+    {
+      error_cannot_find_member_name(expression->name, name, class->name.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->index = variable->index;
+    expression->data_type = variable->data_type;
+
+    return variable->data_type;
+  }
+  else
+  {
+    error_not_an_object(expression->expr_token);
+    return DATA_TYPE(TYPE_VOID);
+  }
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -416,6 +520,8 @@ static DataType check_expression(Expr* expression)
     return check_assignment_expression(&expression->assign);
   case EXPR_CALL:
     return check_call_expression(&expression->call);
+  case EXPR_ACCESS:
+    return check_access_expression(&expression->access);
 
   default:
     UNREACHABLE("Unhandled expression");
@@ -684,22 +790,11 @@ static void check_class_declaration(ClassStmt* statement)
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
   {
-    const char* name = function_statement->name.lexeme;
-    if (environment_get_variable(checker.environment, name))
-    {
-      error_name_already_exists(function_statement->name, name);
-      return;
-    }
-
-    const char* class_name = statement->name.lexeme;
-    const char* function_name = function_statement->name.lexeme;
-
-    function_statement->data_type = token_to_data_type(function_statement->type);
-    function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
-
+    init_function_declaration(function_statement);
     check_function_declaration(function_statement);
   }
 
+  checker.class->members = checker.environment->variables;
   checker.class = NULL;
   checker.environment = checker.environment->parent;
 }
@@ -740,67 +835,6 @@ static void check_statement(Stmt* statement)
 
   default:
     UNREACHABLE("Unhandled statement");
-  }
-}
-
-static void init_function_declaration(FuncStmt* statement)
-{
-  const char* name = statement->name.lexeme;
-  if (environment_get_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-    return;
-  }
-
-  statement->data_type = token_to_data_type(statement->type);
-
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = statement->type;
-  variable->initializer = NULL;
-  variable->scope = SCOPE_GLOBAL;
-  variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_FUNCTION);
-  variable->data_type.function = statement;
-
-  environment_set_variable(checker.environment, name, variable);
-}
-
-static void init_class_declaration(ClassStmt* statement)
-{
-  const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = statement->name;
-  variable->initializer = NULL;
-  variable->scope = SCOPE_GLOBAL;
-  variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
-  variable->data_type.class = statement;
-
-  environment_set_variable(checker.environment, name, variable);
-}
-
-static void init_statement(Stmt* statement)
-{
-  checker.error = false;
-
-  switch (statement->type)
-  {
-  case STMT_FUNCTION_DECL:
-    init_function_declaration(&statement->func);
-    break;
-  case STMT_CLASS_DECL:
-    init_class_declaration(&statement->class);
-    break;
-
-  default:
-    break;
   }
 }
 

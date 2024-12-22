@@ -3,6 +3,7 @@
 
 #include "expression.h"
 #include "lexer.h"
+#include "map.h"
 
 #define STMT() (ALLOC(Stmt))
 
@@ -78,10 +79,11 @@ typedef struct _CLASS_STMT
   Token keyword;
   Token name;
 
+  MapVarStmt members;
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
 
-  uintptr_t type;
+  uintptr_t ref;
 } ClassStmt;
 
 struct _STMT

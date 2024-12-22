@@ -19,10 +19,11 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
 
 static struct
 {
+  const char* prefix;
+  int loops;
+
   BinaryenModuleRef module;
   BinaryenType class;
-
-  int loops;
   ArrayStmt statements;
 } codegen;
 
@@ -38,7 +39,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_FLOAT:
     return BinaryenTypeFloat32();
   case TYPE_OBJECT:
-    return data_type.class->type;
+    return data_type.class->ref;
 
   default:
     UNREACHABLE("Unhandled data type");
@@ -55,7 +56,7 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
   case TYPE_OBJECT:
-    return BinaryenRefNull(codegen.module, data_type.class->type);
+    return BinaryenRefNull(codegen.module, data_type.class->ref);
   default:
     UNREACHABLE("Unexpected default initializer");
   }
@@ -352,6 +353,14 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
   return BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
 }
 
+static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
+{
+  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+  BinaryenExpressionRef ref = generate_expression(expression->expr);
+
+  return BinaryenStructGet(codegen.module, expression->index, ref, type, false);
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -372,6 +381,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_assignment_expression(&expression->assign);
   case EXPR_CALL:
     return generate_call_expression(&expression->call);
+  case EXPR_ACCESS:
+    return generate_access_expression(&expression->access);
 
   default:
     UNREACHABLE("Unhandled expression");
@@ -523,6 +534,11 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   }
 
   const char* name = statement->name.lexeme;
+  if (codegen.prefix)
+  {
+    name = memory_sprintf(&memory, "%s.%s", codegen.prefix, statement->name.lexeme);
+  }
+
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
   BinaryenType results = data_type_to_binaryen_type(statement->data_type);
 
@@ -581,16 +597,19 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   BinaryenHeapType heap_type;
   TypeBuilderBuildAndDispose(type_builder, &heap_type, 0, 0);
 
-  statement->type = BinaryenTypeFromHeapType(heap_type, true);
+  statement->ref = BinaryenTypeFromHeapType(heap_type, true);
 
   BinaryenExpressionRef constructor =
     BinaryenStructNew(codegen.module, initializers.elems, initializers.size, heap_type);
 
-  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(), statement->type,
+  BinaryenAddFunction(codegen.module, statement->name.lexeme, BinaryenTypeNone(), statement->ref,
                       NULL, 0, constructor);
 
+  const char* previous_prefix = codegen.prefix;
   BinaryenType previous_class = codegen.class;
-  codegen.class = statement->type;
+
+  codegen.class = statement->ref;
+  codegen.prefix = statement->name.lexeme;
 
   FuncStmt* function;
   array_foreach(&statement->functions, function)
@@ -598,6 +617,7 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     generate_function_declaration(function);
   }
 
+  codegen.prefix = previous_prefix;
   codegen.class = previous_class;
 
   return NULL;
@@ -669,7 +689,7 @@ void codegen_generate(void)
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC());
   BinaryenModuleValidate(codegen.module);
-  // BinaryenModuleOptimize(codegen.module);
+  BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

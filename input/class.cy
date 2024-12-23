@@ -1,15 +1,18 @@
-void log(int n)
+void log(bool n)
 
 class Hello
     int data
     Hello next
 
     int getData()
-        return data
+        return getNext().getNext().getNext().next.data
 
     Hello getNext()
         return next
 
-Hello main()
-    Hello a
-    return a.getNext()
+Hello a = Hello()
+Hello b
+log(a == b)
+log(a != b)
+log(a == null)
+log(a != null)

@@ -2,6 +2,7 @@
 #define expression_h
 
 #include "lexer.h"
+#include "map.h"
 
 #define EXPR() (ALLOC(Expr))
 #define BINARY_EXPR(destination, op, l, r)                                                         \
@@ -47,6 +48,7 @@ typedef struct _DATA_TYPE
     TYPE_FLOAT,
     TYPE_STRING,
     TYPE_FUNCTION,
+    TYPE_FUNCTION_MEMBER,
     TYPE_PROTOTYPE,
     TYPE_OBJECT,
     TYPE_ARRAY,
@@ -54,8 +56,13 @@ typedef struct _DATA_TYPE
 
   union {
     struct _CLASS_STMT* class;
-    struct _FUNC_STMT* function;
     struct _DATA_TYPE* array;
+    struct _FUNC_STMT* function;
+    struct
+    {
+      struct _FUNC_STMT* function;
+      struct _EXPR* member;
+    } function_member;
   };
 } DataType;
 

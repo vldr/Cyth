@@ -234,19 +234,23 @@ static void init_function_declaration(FuncStmt* statement)
 
   statement->data_type = token_to_data_type(statement->type);
 
-  if (checker.class)
-    statement->scope = SCOPE_CLASS;
-  else
-    statement->scope = SCOPE_GLOBAL;
-
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
   variable->type = statement->type;
-  variable->scope = statement->scope;
   variable->initializer = NULL;
   variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_FUNCTION);
-  variable->data_type.function = statement;
+
+  if (checker.class)
+  {
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
+    variable->data_type.function_member.function = statement;
+    variable->data_type.function_member.member = NULL;
+  }
+  else
+  {
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION);
+    variable->data_type.function = statement;
+  }
 
   environment_set_variable(checker.environment, name, variable);
 }
@@ -354,6 +358,14 @@ static DataType check_binary_expression(BinaryExpr* expression)
     break;
   case TOKEN_EQUAL_EQUAL:
   case TOKEN_BANG_EQUAL:
+    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_BOOL)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)))
+      error_operation_not_defined(op, "'int', 'float', 'bool', 'class'");
+
+    expression->return_data_type = DATA_TYPE(TYPE_BOOL);
+    break;
   case TOKEN_GREATER:
   case TOKEN_GREATER_EQUAL:
   case TOKEN_LESS:
@@ -361,7 +373,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
-      error_operation_not_defined(op, "'int', 'float', 'bool");
+      error_operation_not_defined(op, "'int', 'float', 'bool'");
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -442,57 +454,74 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
-  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION)))
+  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
   {
-    FuncStmt* function = callee_data_type.function;
+    Expr* this;
 
-    if (function->scope == SCOPE_CLASS)
+    if (callee_data_type.function_member.member)
     {
-      Expr* argument;
-
-      if (checker.class)
-      {
-        argument = EXPR();
-        argument->type = EXPR_VAR;
-        argument->var.name = (Token){ .lexeme = "this" };
-        argument->var.index = 0;
-        argument->var.scope = SCOPE_LOCAL;
-        argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
-        argument->var.data_type.class = checker.class;
-      }
-      else if (callee->type == EXPR_ACCESS)
-      {
-        argument = callee->access.expr;
-      }
-      else
-      {
-        error(function->name, "idk");
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      ArrayExpr arguments;
-      array_init(&arguments);
-      array_add(&arguments, argument);
-      array_foreach(&expression->arguments, argument)
-      {
-        array_add(&arguments, argument);
-      }
-
-      expression->arguments = arguments;
+      this = callee_data_type.function_member.member;
+    }
+    else
+    {
+      this = EXPR();
+      this->type = EXPR_VAR;
+      this->var.name = (Token){ .lexeme = "this" };
+      this->var.index = 0;
+      this->var.scope = SCOPE_LOCAL;
+      this->var.data_type = DATA_TYPE(TYPE_OBJECT);
+      this->var.data_type.class = checker.class;
     }
 
+    ArrayExpr arguments;
+    array_init(&arguments);
+    array_add(&arguments, this);
+
+    Expr* argument;
+    array_foreach(&expression->arguments, argument)
+    {
+      array_add(&arguments, argument);
+    }
+
+    expression->arguments = arguments;
+
+    FuncStmt* function = callee_data_type.function_member.function;
+    int number_of_arguments = array_size(&expression->arguments) - 1;
+    int expected_number_of_arguments = array_size(&function->parameters) - 1;
+
+    if (number_of_arguments != expected_number_of_arguments)
+    {
+      error_invalid_arity(expression->callee_token, expected_number_of_arguments,
+                          number_of_arguments);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    for (int i = 0; i < number_of_arguments; i++)
+    {
+      Expr* argument = expression->arguments.elems[i];
+      VarStmt* parameter = function->parameters.elems[i];
+
+      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+      {
+        error_type_mismatch(function->name);
+      }
+    }
+
+    expression->return_data_type = function->data_type;
+    expression->callee_data_type = callee_data_type;
+
+    return expression->return_data_type;
+  }
+  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION)))
+  {
+    FuncStmt* function = callee_data_type.function;
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = array_size(&function->parameters);
 
     if (number_of_arguments != expected_number_of_arguments)
     {
-      if (function->scope == SCOPE_CLASS)
-      {
-        number_of_arguments -= 1;
-        expected_number_of_arguments -= 1;
-      }
-
-      error_invalid_arity(function->name, expected_number_of_arguments, number_of_arguments);
+      error_invalid_arity(expression->callee_token, expected_number_of_arguments,
+                          number_of_arguments);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -552,6 +581,11 @@ static DataType check_access_expression(AccessExpr* expression)
     {
       error_cannot_find_member_name(expression->name, name, class->name.lexeme);
       return DATA_TYPE(TYPE_VOID);
+    }
+
+    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    {
+      variable->data_type.function_member.member = expression->expr;
     }
 
     expression->index = variable->index;
@@ -843,12 +877,13 @@ static void check_class_declaration(ClassStmt* statement)
     function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
   }
 
+  checker.class->members = checker.environment->variables;
+
   array_foreach(&statement->functions, function_statement)
   {
     check_function_declaration(function_statement);
   }
 
-  checker.class->members = checker.environment->variables;
   checker.class = NULL;
   checker.environment = checker.environment->parent;
 }

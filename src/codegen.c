@@ -76,6 +76,8 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(expression->floating));
   case TYPE_BOOL:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->boolean));
+  case TYPE_OBJECT:
+    return BinaryenRefNull(codegen.module, BinaryenTypeNullref());
 
   default:
     UNREACHABLE("Unhandled literal value");
@@ -142,6 +144,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       op = BinaryenEqInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenEqFloat32();
+    else if (data_type.type == TYPE_OBJECT)
+      return BinaryenRefEq(codegen.module, left, right);
     else
       UNREACHABLE("Unsupported binary type for ==");
 
@@ -152,6 +156,9 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       op = BinaryenNeInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenNeFloat32();
+    else if (data_type.type == TYPE_OBJECT)
+      return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
+                           BinaryenRefEq(codegen.module, left, right));
     else
       UNREACHABLE("Unsupported binary type for ==");
 
@@ -330,6 +337,9 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
   {
   case TYPE_FUNCTION:
     name = callee_data_type.function->name.lexeme;
+    break;
+  case TYPE_FUNCTION_MEMBER:
+    name = callee_data_type.function_member.function->name.lexeme;
     break;
   case TYPE_PROTOTYPE:
     name = callee_data_type.class->name.lexeme;
@@ -685,7 +695,7 @@ void codegen_generate(void)
   BinaryenSetStart(codegen.module, start);
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC());
   BinaryenModuleValidate(codegen.module);
-  // BinaryenModuleOptimize(codegen.module);
+  BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
 }

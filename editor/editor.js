@@ -389,6 +389,7 @@ class Editor
                 symbols:  /[=><!~?:&|+\-*\/\^%]+/,
                 tokenizer: {
                     root: [
+                        [/#.*/, 'comment'],
                         [/([a-zA-Z_]+)(\()/, ['function', 'default']],
                         [/\d+\.[fF]/, 'number'],
                         [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, 'number'],
@@ -414,17 +415,8 @@ class Editor
                         { include: '@whitespace' },
                     ],
     
-                    comment: [
-                        [/[^\/*]+/, 'comment' ],
-                        [/\/\*/,    'comment', '@push' ],
-                        ["\\*/",    'comment', '@pop'  ],
-                        [/[\/*]/,   'comment' ]
-                    ],
-    
                     whitespace: [
                         [/[ \t\r\n]+/, 'white'],
-                        [/\/\*/,       'comment', '@comment' ],
-                        [/\/\/.*$/,    'comment'],
                     ],
                 },
             });
@@ -439,7 +431,7 @@ class Editor
                     { token: 'number', foreground: 'adfd84' },
                     { token: 'function', foreground: 'fde3a1' },
                     { token: 'comment', foreground: '00af1b' },
-                    { token: 'operator', foreground: 'dddddd' },
+                    { token: 'operator', foreground: 'c0c0c0' },
                     { token: 'default', foreground: '909090' },
                 ],
                 colors: {

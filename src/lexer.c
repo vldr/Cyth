@@ -496,12 +496,6 @@ ArrayToken lexer_scan(void)
     scan_token();
   }
 
-  if (lexer.multi_line)
-  {
-    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Reached end-of-file in multi-line mode");
-  }
-
   if (array_size(&lexer.tokens) && array_last(&lexer.tokens).type != TOKEN_NEWLINE)
   {
     add_custom_token(TOKEN_NEWLINE, "\\n", sizeof("\\n") - 1);

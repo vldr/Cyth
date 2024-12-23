@@ -1,5 +1,7 @@
 output/
 objs/
+editor/cyth.js
+editor/cyth.wasm
 compile_commands.json
 
 # User-specific files

@@ -5,56 +5,78 @@
 #include "lexer.h"
 #include "memory.h"
 #include "parser.h"
-#include "printer.h"
 #include "statement.h"
 
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-static const char* file_name = NULL;
-static bool error = false;
+typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
+                                 const char* message);
+typedef void (*result_callback_t)(size_t size, void* data);
 
-void report_error(int start_line, int start_column, int end_line, int end_column,
-                  const char* message)
+static struct
 {
-  fprintf(stderr, "%s:%d:%d-%d:%d: error: %s\n", file_name, start_line, start_column, end_line,
-          end_column, message);
-  error = true;
+  bool error;
+  const char* input_path;
+  const char* output_path;
+
+  error_callback_t error_callback;
+  result_callback_t result_callback;
+} cyth;
+
+void set_error_callback(error_callback_t callback)
+{
+  cyth.error_callback = callback;
 }
 
-void run_source(const char* source)
+void set_result_callback(result_callback_t callback)
 {
-  error = false;
+  cyth.result_callback = callback;
+}
+
+void error(int start_line, int start_column, int end_line, int end_column, const char* message)
+{
+  cyth.error_callback(start_line, start_column, end_line, end_column, message);
+  cyth.error = true;
+}
+
+void run(const char* source, bool codegen)
+{
+  cyth.error = false;
 
   lexer_init(source);
   ArrayToken tokens = lexer_scan();
 
-  if (error)
+  if (cyth.error)
     return;
 
   parser_init(tokens);
   ArrayStmt statements = parser_parse();
 
-  if (error)
+  if (cyth.error)
     return;
 
   checker_init(statements);
   checker_validate();
 
-  if (error)
+  if (cyth.error)
     return;
 
-  codegen_init(statements);
-  codegen_generate();
+  if (codegen)
+  {
+    codegen_init(statements);
+    Codegen codegen = codegen_generate();
+
+    cyth.result_callback(codegen.size, codegen.data);
+  }
 }
 
-void run_file(const char* path)
+static void run_file(void)
 {
-  FILE* file = fopen(path, "rb");
+  FILE* file = fopen(cyth.input_path, "rb");
   if (!file)
   {
-    fprintf(stderr, "Could not open file: %s\n", path);
+    fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
     return;
   }
 
@@ -63,33 +85,74 @@ void run_file(const char* path)
   rewind(file);
 
   char* source = memory_alloc(&memory, file_size + 1);
-  size_t bytes_read = fread(source, sizeof(char), file_size, file);
+  size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
 
   if (file_size != bytes_read)
   {
-    fprintf(stderr, "Could not read file: %s\n", path);
+    fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
     return;
   }
 
   fclose(file);
-
-  file_name = path;
   source[file_size] = '\0';
 
-  run_source(source);
+  run(source, true);
+}
+
+static void handle_error(int start_line, int start_column, int end_line, int end_column,
+                         const char* message)
+{
+  fprintf(stderr, "%s:%d:%d-%d:%d: error: %s\n", cyth.input_path, start_line, start_column,
+          end_line, end_column, message);
+}
+
+static void handle_result(size_t size, void* data)
+{
+  if (!cyth.output_path)
+  {
+    goto clean_up;
+  }
+
+  FILE* file = fopen(cyth.output_path, "wb");
+  if (!file)
+  {
+    fprintf(stderr, "Could not open file: %s\n", cyth.output_path);
+    goto clean_up;
+  }
+
+  size_t bytes_written = fwrite(data, sizeof(unsigned char), size, file);
+  if (size != bytes_written)
+  {
+    fprintf(stderr, "Could not write file: %s\n", cyth.output_path);
+    goto clean_up_fd;
+  }
+
+clean_up_fd:
+  fclose(file);
+
+clean_up:
+  free(data);
 }
 
 int main(int argc, char* argv[])
 {
-  if (argc == 2)
+  if (argc < 2)
   {
-    run_file(argv[1]);
-  }
-  else
-  {
-    fprintf(stderr, "Usage: cyth [path]\n");
+    fprintf(stderr, "Usage: cyth <input_path> [output_path]\n");
     return -1;
   }
+
+  cyth.input_path = argv[1];
+
+  if (argc < 3)
+    cyth.output_path = NULL;
+  else
+    cyth.output_path = argv[2];
+
+  set_error_callback(handle_error);
+  set_result_callback(handle_result);
+
+  run_file();
 
   memory_free(&memory);
   return 0;

@@ -21,108 +21,110 @@ static struct
 static DataType check_expression(Expr* expression);
 static void check_statement(Stmt* statement);
 
-static void error(Token token, const char* message)
+static void checker_error(Token token, const char* message)
 {
   if (checker.error)
     return;
 
-  report_error(token.start_line, token.start_column, token.end_line, token.end_column, message);
+  error(token.start_line, token.start_column, token.end_line, token.end_column, message);
   checker.error = true;
 }
 
 static void error_type_mismatch(Token token)
 {
-  error(token, "Type mismatch.");
+  checker_error(token, "Type mismatch.");
 }
 
 static void error_operation_not_defined(Token token, const char* type)
 {
-  error(token, memory_sprintf(&memory, "Operator '%s' only defined for %s.", token.lexeme, type));
+  checker_error(token,
+                memory_sprintf(&memory, "Operator '%s' only defined for %s.", token.lexeme, type));
 }
 
 static void error_name_already_exists(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "The name '%s' already exists.", name));
+  checker_error(token, memory_sprintf(&memory, "The name '%s' already exists.", name));
 }
 
 static void error_type_cannot_be_void(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "The type %s cannot be used here", name));
+  checker_error(token, memory_sprintf(&memory, "The type %s cannot be used here", name));
 }
 
 static void error_cannot_find_name(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
+  checker_error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
 }
 
 static void error_cannot_find_member_name(Token token, const char* name, const char* class_name)
 {
-  error(token, memory_sprintf(&memory, "No member named '%s' in '%s'.", name, class_name));
+  checker_error(token, memory_sprintf(&memory, "No member named '%s' in '%s'.", name, class_name));
 }
 
 static void error_cannot_find_type(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "Undeclared type '%s'.", name));
-}
-
-static void error_not_a_variable(Token token, const char* name)
-{
-  error(token, memory_sprintf(&memory, "The name '%s' is not a variable.", name));
+  checker_error(token, memory_sprintf(&memory, "Undeclared type '%s'.", name));
 }
 
 static void error_not_a_type(Token token, const char* name)
 {
-  error(token, memory_sprintf(&memory, "The name '%s' is not a type.", name));
+  checker_error(token, memory_sprintf(&memory, "The name '%s' is not a type.", name));
 }
 
 static void error_not_a_function(Token token)
 {
-  error(token, "The expression is not a function.");
+  checker_error(token, "The expression is not a function.");
 }
 
 static void error_not_an_object(Token token)
 {
-  error(token, "The expression is not an object.");
+  checker_error(token, "The expression is not an object.");
+}
+
+static void error_not_assignable(Token token)
+{
+  checker_error(token, "The expression is not assignable.");
 }
 
 static void error_unexpected_function(Token token)
 {
-  error(token, "A function declaration is not allowed here.");
+  checker_error(token, "A function declaration is not allowed here.");
 }
 
 static void error_unexpected_class(Token token)
 {
-  error(token, "A class declaration is not allowed here.");
+  checker_error(token, "A class declaration is not allowed here.");
 }
 
 static void error_unexpected_return(Token token)
 {
-  error(token, "A return statement can only appear inside a function.");
+  checker_error(token, "A return statement can only appear inside a function.");
 }
 
 static void error_unexpected_continue(Token token)
 {
-  error(token, "A continue statement can only appear inside a loop.");
+  checker_error(token, "A continue statement can only appear inside a loop.");
 }
 
 static void error_unexpected_break(Token token)
 {
-  error(token, "A break statement can only appear inside a loop.");
+  checker_error(token, "A break statement can only appear inside a loop.");
 }
 
 static void error_condition_is_not_bool(Token token)
 {
-  error(token, "The condition expression must evaluate to a boolean.");
+  checker_error(token, "The condition expression must evaluate to a boolean.");
 }
 
 static void error_invalid_return_type(Token token)
 {
-  error(token, "Type mismatch with return.");
+  checker_error(token, "Type mismatch with return.");
 }
 
 static void error_invalid_arity(Token token, int expected, int got)
 {
-  error(token, memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
+  checker_error(token,
+                memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
 }
 
 bool equal_data_type(DataType left, DataType right)
@@ -420,33 +422,46 @@ static DataType check_variable_expression(VarExpr* expression)
 
 static DataType check_assignment_expression(AssignExpr* expression)
 {
-  const char* name = expression->name.lexeme;
+  Expr* target = expression->target;
+  DataType target_data_type = check_expression(target);
+  DataType value_data_type = check_expression(expression->value);
 
-  VarStmt* variable = environment_get_variable(checker.environment, name);
-  if (!variable)
+  if (equal_data_type(target_data_type, DATA_TYPE(TYPE_PROTOTYPE)) ||
+      equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION)) ||
+      equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
   {
-    error_cannot_find_name(expression->name, name);
+    error_not_assignable(expression->op);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION)))
+  if (!equal_data_type(target_data_type, value_data_type))
   {
-    error_not_a_variable(expression->name, name);
+    error_type_mismatch(expression->op);
     return DATA_TYPE(TYPE_VOID);
   }
 
-  DataType data_type = check_expression(expression->value);
-
-  if (!equal_data_type(variable->data_type, data_type))
+  if (target->type == EXPR_VAR)
   {
-    error_type_mismatch(expression->name);
+    Token name_token = target->var.name;
+    const char* name = name_token.lexeme;
+
+    VarStmt* variable = environment_get_variable(checker.environment, name);
+    if (!variable)
+    {
+      error_cannot_find_name(name_token, name);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->name = name;
+    expression->index = variable->index;
+    expression->scope = variable->scope;
+    expression->data_type = variable->data_type;
+
+    return expression->data_type;
   }
 
-  expression->scope = variable->scope;
-  expression->index = variable->index;
-  expression->data_type = data_type;
-
-  return expression->data_type;
+  error_not_assignable(expression->op);
+  return DATA_TYPE(TYPE_VOID);
 }
 
 static DataType check_call_expression(CallExpr* expression)

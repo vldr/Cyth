@@ -18,11 +18,11 @@ static struct
   ArrayToken tokens;
 } parser;
 
-static void error(Token token, const char* message)
+static void parser_error(Token token, const char* message)
 {
   if (!parser.error)
   {
-    report_error(token.start_line, token.start_column, token.end_line, token.end_column, message);
+    error(token.start_line, token.start_column, token.end_line, token.end_column, message);
   }
 
   parser.error = true;
@@ -77,7 +77,7 @@ static Token consume(TokenType type, const char* message)
   if (match(type))
     return previous();
 
-  error(peek(), message);
+  parser_error(peek(), message);
 
   return peek();
 }
@@ -109,7 +109,7 @@ static Token consume_data_type(const char* message)
   if (is_data_type(peek().type))
     return advance();
 
-  error(peek(), message);
+  parser_error(peek(), message);
 
   return peek();
 }
@@ -212,7 +212,7 @@ static Expr* primary(void)
 
     break;
   default:
-    error(token, "Expected an expression.");
+    parser_error(token, "Expected an expression.");
     break;
   }
 
@@ -388,19 +388,16 @@ static Expr* assignment(void)
   if (match(TOKEN_EQUAL))
   {
     Token op = previous();
+    Expr* value = assignment();
 
-    if (expr->type == EXPR_VAR)
-    {
-      Expr* var = EXPR();
-      var->type = EXPR_ASSIGN;
-      var->assign.index = -1;
-      var->assign.name = expr->var.name;
-      var->assign.value = assignment();
+    Expr* var = EXPR();
+    var->type = EXPR_ASSIGN;
+    var->assign.index = -1;
+    var->assign.op = op;
+    var->assign.target = expr;
+    var->assign.value = value;
 
-      return var;
-    }
-
-    error(op, "Invalid assignment target.");
+    return var;
   }
 
   return expr;
@@ -502,7 +499,8 @@ static Stmt* class_declaration_statement(void)
       }
       else
       {
-        error(advance(), "Only function and variable declarations can appear inside classes.");
+        parser_error(advance(),
+                     "Only function and variable declarations can appear inside classes.");
       }
     }
 

@@ -117,8 +117,11 @@ typedef struct
   DataType data_type;
 
   int index;
+  const char* name;
   Scope scope;
-  Token name;
+
+  Token op;
+  Expr* target;
   Expr* value;
 } AssignExpr;
 

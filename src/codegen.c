@@ -306,8 +306,8 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 
   case SCOPE_GLOBAL: {
     BinaryenExpressionRef list[] = {
-      BinaryenGlobalSet(codegen.module, expression->name.lexeme, value),
-      BinaryenGlobalGet(codegen.module, expression->name.lexeme, type),
+      BinaryenGlobalSet(codegen.module, expression->name, value),
+      BinaryenGlobalGet(codegen.module, expression->name, type),
     };
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
@@ -686,7 +686,7 @@ void codegen_init(ArrayStmt statements)
   codegen.loops = -1;
 }
 
-void codegen_generate(void)
+Codegen codegen_generate(void)
 {
   BinaryenFunctionRef start =
     BinaryenAddFunction(codegen.module, "~start", BinaryenTypeNone(), BinaryenTypeNone(), NULL, 0,
@@ -697,5 +697,10 @@ void codegen_generate(void)
   BinaryenModuleValidate(codegen.module);
   BinaryenModuleOptimize(codegen.module);
   BinaryenModulePrint(codegen.module);
+
+  BinaryenModuleAllocateAndWriteResult result =
+    BinaryenModuleAllocateAndWrite(codegen.module, NULL);
   BinaryenModuleDispose(codegen.module);
+
+  return (Codegen){ .data = result.binary, .size = result.binaryBytes };
 }

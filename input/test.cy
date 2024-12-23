@@ -1,3 +1,5 @@
+void log(int n)
+
 int fibonacci(int n)
     if n == 0
         return n
@@ -11,3 +13,6 @@ int add(int a, int b)
         return a
     else
         return add(a + 1, b - 1)
+
+log(fibonacci(42))
+log(add(10, 5))

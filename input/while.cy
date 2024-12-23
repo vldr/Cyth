@@ -1,3 +1,5 @@
+void log(int n)
+
 int fib(int n)
     int a
     int b
@@ -11,3 +13,5 @@ int fib(int n)
         i = i + 1
 
     return c
+
+log(fib(42))

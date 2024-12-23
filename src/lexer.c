@@ -115,8 +115,8 @@ static void string(void)
 
     if (peek() == '\0')
     {
-      report_error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                   "Unterminated string");
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unterminated string");
       return;
     }
 
@@ -385,8 +385,8 @@ static void scan_token(void)
       break;
     }
 
-    report_error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                 "Unexpected character");
+    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+          "Unexpected character");
     break;
   }
 }
@@ -438,8 +438,8 @@ static void scan_indentation(void)
 
   if ((lexer.indentation_type & INDENTATION_SPACE) && (lexer.indentation_type & INDENTATION_TAB))
   {
-    report_error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                 "Mixing of tabs and spaces");
+    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+          "Mixing of tabs and spaces");
     lexer.indentation_type = INDENTATION_NONE;
   }
 
@@ -458,8 +458,8 @@ static void scan_indentation(void)
 
     if (indentation != array_last(&lexer.indentation))
     {
-      report_error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                   "Unexpected deindent");
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unexpected deindent");
     }
   }
 }
@@ -498,8 +498,8 @@ ArrayToken lexer_scan(void)
 
   if (lexer.multi_line)
   {
-    report_error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                 "Reached end-of-file in multi-line mode");
+    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+          "Reached end-of-file in multi-line mode");
   }
 
   if (array_size(&lexer.tokens) && array_last(&lexer.tokens).type != TOKEN_NEWLINE)

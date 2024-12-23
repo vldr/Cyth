@@ -3,7 +3,13 @@
 
 #include "statement.h"
 
+typedef struct
+{
+  size_t size;
+  void* data;
+} Codegen;
+
 void codegen_init(ArrayStmt statements);
-void codegen_generate(void);
+Codegen codegen_generate(void);
 
 #endif

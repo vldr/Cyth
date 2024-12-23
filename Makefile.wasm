@@ -1,7 +1,7 @@
-OUTPUT = output/cyth.html
+OUTPUT = editor/cyth.js
 CXX = emcc
-CXXFLAGS = -Ithird_party/includes -MMD -ffunction-sections -flto -fno-rtti -Oz -Wall -Wextra -pedantic 
-LINKFLAGS = --closure 1 -sFILESYSTEM=0 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -sEXPORTED_FUNCTIONS=_run_source -Wl,--gc-sections -Lthird_party/libs -lbinaryen
+CXXFLAGS = -Ithird_party/includes -MMD -flto -fno-rtti -O3 -Wall -Wextra -pedantic
+LINKFLAGS = --closure 1 -sFILESYSTEM=0 -sALLOW_TABLE_GROWTH=1 -sEXPORTED_RUNTIME_METHODS=cwrap,addFunction,UTF8ToString -sEXPORTED_FUNCTIONS=_free,_run,_set_error_callback,_set_result_callback -Lthird_party/libs -lbinaryen
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(patsubst src/%, objs/%, $(patsubst %.c, %.o, $(SRCS)))

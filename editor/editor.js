@@ -241,7 +241,7 @@ class EditorTabs
             tabElement.onclick = () => this.selectTab(index);
             tabElement.className = "editor-tab";
             tabElement.innerHTML = `
-                <div class="editor-tab-icon">CS</div>
+                <div class="editor-tab-icon">CY</div>
                 ${tab.name}
             `;
 
@@ -251,7 +251,7 @@ class EditorTabs
                 removeTabElement.onclick = (event) => { event.stopPropagation(); this.removeTab(); };
                 removeTabElement.className = "editor-tab-delete";
                 removeTabElement.innerHTML = `
-                    <svg class="editor-tab-delete" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px" y="0px" 
+                    <svg class="editor-tab-delete" xmlns="http://www.w3.org/2000/svg" fill="#fff" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px" y="0px" 
                         viewBox="0 0 357 357" xml:space="preserve">
                         <polygon points="357,35.7 321.3,0 178.5,142.8 35.7,0 0,35.7 142.8,178.5 0,321.3 35.7,357 178.5,214.2 321.3,357 357,321.3 214.2,178.5 "/>     
                     </svg>
@@ -361,95 +361,95 @@ class Editor
             );
             
             monaco.languages.setMonarchTokensProvider("cyth", {
+                types: [
+                    'int',
+                    'float',
+                    'bool',
+                    'class',
+                    'void', 
+                ],
                 keywords: [
+                    'return', 
+                    'for', 
+                    'while', 
+                    'break',
+                    'continue', 
+                    'if', 
+                    'else',
+                    'and',
+                    'or',
+                    'null'
                 ],
-                
-                typeKeywords: [
-                    "fun",
-                    "var",
-                    "class",
-                    "nil",
-                    "true",
-                    "false",
-                    "and",
-                    "or",
-                    "while",
-                    "if",
-                    "for",
-                    "super",
-                    "this",
-                    "return",
-                    "print",
-                ],
-                
                 operators: [
-                    "=", ">", "<", "!", "==", "<=", ">=", "!=",
-                    "++", "--", "+", "-", "*", "/", "%",
-                    "+=", "-=", "*=", "/=", "%="
+                    '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
+                    '&&', '||', '++', '--', '+', '-', '*', '/', '&', '|', '^', '%',
+                    '<<', '>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '^=',
+                    '%=', '<<=', '>>=', '>>>='
                 ],
-                
-                symbols: /[=><!~?:&|+\-*\/\^%]+/,
-                escapes: /\\(?:[abfnrtv\\""]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
-
+                symbols:  /[=><!~?:&|+\-*\/\^%]+/,
                 tokenizer: {
                     root: [
-                        [/([a-zA-Z_{1}][a-zA-Z0-9_]+)(?=\()/, { cases: { "@typeKeywords": "keyword",
-                            "@default": "type.identifier" } } ],
-                        [/[a-z_$][\w$]*/, { cases: { "@typeKeywords": "keyword",
-                                                    "@keywords": "keyword",
-                                                    "@default": "identifier" } }],
-                        { include: "@whitespace" },
-
-                        [/[{}()\[\]]/, "@brackets"],
-                        [/[<>](?!@symbols)/, "@brackets"],
-                        [/@symbols/, { cases: { "@operators": "operator",
-                                                "@default"  : "" } } ],
-
-                        [/\d*\.\d+([eE][\-+]?\d+)?/, "number.float"],
-                        [/0[xX][0-9a-fA-F]+u/, 'number.hex'],
-                        [/0[xX][0-9a-fA-F]+/, 'number.hex'],
-                        [/\d+u/, 'number'],
+                        [/([a-zA-Z_]+)(\()/, ['function', 'default']],
+                        [/\d+\.[fF]/, 'number'],
+                        [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, 'number'],
+                        [/0[xX][0-9a-fA-F]+[uU]/, 'number'],
+                        [/0[xX][0-9a-fA-F]+/, 'number'],
+                        [/\d+[uU]/, 'number'],
                         [/\d+/, 'number'],
-
-                        [/[;,.]/, "delimiter"],
-
-                        [/"([^"\\]|\\.)*$/, "string.invalid" ],
-                        [/"/,  { token: "string.quote", bracket: "@open", next: "@string" } ],
-
-                        [/"[^\\"]"/, "string"],
-                        [/(")(@escapes)(")/, ["string","string.escape","string"]],
-                        [/"/, "string.invalid"]
+                        [/[a-zA-Z_$][\w$]*/, { 
+                            cases: {
+                                '@keywords': 'keyword', 
+                                '@types': 'types', 
+                                '@default': 'identifier' 
+                            } 
+                        }],
+                        [/[{}()\[\]]/, 'default'],
+                        [/[;,.]/, 'default'],
+                        [/@symbols/, { 
+                            cases: { 
+                                '@operators': 'operator', 
+                                '@default': '' 
+                            }
+                        }],
+                        { include: '@whitespace' },
                     ],
-                
-                    comment: [],
-                
-                    string: [
-                        [/[^\\"]+/,  "string"],
-                        [/@escapes/, "string.escape"],
-                        [/\\./,      "string.escape.invalid"],
-                        [/"/,        { token: "string.quote", bracket: "@close", next: "@pop" } ]
+    
+                    comment: [
+                        [/[^\/*]+/, 'comment' ],
+                        [/\/\*/,    'comment', '@push' ],
+                        ["\\*/",    'comment', '@pop'  ],
+                        [/[\/*]/,   'comment' ]
                     ],
-                
+    
                     whitespace: [
-                        [/[ \t\r\n]+/, "white"],
-                        [/\/\/.*$/,    "comment"],
+                        [/[ \t\r\n]+/, 'white'],
+                        [/\/\*/,       'comment', '@comment' ],
+                        [/\/\/.*$/,    'comment'],
                     ],
                 },
             });
 
             monaco.editor.defineTheme("cyth", {
-                base: "vs",
+                base: "vs-dark",
                 inherit: true,
                 rules: [
-                    { token: 'type.identifier', foreground: '#cd00eb' },
+                    { token: 'keyword', foreground: 'f7a8ff' },
+                    { token: 'types', foreground: '00c4ff' },
+                    { token: 'identifier', foreground: '9cdcfe' },
+                    { token: 'number', foreground: 'adfd84' },
+                    { token: 'function', foreground: 'fde3a1' },
+                    { token: 'comment', foreground: '00af1b' },
+                    { token: 'operator', foreground: 'dddddd' },
+                    { token: 'default', foreground: '909090' },
                 ],
                 colors: {
+                    "editor.background": "#1d1d1d",
                     "editorLineNumber.foreground": "#858585",
-                    "editor.paddingTop": "10px",
                     "scrollbar.shadow": "#00000000"
                 }
             });
                   
+            this.errors = [];
             this.model = monaco.editor.createModel("", "cyth"); 
 
             this.editorDeltaDecorationsList = [];
@@ -499,7 +499,7 @@ class Editor
 
     onInput() 
     {
-        this.errors = [];
+        this.errors.length = 0;
         
         const text = this.editor.getValue();
         Module.run(text, false);

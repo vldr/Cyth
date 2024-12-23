@@ -69,6 +69,8 @@ void run(const char* source, bool codegen)
 
     cyth.result_callback(codegen.size, codegen.data);
   }
+
+  memory_reset(&memory);
 }
 
 static void run_file(void)

@@ -12,10 +12,15 @@
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=Roboto+Mono&display=swap");
 
+      :root {
+        color-scheme: dark;
+      }
+
       body {
         margin: 0;
         padding: 0;
         font-family: "Open Sans", sans-serif;
+        background: #1d1d1d;
       }
 
       .func {
@@ -31,7 +36,7 @@
         display: flex;
         flex-direction: row;
         text-align: center;
-        color: #4e4e4e;
+        color: rgb(205, 205, 205);
         user-select: none;
         cursor: pointer;
         border-radius: 21px;
@@ -42,23 +47,25 @@
       }
 
       .editor-tab:hover {
-        background-color: #f3f3f3;
+        background-color: #151515;
       }
 
       .editor-tab-active {
-        background: #ebebeb;
+        background: #000000;
+        color: white;
       }
 
       .editor-tab-active:hover {
-        background-color: #ebebeb;
+        background: #000000;
       }
 
       .editor-tab-icon {
         margin: 0;
         font-size: 12px;
-        margin-right: 10px;
+        margin-bottom: -1px;
+        margin-right: 6px;
         font-weight: bold;
-        color: black;
+        color: rgb(255 255 255);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -91,11 +98,11 @@
         display: flex;
         flex-direction: row;
         align-items: center;
-        margin-left: 10px;
+        padding-left: 10px;
         height: 50px;
         z-index: 1;
-        border-bottom: 1px solid #e5e7eb;
-        box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.04);
+        border-bottom: 1px solid #3e3e3e;
+        box-shadow: 0px 2px 6px 0px rgb(0 0 0 / 34%);
       }
 
       #editor-tabs-list {
@@ -117,7 +124,7 @@
         justify-content: center;
         align-items: center;
         height: 100%;
-        box-shadow: -7px -5px 8px 0px white;
+        box-shadow: -7px -5px 8px 0px #1d1d1d;
       }
 
       #editor-tabs-buttons button {
@@ -135,7 +142,7 @@
       }
 
       #editor-tabs-buttons button:hover {
-        background-color: #f4f4f5;
+        background-color: #101010;
       }
 
       #editor-tabs-logo {
@@ -154,14 +161,14 @@
         display: flex;
         flex-direction: column;
         box-sizing: border-box;
-        background: #fafafa;
-        border-left: 1px solid #e5e7eb;
+        background: #232323;
+        border-left: 1px solid #3e3e3e;
       }
 
       #console-topbar {
         display: flex;
-        box-shadow: 0px 4px 6px 0px rgba(0, 0, 0, 0.04);
-        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0px 4px 6px 0px #191919;
+        border-bottom: 1px solid #3e3e3e;
         padding: 0px 15px;
         margin-top: 15px;
         align-items: center;
@@ -195,7 +202,7 @@
       #console-status {
         margin: 0;
         font-weight: 450;
-        color: #787878;
+        color: #e5e5e5;
         margin-left: 14px;
         line-height: 18px;
       }
@@ -209,7 +216,7 @@
         white-space: pre-wrap;
         padding: 15px 20px;
         font-size: 15px;
-        color: #666666;
+        color: #d8d8d8;
         line-height: 23px;
         overflow: auto;
       }
@@ -252,7 +259,7 @@
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="currentColor"
+                stroke="#fff"
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"

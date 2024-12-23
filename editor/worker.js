@@ -8,11 +8,11 @@ onmessage = async (event) =>
         {
             try 
             {
-                const env = { 
-                    log: (text) => {
+                const env = {
+                    log: function(text) {
                         postMessage({ type: "print", text});
                     } 
-                }
+                };
 
                 await WebAssembly.instantiate(data.bytecode, { env });
 

@@ -665,7 +665,7 @@ static void check_return_statement(ReturnStmt* statement)
 
   if (!equal_data_type(checker.function->data_type, data_type))
   {
-    error_invalid_return_type(checker.function->type);
+    error_invalid_return_type(statement->keyword);
     return;
   }
 }

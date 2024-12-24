@@ -501,10 +501,10 @@ static DataType check_call_expression(CallExpr* expression)
     expression->arguments = arguments;
 
     FuncStmt* function = callee_data_type.function_member.function;
-    int number_of_arguments = array_size(&expression->arguments) - 1;
-    int expected_number_of_arguments = array_size(&function->parameters) - 1;
+    int number_of_arguments = array_size(&expression->arguments);
+    int expected_number_of_arguments = array_size(&function->parameters);
 
-    if (number_of_arguments != expected_number_of_arguments)
+    if (number_of_arguments - 1 != expected_number_of_arguments - 1)
     {
       error_invalid_arity(expression->callee_token, expected_number_of_arguments,
                           number_of_arguments);

@@ -207,9 +207,10 @@ class EditorTabs
         if (!json)
         {
             this.tabIndex = 0;
-            this.tabs.push({name: "fibonacci", text: `void log(int n) \n \nint fibonacci(int n) \n    if n == 0 \n        return n \n    else if n == 1 \n        return n \n    else \n        return fibonacci(n - 2) + fibonacci(n - 1) \n \n \nfor int i = 0; i <= 42; i = i + 1 \n    log(fibonacci(i))` });
+            this.tabs.push({name: "fibonacci", text: `void log(int n)\n\nint fibonacci(int n)\n    if n == 0 \n        return n \n    else if n == 1 \n        return n \n    else \n        return fibonacci(n - 2) + fibonacci(n - 1)\n\nfor int i = 0; i <= 42; i = i + 1\n    log(fibonacci(i))` });
             this.tabs.push({name: "pascal", text: `void log(int n) \n \nint binomialCoeff(int n, int k)  \n    int res = 1 \n \n    if k > n - k  \n        k = n - k \n \n    int i \n    while i < k \n        res = res * (n - i) \n        res = res / (i + 1) \n \n        i = i + 1 \n       \n    return res \n \nint index \nint count = 16 \n \nwhile index < count \n    log( \n        binomialCoeff(count  - 1, index) \n    ) \n \n    index = index + 1` });
             this.tabs.push({name: "sqrt", text: `void log(float n) \n \nint sqrt(int x) \n    int s \n    int b = 32768 \n \n    while b != 0 \n        int t = s + b  \n \n        if t * t <= x \n            s = t \n \n        b = b / 2 \n \n    return s \n \nint pow(int base, int exp) \n    int result = 1 \n \n    while exp != 0 \n        if exp % 2 == 1 \n            result = result * base \n             \n        exp = exp / 2 \n        base = base * base \n     \n    return result \n \nint result2 = sqrt(456420496) \nint result = pow(result2, 2) \n \nlog(result2 + 0.0) \nlog(result + 0.0) \n \nfloat sqrtf(float n) \n    float x = n \n    float y = 1.0 \n    float e = 0.000001 \n \n    while x - y > e  \n        x = (x + y) / 2.0 \n        y = n / x \n \n    return x \n \nlog(sqrtf(50.0)) \n \nfloat exponential(float n, float x) \n    float sum = 1.0 \n   \n    for float i = n - 1; i > 0; i = i - 1 \n        sum = (x * sum / i) + 1.0   \n   \n    return sum   \n  \nfloat n = 10.0 \nfloat x = 1.0 \n \nlog(exponential(n, x))` });
+            this.tabs.push({name: "linked_list", text: `void log(int n)\n\nclass Node\n    int data\n    Node next\n\n    int getData()\n        return data\n\n    Node getNext()\n        return next\n\n    void setData(int data_)\n        data = data_\n\n    void setNext(Node next_)\n        next = next_\n\nNode a = Node()\nNode b = Node()\nNode c = Node()\nNode d = Node()\n\na.setData(1)\na.setNext(b)\n\nb.setData(2)\nb.setNext(c)\n\nc.setData(3)\nc.setNext(d)\n\nd.setData(4)\n\nNode current = a\nwhile current != null\n    log(current.getData())\n    current = current.getNext()` });
         }
         else
         {
@@ -379,7 +380,8 @@ class Editor
                     'else',
                     'and',
                     'or',
-                    'null'
+                    'null',
+                    'this'
                 ],
                 operators: [
                     '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
@@ -398,6 +400,7 @@ class Editor
                         [/0[xX][0-9a-fA-F]+/, 'number'],
                         [/\d+[uU]/, 'number'],
                         [/\d+/, 'number'],
+                        [/[A-Z][a-zA-Z_$]+[\w$]*/, 'class'],
                         [/[a-zA-Z_$][\w$]*/, { 
                             cases: {
                                 '@keywords': 'keyword', 
@@ -433,6 +436,7 @@ class Editor
                     { token: 'function', foreground: 'fde3a1' },
                     { token: 'comment', foreground: '00af1b' },
                     { token: 'operator', foreground: 'c0c0c0' },
+                    { token: 'class', foreground: '92ffc7' },
                     { token: 'default', foreground: '909090' },
                 ],
                 colors: {

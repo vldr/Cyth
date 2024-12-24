@@ -1,8 +1,49 @@
-class Test
-    int a
+void log(int n)
 
-Test().a = 20
+class Hello
+    int data
+    Hello next
 
+    int getData()
+        return data
+
+    Hello getNext()
+        return next
+
+    void setData(int data_)
+        data = data_
+
+    void setNext(Hello next_)
+        next = next_
+
+Hello a = Hello()
+Hello b = Hello()
+Hello c = Hello()
+Hello d = Hello()
+
+a.setData(1)
+a.setNext(b)
+
+b.setData(2)
+b.setNext(c)
+
+c.setData(3)
+c.setNext(d)
+
+d.setData(4)
+
+Hello current = a
+while current != null
+    log(current.getData())
+    current = current.getNext()
+
+# b.setData(2)
+# b.setNext(c)
+
+# c.setData(3)
+# c.setNext(d)
+
+# d.setData(4)
 
 
 # void log(int n)

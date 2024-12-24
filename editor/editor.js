@@ -353,11 +353,12 @@ class Editor
         require(["vs/editor/editor.main"], () => {
             monaco.languages.register({ id: "cyth" });
             monaco.languages.setLanguageConfiguration("cyth",
-            {
-                "surroundingPairs": [{"open":"{","close":"}"}, {"open":"(","close":")"}, {"open":"[","close":"]"}],
-                "autoClosingPairs": [{"open":"{","close":"}"}, {"open":"(","close":")"}, {"open":"[","close":"]"}],
-                "brackets":[["{","}"], ["(",")"], ["[","]"],]
-            }
+                {
+                    surroundingPairs: [ {"open":"{","close":"}"}, {"open":"(","close":")"}, {"open":"[","close":"]"} ],
+                    autoClosingPairs: [ {"open":"{","close":"}"}, {"open":"(","close":")"}, {"open":"[","close":"]"} ],
+                    brackets: [ ["{","}"], ["(",")"], ["[","]"] ],
+                    comments: { lineComment: "#" },
+                }
             );
             
             monaco.languages.setMonarchTokensProvider("cyth", {

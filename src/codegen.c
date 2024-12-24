@@ -427,12 +427,16 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 {
   codegen.loops++;
 
+  const char* continue_name = memory_sprintf(&memory, "continue|%d", codegen.loops);
   const char* break_name = memory_sprintf(&memory, "break|%d", codegen.loops);
   const char* loop_name = memory_sprintf(&memory, "loop|%d", codegen.loops);
 
+  BinaryenExpressionRef continue_block = generate_statements(&statement->body);
+  BinaryenBlockSetName(continue_block, continue_name);
+
   ArrayBinaryenExpressionRef loop_block_list;
   array_init(&loop_block_list);
-  array_add(&loop_block_list, generate_statements(&statement->body));
+  array_add(&loop_block_list, continue_block);
 
   if (statement->incrementer)
   {
@@ -475,7 +479,7 @@ static BinaryenExpressionRef generate_return_statement(ReturnStmt* statement)
 
 static BinaryenExpressionRef generate_continue_statement(void)
 {
-  const char* name = memory_sprintf(&memory, "loop|%d", codegen.loops);
+  const char* name = memory_sprintf(&memory, "continue|%d", codegen.loops);
   return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 

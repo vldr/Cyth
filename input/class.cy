@@ -8,7 +8,7 @@ class Hello
         return data
 
     Hello getNext()
-        return next
+        return this.next
 
     void setData(int data_)
         data = data_

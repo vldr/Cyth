@@ -206,7 +206,7 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
 static void init_function_declaration(FuncStmt* statement)
 {
   const char* name = statement->name.lexeme;
-  if (environment_get_variable(checker.environment, name))
+  if (environment_check_variable(checker.environment, name))
   {
     error_name_already_exists(statement->name, name);
     return;
@@ -218,7 +218,7 @@ static void init_function_declaration(FuncStmt* statement)
     parameter->name = (Token){ .lexeme = "this" };
     parameter->type = checker.class->name;
     parameter->initializer = NULL;
-    parameter->index = -1;
+    parameter->index = 0;
     parameter->scope = SCOPE_LOCAL;
     parameter->data_type = DATA_TYPE(TYPE_OBJECT);
     parameter->data_type.class = checker.class;
@@ -240,13 +240,12 @@ static void init_function_declaration(FuncStmt* statement)
   variable->name = statement->name;
   variable->type = statement->type;
   variable->initializer = NULL;
-  variable->index = -1;
 
   if (checker.class)
   {
     variable->data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
     variable->data_type.function_member.function = statement;
-    variable->data_type.function_member.member = NULL;
+    variable->data_type.function_member.this = NULL;
   }
   else
   {
@@ -413,8 +412,7 @@ static DataType check_variable_expression(VarExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
-  expression->scope = variable->scope;
-  expression->index = variable->index;
+  expression->variable = variable;
   expression->data_type = variable->data_type;
 
   return expression->data_type;
@@ -442,19 +440,16 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
   if (target->type == EXPR_VAR)
   {
-    Token name_token = target->var.name;
-    const char* name = name_token.lexeme;
+    VarStmt* variable = target->var.variable;
+    expression->variable = variable;
+    expression->data_type = variable->data_type;
 
-    VarStmt* variable = environment_get_variable(checker.environment, name);
-    if (!variable)
-    {
-      error_cannot_find_name(name_token, name);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    expression->name = name;
-    expression->index = variable->index;
-    expression->scope = variable->scope;
+    return expression->data_type;
+  }
+  else if (target->type == EXPR_ACCESS)
+  {
+    VarStmt* variable = target->access.variable;
+    expression->variable = variable;
     expression->data_type = variable->data_type;
 
     return expression->data_type;
@@ -471,28 +466,26 @@ static DataType check_call_expression(CallExpr* expression)
 
   if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
   {
-    Expr* this;
+    FuncStmt* function = callee_data_type.function_member.function;
+    Expr* argument;
 
-    if (callee_data_type.function_member.member)
+    if (callee_data_type.function_member.this)
     {
-      this = callee_data_type.function_member.member;
+      argument = callee_data_type.function_member.this;
     }
     else
     {
-      this = EXPR();
-      this->type = EXPR_VAR;
-      this->var.name = (Token){ .lexeme = "this" };
-      this->var.index = 0;
-      this->var.scope = SCOPE_LOCAL;
-      this->var.data_type = DATA_TYPE(TYPE_OBJECT);
-      this->var.data_type.class = checker.class;
+      argument = EXPR();
+      argument->type = EXPR_VAR;
+      argument->var.name = (Token){ .lexeme = "this" };
+      argument->var.variable = array_at(&function->parameters, 0);
+      argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
+      argument->var.data_type.class = checker.class;
     }
 
     ArrayExpr arguments;
     array_init(&arguments);
-    array_add(&arguments, this);
-
-    Expr* argument;
+    array_add(&arguments, argument);
     array_foreach(&expression->arguments, argument)
     {
       array_add(&arguments, argument);
@@ -500,18 +493,17 @@ static DataType check_call_expression(CallExpr* expression)
 
     expression->arguments = arguments;
 
-    FuncStmt* function = callee_data_type.function_member.function;
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = array_size(&function->parameters);
 
-    if (number_of_arguments - 1 != expected_number_of_arguments - 1)
+    if (number_of_arguments != expected_number_of_arguments)
     {
-      error_invalid_arity(expression->callee_token, expected_number_of_arguments,
-                          number_of_arguments);
+      error_invalid_arity(expression->callee_token, expected_number_of_arguments - 1,
+                          number_of_arguments - 1);
       return DATA_TYPE(TYPE_VOID);
     }
 
-    for (int i = 0; i < number_of_arguments; i++)
+    for (int i = 1; i < number_of_arguments; i++)
     {
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
@@ -600,10 +592,10 @@ static DataType check_access_expression(AccessExpr* expression)
 
     if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
     {
-      variable->data_type.function_member.member = expression->expr;
+      variable->data_type.function_member.this = expression->expr;
     }
 
-    expression->index = variable->index;
+    expression->variable = variable;
     expression->data_type = variable->data_type;
 
     return variable->data_type;

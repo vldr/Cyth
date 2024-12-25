@@ -29,6 +29,7 @@
 #define DATA_TYPE(a) ((DataType){ .type = a })
 
 typedef struct _EXPR Expr;
+typedef struct _VAR_STMT VarStmt;
 array_def(Expr*, Expr);
 
 typedef enum _SCOPE
@@ -61,7 +62,7 @@ typedef struct _DATA_TYPE
     struct
     {
       struct _FUNC_STMT* function;
-      struct _EXPR* member;
+      struct _EXPR* this;
     } function_member;
   };
 } DataType;
@@ -107,22 +108,19 @@ typedef struct
 {
   DataType data_type;
 
-  int index;
-  Scope scope;
   Token name;
+  VarStmt* variable;
 } VarExpr;
 
 typedef struct
 {
   DataType data_type;
 
-  int index;
-  const char* name;
-  Scope scope;
-
   Token op;
   Expr* target;
   Expr* value;
+
+  VarStmt* variable;
 } AssignExpr;
 
 typedef struct
@@ -149,9 +147,9 @@ typedef struct
 
   Expr* expr;
   Token expr_token;
-
-  int index;
   Token name;
+
+  VarStmt* variable;
 } AccessExpr;
 
 struct _EXPR

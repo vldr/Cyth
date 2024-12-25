@@ -207,8 +207,8 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_VAR;
-    expr->var.index = -1;
     expr->var.name = token;
+    expr->var.variable = NULL;
 
     break;
   default:
@@ -392,10 +392,10 @@ static Expr* assignment(void)
 
     Expr* var = EXPR();
     var->type = EXPR_ASSIGN;
-    var->assign.index = -1;
     var->assign.op = op;
     var->assign.target = expr;
     var->assign.value = value;
+    var->assign.variable = NULL;
 
     return var;
   }

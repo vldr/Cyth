@@ -203,14 +203,7 @@ static void literal(void)
     KEYWORD("return", TOKEN_RETURN)
 
     KEYWORD_GROUP('s')
-    switch (lexer.start[1])
-    {
-    default:
-      KEYWORD_GROUP('u')
-      KEYWORD("super", TOKEN_SUPER)
-      KEYWORD_GROUP('t')
-      KEYWORD("string", TOKEN_IDENTIFIER_STRING)
-    }
+    KEYWORD("string", TOKEN_IDENTIFIER_STRING)
 
     KEYWORD_GROUP('w')
     KEYWORD("while", TOKEN_WHILE)
@@ -237,14 +230,7 @@ static void literal(void)
     }
 
     KEYWORD_GROUP('t')
-    switch (lexer.start[1])
-    {
-    default:
-      KEYWORD_GROUP('h')
-      KEYWORD("this", TOKEN_THIS)
-      KEYWORD_GROUP('r')
-      KEYWORD("true", TOKEN_TRUE)
-    }
+    KEYWORD("true", TOKEN_TRUE)
 
     KEYWORD_GROUP('v')
     KEYWORD("void", TOKEN_IDENTIFIER_VOID)

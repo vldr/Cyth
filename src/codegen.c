@@ -280,14 +280,14 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
 {
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
-  switch (expression->scope)
+  switch (expression->variable->scope)
   {
   case SCOPE_LOCAL:
-    return BinaryenLocalGet(codegen.module, expression->index, type);
+    return BinaryenLocalGet(codegen.module, expression->variable->index, type);
   case SCOPE_GLOBAL:
     return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
   case SCOPE_CLASS:
-    return BinaryenStructGet(codegen.module, expression->index,
+    return BinaryenStructGet(codegen.module, expression->variable->index,
                              BinaryenLocalGet(codegen.module, 0, codegen.class), type, false);
   default:
     UNREACHABLE("Unhandled scope type");
@@ -298,26 +298,32 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 {
   BinaryenExpressionRef value = generate_expression(expression->value);
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+  VarStmt* variable = expression->variable;
 
-  switch (expression->scope)
+  switch (variable->scope)
   {
   case SCOPE_LOCAL:
-    return BinaryenLocalTee(codegen.module, expression->index, value, type);
+    return BinaryenLocalTee(codegen.module, variable->index, value, type);
 
   case SCOPE_GLOBAL: {
     BinaryenExpressionRef list[] = {
-      BinaryenGlobalSet(codegen.module, expression->name, value),
-      BinaryenGlobalGet(codegen.module, expression->name, type),
+      BinaryenGlobalSet(codegen.module, variable->name.lexeme, value),
+      BinaryenGlobalGet(codegen.module, variable->name.lexeme, type),
     };
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
   }
 
   case SCOPE_CLASS: {
-    BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, codegen.class);
+    BinaryenExpressionRef ref;
+    if (expression->target->type == EXPR_ACCESS)
+      ref = generate_expression(expression->target->access.expr);
+    else
+      ref = BinaryenLocalGet(codegen.module, 0, codegen.class);
+
     BinaryenExpressionRef list[] = {
-      BinaryenStructSet(codegen.module, expression->index, ref, value),
-      BinaryenStructGet(codegen.module, expression->index, ref, codegen.class, false),
+      BinaryenStructSet(codegen.module, variable->index, ref, value),
+      BinaryenStructGet(codegen.module, variable->index, ref, codegen.class, false),
     };
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
@@ -367,7 +373,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
   BinaryenExpressionRef ref = generate_expression(expression->expr);
 
-  return BinaryenStructGet(codegen.module, expression->index, ref, type, false);
+  return BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
 }
 
 static BinaryenExpressionRef generate_expression(Expr* expression)

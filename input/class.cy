@@ -1,80 +1,62 @@
 void log(int n)
 
-class Hello
+class Node
     int data
-    Hello next
+    Node next
 
-    int getData()
-        return data
+class LinkedList
+    Node head
 
-    Hello getNext()
-        return this.next
+    void push(int data)
+        Node node = Node()
+        node.data = data
 
-    void setData(int data_)
-        data = data_
+        if head == null
+            head = node
+        else
+            Node current = head
+            while current.next != null
+                current = current.next
 
-    void setNext(Hello next_)
-        next = next_
+            current.next = node
 
-Hello a = Hello()
-Hello b = Hello()
-Hello c = Hello()
-Hello d = Hello()
+    void del(int index)
+        bool found
+        int currentIndex
+        Node previous
+        Node current = head
 
-a.setData(1)
-a.setNext(b)
+        while current != null
+            if index == currentIndex
+                found = true
+                break
 
-b.setData(2)
-b.setNext(c)
+            previous = current
+            current = current.next
+            currentIndex = currentIndex + 1
 
-c.setData(3)
-c.setNext(d)
+        if not found
+            return
 
-d.setData(4)
+        if previous == null
+            head = current.next
+        else
+            previous.next = current.next
 
-Hello current = a
-while current != null
-    log(current.getData())
-    current = current.getNext()
+    void print()
+        for Node node = head; node != null; node = node.next
+            log(node.data)
+        
 
-# b.setData(2)
-# b.setNext(c)
+int items = 100
+LinkedList list = LinkedList()
 
-# c.setData(3)
-# c.setNext(d)
+for int i = 0; i < items; i = i + 1
+    list.push(i)
 
-# d.setData(4)
+for int i = 0; i < items; i = i + 1
+    list.del(0)
 
 
-# void log(int n)
 
-# class Hello
-#     int data
-#     Hello next
-
-#     int getData()
-#         return getNext().getNext().getNext().next.data
-
-#     Hello getNext()
-#         return next
-
-# Hello a = Hello()
-# Hello b = Hello()
-# Hello c = Hello()
-# Hello d = Hello()
-
-# a.data = 1
-# a.next = b
-
-# b.data = 2
-# b.next = c
-
-# c.data = 3
-# c.next = d
-
-# d.data = 4
-
-# Hello current = a
-# while current != null
-#     log(current.getData())
-#     current = current.getNext()
+list.print()

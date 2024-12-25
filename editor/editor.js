@@ -369,6 +369,13 @@ class Editor
                     'bool',
                     'class',
                     'void', 
+                    'null',
+                    'true',
+                    'false',
+                    'this',
+                    'and',
+                    'or',
+                    'not'
                 ],
                 keywords: [
                     'return', 
@@ -378,10 +385,6 @@ class Editor
                     'continue', 
                     'if', 
                     'else',
-                    'and',
-                    'or',
-                    'null',
-                    'this'
                 ],
                 operators: [
                     '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',

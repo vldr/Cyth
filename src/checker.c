@@ -12,6 +12,7 @@ static struct
   bool error;
   ArrayStmt statements;
 
+  Environment* global_environment;
   Environment* environment;
   FuncStmt* function;
   ClassStmt* class;
@@ -748,40 +749,30 @@ static void check_while_statement(WhileStmt* statement)
 
 static void check_variable_declaration(VarStmt* statement)
 {
+  Environment* environment = checker.environment;
   const char* name = statement->name.lexeme;
 
   if (checker.function)
   {
-    if (environment_check_variable(checker.environment, name))
-    {
-      error_name_already_exists(statement->name, name);
-      return;
-    }
-
     statement->scope = SCOPE_LOCAL;
     statement->index =
       array_size(&checker.function->variables) + array_size(&checker.function->parameters);
   }
   else if (checker.class)
   {
-    if (environment_check_variable(checker.environment, name))
-    {
-      error_name_already_exists(statement->name, name);
-      return;
-    }
-
     statement->scope = SCOPE_CLASS;
   }
   else
   {
-    if (environment_get_variable(checker.environment, name))
-    {
-      error_name_already_exists(statement->name, name);
-      return;
-    }
+    environment = checker.global_environment;
 
     statement->scope = SCOPE_GLOBAL;
-    statement->index = -1;
+  }
+
+  if (environment_check_variable(environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+    return;
   }
 
   statement->data_type = token_to_data_type(statement->type);
@@ -807,7 +798,7 @@ static void check_variable_declaration(VarStmt* statement)
     array_add(&checker.function->variables, statement);
   }
 
-  environment_set_variable(checker.environment, name, statement);
+  environment_set_variable(environment, name, statement);
 }
 
 static void check_function_declaration(FuncStmt* statement)
@@ -941,7 +932,9 @@ void checker_init(ArrayStmt statements)
   checker.class = NULL;
   checker.loop = NULL;
   checker.statements = statements;
+
   checker.environment = environment_init(NULL);
+  checker.global_environment = checker.environment;
 }
 
 void checker_validate(void)

@@ -323,7 +323,8 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 
     BinaryenExpressionRef list[] = {
       BinaryenStructSet(codegen.module, variable->index, ref, value),
-      BinaryenStructGet(codegen.module, variable->index, ref, codegen.class, false),
+      BinaryenStructGet(codegen.module, variable->index,
+                        BinaryenExpressionCopy(ref, codegen.module), codegen.class, false),
     };
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);

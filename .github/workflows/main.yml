@@ -18,8 +18,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-        with:
-          lfs: true
 
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v11
@@ -28,6 +26,7 @@ jobs:
 
       - name: Build
         run: |
+          wget https://vldr.org/libbinaryen.a -o third_party/libs/libbinaryen.a
           make clean
           make -f Makefile.wasm -j`nproc`
 

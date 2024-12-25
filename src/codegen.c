@@ -469,8 +469,6 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 
   array_add(&block_list, loop);
 
-  codegen.loops--;
-
   return BinaryenBlock(codegen.module, break_name, block_list.elems, block_list.size,
                        BinaryenTypeNone());
 }

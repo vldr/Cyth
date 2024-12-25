@@ -20,7 +20,7 @@ class LinkedList
 
             current.next = node
 
-    void del(int index)
+    bool del(int index)
         bool found
         int currentIndex
         Node previous
@@ -35,28 +35,27 @@ class LinkedList
             current = current.next
             currentIndex = currentIndex + 1
 
-        if not found
-            return
-
-        if previous == null
-            head = current.next
-        else
-            previous.next = current.next
+        if found
+            if previous == null
+                head = current.next
+            else
+                previous.next = current.next
+            
+        return found
 
     void print()
         for Node node = head; node != null; node = node.next
             log(node.data)
         
+        
 
-int items = 100
+int items = 100000
 LinkedList list = LinkedList()
 
 for int i = 0; i < items; i = i + 1
     list.push(i)
 
-for int i = 0; i < items; i = i + 1
+for i = 0; i < items; i = i + 1
     list.del(0)
-
-
 
 list.print()

@@ -104,11 +104,11 @@ class EditorConsole
 
     print(text)
     {
-        let shouldScrollToBottom = Math.abs(
-            this.consoleOutput.scrollHeight - 
-            this.consoleOutput.scrollTop - 
-            this.consoleOutput.clientHeight
-        ) < 1;
+        const shouldScrollToBottom = (
+            this.consoleOutput.scrollTop +
+            this.consoleOutput.clientHeight -
+            this.consoleOutput.scrollHeight
+        ) >= -5;
 
         this.consoleOutput.innerHTML += text;
 

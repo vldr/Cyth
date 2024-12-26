@@ -268,26 +268,6 @@ static void init_function_declaration(FuncStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
-static void init_class_declaration(ClassStmt* statement)
-{
-  const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = statement->name;
-  variable->initializer = NULL;
-  variable->scope = SCOPE_GLOBAL;
-  variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
-  variable->data_type.class = statement;
-
-  environment_set_variable(checker.environment, name, variable);
-}
-
 static void init_statement(Stmt* statement)
 {
   checker.error = false;
@@ -296,9 +276,6 @@ static void init_statement(Stmt* statement)
   {
   case STMT_FUNCTION_DECL:
     init_function_declaration(&statement->func);
-    break;
-  case STMT_CLASS_DECL:
-    init_class_declaration(&statement->class);
     break;
 
   default:
@@ -832,7 +809,7 @@ static void check_variable_declaration(VarStmt* statement)
 
     if (!equal_data_type(statement->data_type, initializer_data_type))
     {
-      error_type_mismatch(statement->type);
+      error_type_mismatch(statement->name);
     }
   }
 
@@ -893,6 +870,23 @@ static void check_class_declaration(ClassStmt* statement)
     error_unexpected_class(statement->name);
     return;
   }
+
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->name;
+  variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
+  variable->data_type.class = statement;
+
+  environment_set_variable(checker.environment, name, variable);
 
   checker.environment = environment_init(checker.environment);
   checker.class = statement;

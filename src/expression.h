@@ -56,8 +56,8 @@ typedef struct _DATA_TYPE
   } type;
 
   union {
-    struct _CLASS_STMT* class;
     struct _DATA_TYPE* array;
+    struct _CLASS_STMT* class;
     struct _FUNC_STMT* function;
     struct
     {

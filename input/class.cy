@@ -6,8 +6,13 @@ class Node
 
 class LinkedList
     Node head
+    int size
 
-    void push(int data)
+    void __init__(int size, Node head)
+        this.size = size
+        this.head = head
+
+    void append(int data)
         Node node = Node()
         node.data = data
 
@@ -19,6 +24,26 @@ class LinkedList
                 current = current.next
 
             current.next = node
+
+        size = size + 1
+
+    void prepend(int data)
+        Node node = Node()
+        node.data = data
+
+        if head == null
+            head = node
+        else
+            node.next = head
+            head = node
+
+        size = size + 1
+
+    bool pop()
+        return del(size - 1)
+
+    bool popfront()
+        return del(0)
 
     bool del(int index)
         bool found
@@ -40,22 +65,25 @@ class LinkedList
                 head = current.next
             else
                 previous.next = current.next
+
+            size = size - 1
             
         return found
 
     void print()
         for Node node = head; node != null; node = node.next
             log(node.data)
-        
-        
+            
+# int items = 10
+Node node = Node()
+LinkedList list = LinkedList(10, node)
 
-int items = 100000
-LinkedList list = LinkedList()
+# list.print()
 
-for int i = 0; i < items; i = i + 1
-    list.push(i)
+# for int i = 0; i < items; i = i + 1
+#     list.prepend(i)
 
-for i = 0; i < items; i = i + 1
-    list.del(0)
-
-list.print()
+# for i = 0; i < items/2; i = i + 1
+#     list.pop()
+    
+# list.print()

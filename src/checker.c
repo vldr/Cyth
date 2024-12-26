@@ -122,6 +122,11 @@ static void error_invalid_return_type(Token token)
   checker_error(token, "Type mismatch with return.");
 }
 
+static void error_invalid_initializer_return_type(Token token)
+{
+  checker_error(token, "The return type of '__init__' must be 'void'.");
+}
+
 static void error_invalid_arity(Token token, int expected, int got)
 {
   checker_error(token,
@@ -215,6 +220,12 @@ static void init_function_declaration(FuncStmt* statement)
 
   if (checker.class)
   {
+    if (strcmp(name, "__init__") == 0 && statement->type.type != TOKEN_IDENTIFIER_VOID)
+    {
+      error_invalid_initializer_return_type(statement->name);
+      return;
+    }
+
     VarStmt* parameter = ALLOC(VarStmt);
     parameter->name = (Token){ .lexeme = "this" };
     parameter->type = checker.class->name;
@@ -552,14 +563,46 @@ static DataType check_call_expression(CallExpr* expression)
   else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE)))
   {
     ClassStmt* class = callee_data_type.class;
+    VarStmt* variable = map_get_var_stmt(&class->members, "__init__");
 
-    int number_of_arguments = array_size(&expression->arguments);
-    int expected_number_of_arguments = 0;
-
-    if (number_of_arguments != expected_number_of_arguments)
+    if (variable)
     {
-      error_invalid_arity(class->name, expected_number_of_arguments, number_of_arguments);
-      return DATA_TYPE(TYPE_VOID);
+      if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+      {
+        error_not_a_function(expression->callee_token);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      FuncStmt* function = variable->data_type.function_member.function;
+      int number_of_arguments = array_size(&expression->arguments);
+      int expected_number_of_arguments = array_size(&function->parameters);
+
+      if (number_of_arguments != expected_number_of_arguments - 1)
+      {
+        error_invalid_arity(expression->callee_token, expected_number_of_arguments - 1,
+                            number_of_arguments);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      for (int i = 0; i < number_of_arguments; i++)
+      {
+        Expr* argument = expression->arguments.elems[i];
+        VarStmt* parameter = function->parameters.elems[i + 1];
+
+        if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+        {
+          error_type_mismatch(function->name);
+        }
+      }
+    }
+    else
+    {
+      int number_of_arguments = array_size(&expression->arguments);
+      if (number_of_arguments)
+      {
+        error_invalid_arity(class->name, 0, number_of_arguments);
+        return DATA_TYPE(TYPE_VOID);
+      }
     }
 
     expression->callee_data_type = callee_data_type;

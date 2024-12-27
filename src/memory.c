@@ -19,7 +19,7 @@ struct _BUCKET
 
 static Bucket* new_bucket(size_t capacity)
 {
-  Bucket* bucket = (Bucket*)malloc(sizeof(Bucket) + sizeof(uintptr_t) * capacity);
+  Bucket* bucket = (Bucket*)calloc(capacity, sizeof(Bucket) + sizeof(uintptr_t));
   bucket->next = NULL;
   bucket->count = 0;
   bucket->capacity = capacity;

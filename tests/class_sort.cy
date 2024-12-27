@@ -7,6 +7,9 @@ class Node
     void __init__(int data)
         this.data = data
 
+    bool __eq__(Node other)
+        return this.data == other.data
+
 class LinkedList
     Node head
     int size
@@ -42,6 +45,35 @@ class LinkedList
     bool popfront()
         return del(0)
 
+    Node at(int index)
+        Node found
+        int currentIndex
+        Node current = head
+
+        while current != null
+            if index == currentIndex
+                found = current
+                break
+
+            current = current.next
+            currentIndex = currentIndex + 1
+            
+        return found
+
+    void sort()
+        int max
+
+        for int i = size; i >= 1; i = i - 1
+            max = 0
+
+            for int j = 0; j < i; j = j + 1
+                if at(j).data > at(max).data 
+                    max = j
+            
+            int temp = at(i - 1).data
+            at(i - 1).data = at(max).data
+            at(max).data = temp
+
     bool del(int index)
         bool found
         int currentIndex
@@ -71,64 +103,55 @@ class LinkedList
         for Node node = head; node != null; node = node.next
             log(node.data)
             
-int items = 100
 LinkedList list = LinkedList()
 
-for int i = 0; i < items; i = i + 1
-    list.prepend(i)
+int items = 10
+for int i = items; i >= -items; i = i - 1
+    list.append(i)
 
-for i = 0; i < items / 2; i = i + 1
-    list.pop()
-    
+list.print()
+list.sort()
 list.print()
 
-# 99
-# 98
-# 97
-# 96
-# 95
-# 94
-# 93
-# 92
-# 91
-# 90
-# 89
-# 88
-# 87
-# 86
-# 85
-# 84
-# 83
-# 82
-# 81
-# 80
-# 79
-# 78
-# 77
-# 76
-# 75
-# 74
-# 73
-# 72
-# 71
-# 70
-# 69
-# 68
-# 67
-# 66
-# 65
-# 64
-# 63
-# 62
-# 61
-# 60
-# 59
-# 58
-# 57
-# 56
-# 55
-# 54
-# 53
-# 52
-# 51
-# 50
+# 10
+# 9
+# 8
+# 7
+# 6
+# 5
+# 4
+# 3
+# 2
+# 1
+# 0
+# -1
+# -2
+# -3
+# -4
+# -5
+# -6
+# -7
+# -8
+# -9
+# -10
+# -10
+# -9
+# -8
+# -7
+# -6
+# -5
+# -4
+# -3
+# -2
+# -1
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
+# 10

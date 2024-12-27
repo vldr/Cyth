@@ -14,5 +14,8 @@ int add(int a, int b)
     else
         return add(a + 1, b - 1)
 
-log(fibonacci(42))
-log(add(10, 5))
+log(fibonacci(42)) 
+log(add(10, 5)) 
+
+# 267914296
+# 15

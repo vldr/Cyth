@@ -5,3 +5,10 @@ for int i = 0; i <= 42; i = i + 1
         continue
 
     log(i)
+
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5

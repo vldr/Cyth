@@ -47,7 +47,7 @@ web: $(EM_OBJS)
 	@cp output/cyth.wasm editor/cyth.wasm
 
 test:
-	bun test ./tests/*.js
+	bun test --bail ./tests/*.js
 
 clean:
 	rm -f $(OBJS) $(DEPS) $(EM_OBJS) $(EM_DEPS)

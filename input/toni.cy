@@ -1,3 +1,5 @@
+void log(int n)
+
 int modpow(int a, int b, int n) 
     int x = 1
     int y = a
@@ -77,3 +79,22 @@ Solution ts(int n, int p)
         m = i
         
     return null
+
+void test(int n, int p)
+    Solution sol = ts(n, p)
+    if sol.exists
+        log(sol.root1)
+        log(sol.root2)
+
+test(10, 13)
+test(56, 101)
+test(1030, 10009)
+test(1032, 10009)
+test(44402, 100049)
+
+# 7
+# 6
+# 37
+# 64
+# 1632
+# 8377

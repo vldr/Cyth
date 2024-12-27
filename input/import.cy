@@ -1,10 +1,12 @@
-int fib(int n)
-void print(int n)
+void log(int n)
 
 int test
 
-print(
-    test = fib(42)
+log(
+    test = 42
 )
 
-print(test)
+log(test)
+
+# 42
+# 42

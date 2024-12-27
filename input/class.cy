@@ -74,16 +74,65 @@ class LinkedList
         for Node node = head; node != null; node = node.next
             log(node.data)
             
-int items = 10
+int items = 100
 Node node = Node()
-LinkedList list = LinkedList(10, node)
-
-list.print()
+LinkedList list = LinkedList(0, null)
 
 for int i = 0; i < items; i = i + 1
-    list.prepend(i)
+    list.append(i)
 
-for i = 0; i < items; i = i + 1
+for i = 0; i < items / 2; i = i + 1
     list.pop()
     
 list.print()
+
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
+# 10
+# 11
+# 12
+# 13
+# 14
+# 15
+# 16
+# 17
+# 18
+# 19
+# 20
+# 21
+# 22
+# 23
+# 24
+# 25
+# 26
+# 27
+# 28
+# 29
+# 30
+# 31
+# 32
+# 33
+# 34
+# 35
+# 36
+# 37
+# 38
+# 39
+# 40
+# 41
+# 42
+# 43
+# 44
+# 45
+# 46
+# 47
+# 48
+# 49

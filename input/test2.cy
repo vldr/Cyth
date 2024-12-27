@@ -36,3 +36,8 @@ Node current = a
 while current != null
     log(current.getData())
     current = current.getNext()
+
+# 1
+# 2
+# 3
+# 4

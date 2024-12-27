@@ -138,7 +138,7 @@ bool equal_data_type(DataType left, DataType right)
   return left.type == right.type;
 }
 
-static DataType token_to_data_type(Token token)
+static DataType token_to_data_type(Token token, bool ignore_undeclared)
 {
   switch (token.type)
   {
@@ -163,6 +163,12 @@ static DataType token_to_data_type(Token token)
     if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
     {
       error_not_a_type(token, token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    if (!ignore_undeclared && !variable->data_type.class->declared)
+    {
+      error_cannot_find_type(token, token.lexeme);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -246,7 +252,7 @@ static void init_function_declaration(FuncStmt* statement)
     statement->parameters = parameters;
   }
 
-  statement->data_type = token_to_data_type(statement->type);
+  statement->data_type = token_to_data_type(statement->type, true);
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
@@ -268,6 +274,26 @@ static void init_function_declaration(FuncStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
+static void init_class_declaration(ClassStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = statement->name;
+  variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
+  variable->data_type.class = statement;
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
 static void init_statement(Stmt* statement)
 {
   checker.error = false;
@@ -276,6 +302,9 @@ static void init_statement(Stmt* statement)
   {
   case STMT_FUNCTION_DECL:
     init_function_declaration(&statement->func);
+    break;
+  case STMT_CLASS_DECL:
+    init_class_declaration(&statement->class);
     break;
 
   default:
@@ -497,9 +526,9 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type, false)))
       {
-        error_type_mismatch(function->name);
+        error_type_mismatch(expression->callee_token);
       }
     }
 
@@ -526,9 +555,9 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type, false)))
       {
-        error_type_mismatch(function->name);
+        error_type_mismatch(expression->callee_token);
       }
     }
 
@@ -566,9 +595,10 @@ static DataType check_call_expression(CallExpr* expression)
         Expr* argument = expression->arguments.elems[i];
         VarStmt* parameter = function->parameters.elems[i + 1];
 
-        if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type)))
+        if (!equal_data_type(check_expression(argument),
+                             token_to_data_type(parameter->type, false)))
         {
-          error_type_mismatch(function->name);
+          error_type_mismatch(expression->callee_token);
         }
       }
     }
@@ -577,13 +607,13 @@ static DataType check_call_expression(CallExpr* expression)
       int number_of_arguments = array_size(&expression->arguments);
       if (number_of_arguments)
       {
-        error_invalid_arity(class->name, 0, number_of_arguments);
+        error_invalid_arity(expression->callee_token, 0, number_of_arguments);
         return DATA_TYPE(TYPE_VOID);
       }
     }
 
     expression->callee_data_type = callee_data_type;
-    expression->return_data_type = token_to_data_type(class->name);
+    expression->return_data_type = token_to_data_type(class->name, false);
 
     return expression->return_data_type;
   }
@@ -795,7 +825,7 @@ static void check_variable_declaration(VarStmt* statement)
     return;
   }
 
-  statement->data_type = token_to_data_type(statement->type);
+  statement->data_type = token_to_data_type(statement->type, false);
 
   if (equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)))
   {
@@ -848,7 +878,7 @@ static void check_function_declaration(FuncStmt* statement)
 
     parameter->scope = SCOPE_LOCAL;
     parameter->index = index++;
-    parameter->data_type = token_to_data_type(parameter->type);
+    parameter->data_type = token_to_data_type(parameter->type, false);
 
     environment_set_variable(checker.environment, name, parameter);
   }
@@ -871,25 +901,9 @@ static void check_class_declaration(ClassStmt* statement)
     return;
   }
 
-  const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = statement->name;
-  variable->initializer = NULL;
-  variable->scope = SCOPE_GLOBAL;
-  variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
-  variable->data_type.class = statement;
-
-  environment_set_variable(checker.environment, name, variable);
-
   checker.environment = environment_init(checker.environment);
   checker.class = statement;
+  checker.class->declared = true;
 
   int count = 0;
   VarStmt* variable_statement;
@@ -908,7 +922,7 @@ static void check_class_declaration(ClassStmt* statement)
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
 
-    function_statement->data_type = token_to_data_type(function_statement->type);
+    function_statement->data_type = token_to_data_type(function_statement->type, false);
     function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
   }
 

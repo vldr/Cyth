@@ -7,7 +7,7 @@
 
 #define DEFAULT_BUCKET_SIZE 16384
 
-Memory memory = {0};
+Memory memory = { 0 };
 
 struct _BUCKET
 {

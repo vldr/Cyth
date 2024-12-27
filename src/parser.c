@@ -472,6 +472,7 @@ static Stmt* class_declaration_statement(void)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_CLASS_DECL;
+  stmt->class.declared = false;
   stmt->class.keyword = advance();
   stmt->class.name = consume(TOKEN_IDENTIFIER, "Expected class name.");
 

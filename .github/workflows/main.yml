@@ -10,8 +10,9 @@ on:
     branches: [master]
 
 env:
-  EM_VERSION: 3.1.34
   HOST: ${{ secrets.sftp_host }}
+  EM_VERSION: 3.1.34
+  EM_CACHE_FOLDER: "emsdk-cache"
 
 jobs:
   build-test-deploy:
@@ -20,16 +21,25 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Setup emsdk
+      - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: ${{env.EM_VERSION}}
+          actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Build
         run: |
+          wget "https://$HOST/libbinaryen.so" -O third_party/libs/libbinaryen.so
           wget "https://$HOST/libbinaryen.a" -O third_party/libs/libbinaryen.a
-          make clean
-          make -f Makefile.wasm -j`nproc`
+          make -j
+          make web -j
+
+      - name: Test
+        run: |
+          make test
 
       - name: Upload files
         uses: pressidium/lftp-mirror-action@v1

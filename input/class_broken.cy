@@ -4,5 +4,82 @@ class Node
     int data
     Node next
 
-Node node = Node()
-node.data = 10
+    void __init__(int data)
+        this.data = data
+
+class LinkedList
+    Node head
+    int size
+
+    void append(int data)
+        Node node = Node(data)
+
+        if head == null
+            head = node
+        else
+            Node current = head
+            while current.next != null
+                current = current.next
+
+            current.next = node
+
+        size = size + 1
+
+    void prepend(int data)
+        Node node = Node(data)
+
+        if head == null
+            head = node
+        else
+            node.next = head
+            head = node
+
+        size = size + 1
+
+    bool pop()
+        return del(size - 1)
+
+    bool popfront()
+        return del(0)
+
+    bool del(int index)
+        bool found
+        int currentIndex
+        Node previous
+        Node current = head
+
+        while current != null
+            if index == currentIndex
+                found = true
+                break
+
+            previous = current
+            current = current.next
+            currentIndex = currentIndex + 1
+
+        if found
+            if previous == null
+                head = current.next
+            else
+                previous.next = current.next
+
+            size = size - 1
+            
+        return found
+
+    void print()
+        for Node node = head; node != null; node = node.next
+            log(node.data)
+            
+int items = 100
+LinkedList list = LinkedList()
+
+list.print()
+
+for int i = 0; i < items; i = i + 1
+    list.append(i)
+
+# for i = 0; i < items; i = i + 1
+#     list.pop()
+    
+list.print()

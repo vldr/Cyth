@@ -396,14 +396,14 @@ class Editor
                 tokenizer: {
                     root: [
                         [/#.*/, 'comment'],
-                        [/([a-zA-Z_]+)(\()/, ['function', 'default']],
+                        [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, ['function', 'default']],
                         [/\d+\.[fF]/, 'number'],
                         [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, 'number'],
                         [/0[xX][0-9a-fA-F]+[uU]/, 'number'],
                         [/0[xX][0-9a-fA-F]+/, 'number'],
                         [/\d+[uU]/, 'number'],
                         [/\d+/, 'number'],
-                        [/[A-Z][a-zA-Z_$]+[\w$]*/, 'class'],
+                        [/[A-Z][a-zA-Z_]*[\w$]*/, 'class'],
                         [/[a-zA-Z_$][\w$]*/, { 
                             cases: {
                                 '@keywords': 'keyword', 

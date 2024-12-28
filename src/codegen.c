@@ -610,21 +610,12 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   BinaryenType previous_class = codegen.class;
   codegen.class = type;
 
-  ArrayBinaryenExpressionRef initializers;
-  array_init(&initializers);
-  array_foreach(&statement->variables, variable)
-  {
-    if (variable->initializer)
-      array_add(&initializers, generate_expression(variable->initializer));
-    else
-      array_add(&initializers, generate_default_initialization(variable->data_type));
-  }
-
   const char* initalizer_name = statement->name.lexeme;
   const char* initalizer_function_name = memory_sprintf(&memory, "%s.__init__", initalizer_name);
 
-  FuncStmt* initializer_function = NULL;
   FuncStmt* function;
+  FuncStmt* initializer_function = NULL;
+
   array_foreach(&statement->functions, function)
   {
     if (strcmp(function->name.lexeme, initalizer_function_name) == 0)
@@ -633,48 +624,54 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     generate_function_declaration(function);
   }
 
-  int offset = initializer_function ? initializer_function->parameters.size - 1 : 0;
-  BinaryenType initializer_params = BinaryenTypeNone();
-
   ArrayBinaryenExpressionRef initializer_body;
   array_init(&initializer_body);
-  array_add(&initializer_body,
-            BinaryenLocalSet(
-              codegen.module, offset,
-              BinaryenStructNew(codegen.module, initializers.elems, initializers.size, heap_type)));
+  array_add(
+    &initializer_body,
+    BinaryenLocalSet(codegen.module, 0, BinaryenStructNew(codegen.module, NULL, 0, heap_type)));
+
+  array_foreach(&statement->variables, variable)
+  {
+    if (variable->initializer)
+    {
+      BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, type);
+      BinaryenExpressionRef value = generate_expression(variable->initializer);
+      array_add(&initializer_body, BinaryenStructSet(codegen.module, variable->index, ref, value));
+    }
+  }
+
+  ArrayBinaryenType parameter_types;
+  array_init(&parameter_types);
+  array_add(&parameter_types, type);
 
   if (initializer_function)
   {
     ArrayBinaryenExpressionRef parameters;
-    ArrayBinaryenType parameter_types;
-
     array_init(&parameters);
-    array_init(&parameter_types);
-    array_add(&parameters, BinaryenLocalGet(codegen.module, offset, type));
+    array_add(&parameters, BinaryenLocalGet(codegen.module, 0, type));
 
     for (unsigned int i = 1; i < initializer_function->parameters.size; i++)
     {
       VarStmt* parameter = array_at(&initializer_function->parameters, i);
       BinaryenType parameter_type = data_type_to_binaryen_type(parameter->data_type);
 
-      array_add(&parameters, BinaryenLocalGet(codegen.module, i - 1, parameter_type));
+      array_add(&parameters, BinaryenLocalGet(codegen.module, i, parameter_type));
       array_add(&parameter_types, parameter_type);
     }
-
-    initializer_params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
 
     array_add(&initializer_body,
               BinaryenCall(codegen.module, initalizer_function_name, parameters.elems,
                            parameters.size, BinaryenTypeNone()));
   }
 
-  array_add(&initializer_body, BinaryenLocalGet(codegen.module, offset, type));
+  array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, type));
 
-  BinaryenExpressionRef initalizer =
+  BinaryenType initializer_params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
+  BinaryenExpressionRef initializer =
     BinaryenBlock(codegen.module, NULL, initializer_body.elems, initializer_body.size, type);
 
-  BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, type, &type, 1,
-                      initalizer);
+  BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, type, NULL, 0,
+                      initializer);
   BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
   codegen.class = previous_class;

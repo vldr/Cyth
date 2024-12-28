@@ -8,13 +8,8 @@ let errors = [];
 let logs = [];
 let bytecode;
 
-Module.set_error_callback = Module.cwrap("set_error_callback", null, [
-  "number",
-]);
-
-Module.set_result_callback = Module.cwrap("set_result_callback", null, [
-  "number",
-]);
+Module.set_error_callback = Module.cwrap("set_error_callback", null, ["number"]);
+Module.set_result_callback = Module.cwrap("set_result_callback", null, ["number"]);
 
 Module.set_result_callback(Module.addFunction((size, data) => bytecode = Module.HEAPU8.subarray(data, data + size), "vii"));
 Module.set_error_callback(Module.addFunction((startLineNumber, startColumn, endLineNumber, endColumn, message) => errors.push({
@@ -28,8 +23,10 @@ Module.set_error_callback(Module.addFunction((startLineNumber, startColumn, endL
 const glob = new Glob(import.meta.dir + "/*.cy");
 const run = Module.cwrap("run", null, ["string", "number"]);
 
-for await (const path of glob.scan(".")) {
-  test(path, async () => {
+for await (const path of glob.scan("."))
+{
+  test(path, async () => 
+  {
     const file = Bun.file(path);
     const text = await file.text();
     const expectedLogs = text

@@ -135,6 +135,9 @@ static void error_invalid_arity(Token token, int expected, int got)
 
 bool equal_data_type(DataType left, DataType right)
 {
+  if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
+    return left.class == right.class;
+
   return left.type == right.type;
 }
 
@@ -442,7 +445,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
   DataType target_data_type = check_expression(target);
   DataType value_data_type = check_expression(expression->value);
 
-  if (equal_data_type(target_data_type, DATA_TYPE(TYPE_PROTOTYPE)) ||
+  if (equal_data_type(target_data_type, DATA_TYPE(TYPE_VOID)) ||
+      equal_data_type(target_data_type, DATA_TYPE(TYPE_PROTOTYPE)) ||
       equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION)) ||
       equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
   {
@@ -571,6 +575,20 @@ static DataType check_call_expression(CallExpr* expression)
     ClassStmt* class = callee_data_type.class;
     VarStmt* variable = map_get_var_stmt(&class->members, "__init__");
 
+    Expr* argument = EXPR();
+    argument->type = EXPR_LITERAL;
+    argument->literal.data_type = DATA_TYPE(TYPE_OBJECT);
+
+    ArrayExpr arguments;
+    array_init(&arguments);
+    array_add(&arguments, argument);
+    array_foreach(&expression->arguments, argument)
+    {
+      array_add(&arguments, argument);
+    }
+
+    expression->arguments = arguments;
+
     if (variable)
     {
       if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
@@ -583,17 +601,17 @@ static DataType check_call_expression(CallExpr* expression)
       int number_of_arguments = array_size(&expression->arguments);
       int expected_number_of_arguments = array_size(&function->parameters);
 
-      if (number_of_arguments != expected_number_of_arguments - 1)
+      if (number_of_arguments != expected_number_of_arguments)
       {
         error_invalid_arity(expression->callee_token, expected_number_of_arguments - 1,
-                            number_of_arguments);
+                            number_of_arguments - 1);
         return DATA_TYPE(TYPE_VOID);
       }
 
-      for (int i = 0; i < number_of_arguments; i++)
+      for (int i = 1; i < number_of_arguments; i++)
       {
         Expr* argument = expression->arguments.elems[i];
-        VarStmt* parameter = function->parameters.elems[i + 1];
+        VarStmt* parameter = function->parameters.elems[i];
 
         if (!equal_data_type(check_expression(argument),
                              token_to_data_type(parameter->type, false)))
@@ -605,7 +623,7 @@ static DataType check_call_expression(CallExpr* expression)
     else
     {
       int number_of_arguments = array_size(&expression->arguments);
-      if (number_of_arguments)
+      if (number_of_arguments > 1)
       {
         error_invalid_arity(expression->callee_token, 0, number_of_arguments);
         return DATA_TYPE(TYPE_VOID);
@@ -905,15 +923,6 @@ static void check_class_declaration(ClassStmt* statement)
   checker.class = statement;
   checker.class->declared = true;
 
-  int count = 0;
-  VarStmt* variable_statement;
-  array_foreach(&statement->variables, variable_statement)
-  {
-    variable_statement->index = count++;
-
-    check_variable_declaration(variable_statement);
-  }
-
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
   {
@@ -924,6 +933,15 @@ static void check_class_declaration(ClassStmt* statement)
 
     function_statement->data_type = token_to_data_type(function_statement->type, false);
     function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
+  }
+
+  int count = 0;
+  VarStmt* variable_statement;
+  array_foreach(&statement->variables, variable_statement)
+  {
+    variable_statement->index = count++;
+
+    check_variable_declaration(variable_statement);
   }
 
   checker.class->members = checker.environment->variables;

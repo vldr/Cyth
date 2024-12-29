@@ -266,11 +266,25 @@ static BinaryenExpressionRef generate_unary_expression(UnaryExpr* expression)
 
 static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
 {
+  BinaryenExpressionRef value = generate_expression(expression->expr);
+
   if (expression->to_data_type.type == TYPE_FLOAT &&
       expression->from_data_type.type == TYPE_INTEGER)
   {
-    BinaryenExpressionRef value = generate_expression(expression->expr);
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
+  }
+  else if (expression->to_data_type.type == TYPE_BOOL)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_INTEGER:
+      return value;
+    case TYPE_OBJECT:
+      return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
+                           BinaryenRefIsNull(codegen.module, value));
+    default:
+      break;
+    }
   }
 
   UNREACHABLE("Unsupported cast type");

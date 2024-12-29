@@ -33,7 +33,7 @@ c.setNext(d)
 d.setData(4)
 
 Node current = a
-while current != null
+while current
     log(current.getData())
     current = current.getNext()
 

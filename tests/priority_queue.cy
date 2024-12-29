@@ -18,13 +18,13 @@ class PriorityQueue
             Node previous
             Node current = front
 
-            while current != null and current.value < value
+            while current and current.value < value
                 previous = current
                 current = current.next
 
-            if previous != null and current != null
+            if previous and current
                 previous.next = Node(value, previous.next)
-            else if previous != null
+            else if previous
                 back.next = Node(value, null)
                 back = back.next
             else
@@ -39,7 +39,7 @@ class PriorityQueue
     Node dequeue()
         Node node = null
 
-        if front != null
+        if front
             node = front
 
             if front == back

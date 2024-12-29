@@ -185,6 +185,23 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
   }
 }
 
+static Expr* cast_to_bool(Expr* expression, DataType data_type)
+{
+  if (equal_data_type(data_type, DATA_TYPE(TYPE_OBJECT)) ||
+      equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
+  {
+    Expr* cast_expression = EXPR();
+    cast_expression->type = EXPR_CAST;
+    cast_expression->cast.from_data_type = data_type;
+    cast_expression->cast.to_data_type = DATA_TYPE(TYPE_BOOL);
+    cast_expression->cast.expr = expression;
+
+    return cast_expression;
+  }
+
+  return NULL;
+}
+
 static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, DataType from,
                    DataType to)
 {
@@ -335,22 +352,31 @@ static DataType check_group_expression(GroupExpr* expression)
 static DataType check_unary_expression(UnaryExpr* expression)
 {
   Token op = expression->op;
-  DataType type = check_expression(expression->expr);
+  DataType data_type = check_expression(expression->expr);
 
   if (op.type == TOKEN_MINUS)
   {
-    if (!equal_data_type(type, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(type, DATA_TYPE(TYPE_FLOAT)))
+    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
       error_type_mismatch(op);
+
+    expression->data_type = data_type;
   }
   else if (op.type == TOKEN_BANG || op.type == TOKEN_NOT)
   {
-    if (!equal_data_type(type, DATA_TYPE(TYPE_BOOL)))
-      error_type_mismatch(op);
+    if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+    {
+      Expr* cast_expression = cast_to_bool(expression->expr, data_type);
+      if (cast_expression)
+        expression->expr = cast_expression;
+      else
+        error_type_mismatch(op);
+    }
+
+    expression->data_type = DATA_TYPE(TYPE_BOOL);
   }
 
-  expression->data_type = type;
-  return type;
+  return expression->data_type;
 }
 
 static DataType check_binary_expression(BinaryExpr* expression)
@@ -361,7 +387,9 @@ static DataType check_binary_expression(BinaryExpr* expression)
 
   if (!equal_data_type(left, right))
   {
-    if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)))
+    if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_BOOL)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)))
     {
       error_type_mismatch(expression->op);
     }
@@ -375,8 +403,23 @@ static DataType check_binary_expression(BinaryExpr* expression)
   case TOKEN_AND:
   case TOKEN_OR:
     if (!equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
-      error_operation_not_defined(op, "'bool'");
+    {
+      Expr* left_cast_expression = cast_to_bool(expression->left, left);
+      Expr* right_cast_expression = cast_to_bool(expression->right, right);
 
+      if (!left_cast_expression || !right_cast_expression)
+      {
+        error_operation_not_defined(op, "'bool'");
+      }
+      else
+      {
+        expression->left = left_cast_expression;
+        expression->right = right_cast_expression;
+      }
+    }
+
+    expression->operand_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_EQUAL_EQUAL:
   case TOKEN_BANG_EQUAL:
@@ -752,7 +795,11 @@ static void check_if_statement(IfStmt* statement)
   DataType data_type = check_expression(statement->condition);
   if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
-    error_condition_is_not_bool(statement->keyword);
+    Expr* cast_expression = cast_to_bool(statement->condition, data_type);
+    if (cast_expression)
+      statement->condition = cast_expression;
+    else
+      error_condition_is_not_bool(statement->keyword);
   }
 
   checker.environment = environment_init(checker.environment);
@@ -791,7 +838,11 @@ static void check_while_statement(WhileStmt* statement)
   DataType data_type = check_expression(statement->condition);
   if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
   {
-    error_condition_is_not_bool(statement->keyword);
+    Expr* cast_expression = cast_to_bool(statement->condition, data_type);
+    if (cast_expression)
+      statement->condition = cast_expression;
+    else
+      error_condition_is_not_bool(statement->keyword);
   }
 
   WhileStmt* previous_loop = checker.loop;

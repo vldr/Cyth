@@ -4,7 +4,7 @@ int sqrt(int x)
     int s
     int b = 32768
 
-    while b != 0
+    while b
         int t = s + b 
 
         if t * t <= x
@@ -17,7 +17,7 @@ int sqrt(int x)
 int pow(int base, int exp)
     int result = 1
 
-    while exp != 0
+    while exp
         if exp % 2 == 1
             result = result * base
             

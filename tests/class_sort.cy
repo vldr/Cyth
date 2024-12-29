@@ -17,11 +17,11 @@ class LinkedList
     void append(int data)
         Node node = Node(data)
 
-        if head == null
+        if not head
             head = node
         else
             Node current = head
-            while current.next != null
+            while current.next
                 current = current.next
 
             current.next = node
@@ -31,7 +31,7 @@ class LinkedList
     void prepend(int data)
         Node node = Node(data)
 
-        if head == null
+        if not head
             head = node
         else
             node.next = head
@@ -50,7 +50,7 @@ class LinkedList
         int currentIndex
         Node current = head
 
-        while current != null
+        while current
             if index == currentIndex
                 found = current
                 break
@@ -80,7 +80,7 @@ class LinkedList
         Node previous
         Node current = head
 
-        while current != null
+        while current
             if index == currentIndex
                 found = true
                 break
@@ -90,7 +90,7 @@ class LinkedList
             currentIndex = currentIndex + 1
 
         if found
-            if previous == null
+            if not previous
                 head = current.next
             else
                 previous.next = current.next
@@ -100,7 +100,7 @@ class LinkedList
         return found
 
     void print()
-        for Node node = head; node != null; node = node.next
+        for Node node = head; node; node = node.next
             log(node.data)
             
 LinkedList list = LinkedList()

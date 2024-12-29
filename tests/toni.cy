@@ -4,7 +4,7 @@ int modpow(int a, int b, int n)
     int x = 1
     int y = a
 
-    while b > 0
+    while b
         if b % 2 == 1
             x = (x * y) % n
         
@@ -39,7 +39,7 @@ Solution ts(int n, int p)
     if modpow(n, (p - 1) / 2, p) != 1
         return makeSolution(0, 0, false)
     
-    while q % 2 == 0
+    while not (q % 2)
         ss = ss + 1
         q = q / 2
 

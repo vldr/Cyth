@@ -258,6 +258,7 @@ static Expr* call(void)
       Expr* access = EXPR();
       access->type = EXPR_ACCESS;
       access->access.name = consume(TOKEN_IDENTIFIER, "Expected an identifier.");
+      access->access.variable = NULL;
       access->access.expr = expr;
       access->access.expr_token =
         (Token){ TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,

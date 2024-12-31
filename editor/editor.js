@@ -392,6 +392,7 @@ class Editor
             
             monaco.languages.setMonarchTokensProvider("cyth", {
                 types: [
+                    'string',
                     'int',
                     'float',
                     'bool',
@@ -448,6 +449,18 @@ class Editor
                             }
                         }],
                         { include: '@whitespace' },
+
+                        [/"([^"\\]|\\.)*$/, "string.invalid" ],
+                        [/"/,  { token: "string.quote", bracket: "@open", next: "@string" } ],
+
+                        [/"[^\\"]"/, "string"],
+                        [/"/, "string.invalid"]
+                    ],
+
+                    string: [
+                        [/[^\\"]+/,  "string"],
+                        [/\\./,      "string.escape.invalid"],
+                        [/"/,        { token: "string.quote", bracket: "@close", next: "@pop" } ]
                     ],
     
                     whitespace: [

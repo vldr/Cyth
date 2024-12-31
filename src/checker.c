@@ -426,7 +426,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)))
+        !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
       error_operation_not_defined(op, "'int', 'float', 'bool', 'class'");
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
@@ -724,14 +725,47 @@ static DataType check_access_expression(AccessExpr* expression)
 
     if (strcmp("length", name) == 0)
     {
-      error_cannot_find_member_name(expression->name, name, "string");
-      return DATA_TYPE(TYPE_VOID);
+      expression->data_type = data_type;
+      expression->variable = NULL;
+
+      return DATA_TYPE(TYPE_INTEGER);
     }
-    else
+    else if (strcmp("at", name) == 0)
     {
-      error_cannot_find_member_name(expression->name, name, "string");
-      return DATA_TYPE(TYPE_VOID);
+      Token type = { .type = TOKEN_IDENTIFIER_INT };
+      Token name = { .type = TOKEN_IDENTIFIER, .lexeme = "string.at" };
+
+      FuncStmt* function = ALLOC(FuncStmt);
+      function->data_type = DATA_TYPE(TYPE_INTEGER);
+      function->type = type;
+      function->name = name;
+
+      Stmt* parameter = STMT();
+      parameter->type = STMT_VARIABLE_DECL;
+      parameter->var.data_type = DATA_TYPE(TYPE_INTEGER);
+      parameter->var.type = type;
+      parameter->var.name = name;
+      parameter->var.index = 0;
+      parameter->var.initializer = NULL;
+
+      array_init(&function->parameters);
+      array_add(&function->parameters, &parameter->var);
+      array_add(&function->parameters, &parameter->var);
+
+      VarStmt* variable = ALLOC(VarStmt);
+      variable->initializer = NULL;
+      variable->data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
+      variable->data_type.function_member.function = function;
+      variable->data_type.function_member.this = expression->expr;
+
+      expression->variable = variable;
+      expression->data_type = variable->data_type;
+
+      return variable->data_type;
     }
+
+    error_cannot_find_member_name(expression->name, name, "string");
+    return DATA_TYPE(TYPE_VOID);
   }
   else
   {

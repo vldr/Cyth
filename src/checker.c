@@ -443,6 +443,12 @@ static DataType check_binary_expression(BinaryExpr* expression)
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_PLUS:
+    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
+      error_operation_not_defined(op, "'int', 'float' and 'string'");
+
+    break;
   case TOKEN_MINUS:
   case TOKEN_STAR:
   case TOKEN_SLASH:
@@ -711,6 +717,21 @@ static DataType check_access_expression(AccessExpr* expression)
     expression->data_type = variable->data_type;
 
     return variable->data_type;
+  }
+  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
+  {
+    const char* name = expression->name.lexeme;
+
+    if (strcmp("length", name) == 0)
+    {
+      error_cannot_find_member_name(expression->name, name, "string");
+      return DATA_TYPE(TYPE_VOID);
+    }
+    else
+    {
+      error_cannot_find_member_name(expression->name, name, "string");
+      return DATA_TYPE(TYPE_VOID);
+    }
   }
   else
   {

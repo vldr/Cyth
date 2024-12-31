@@ -401,6 +401,7 @@ map_def_strkey(str, const char *, const char *, map_streq, murmurhash)
 map_def_strkey(sv, const char *, void *, map_streq, murmurhash)
 map_def_strkey(s64, const char *, uint64_t, map_streq, murmurhash)
 map_def_strkey(sll, const char *, long long, map_streq, murmurhash)
+map_def_strkey(sint, const char *, int, map_streq, murmurhash)
 
 map_def_strkey(stmt, const char *, struct _STMT*, map_streq, murmurhash)
 map_def_strkey(var_stmt, const char *, struct _VAR_STMT*, map_streq, murmurhash)

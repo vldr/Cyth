@@ -82,6 +82,7 @@ map_dec_strkey(Str, str, const char *, const char *)
 map_dec_strkey(Sv, sv, const char *, void *)
 map_dec_strkey(S64, s64, const char *, uint64_t)
 map_dec_strkey(Sll, sll, const char *, long long)
+map_dec_strkey(SInt, sint, const char *, int)
 
 map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
 map_dec_strkey(VarStmt, var_stmt, const char*, struct _VAR_STMT*)

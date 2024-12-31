@@ -1,15 +1,16 @@
 class EditorConsole
 {
-    constructor(model) 
+    constructor(model, editorTabs, editor) 
     {
         window.set_result_callback(
             Module.addFunction(this.upload.bind(this), 'vii')
         );
 
-        this.running = false;
-        this.ready = true;
-        this.bytecode = "";
         this.model = model;
+        this.editor = editor;
+        this.editorTabs = editorTabs;
+        this.running = false;
+        this.bytecode = "";
 
         this.consoleStatus = document.getElementById("console-status");
         this.consoleOutput = document.getElementById("console-output"); 
@@ -23,6 +24,13 @@ class EditorConsole
 
     upload(size, data)
     {
+        if (!size)
+        {
+            this.clear();
+            this.error("Cannot run program due to internal compiler error.\n");
+            return;
+        }
+
         const bytecode = Module.HEAPU8.subarray(data, data + size);
 
         this.running = true;
@@ -49,10 +57,15 @@ class EditorConsole
 
     start()
     {
-        if (!this.ready)
+        if (this.editor.errors.length)
         {
             this.clear();
-            this.print("Cannot run program due to errors.");
+   
+            for (const error of this.editor.errors)
+            {
+                this.print(this.editorTabs.getTabName() + ".cy:" + error.startLineNumber + ":" + error.startColumn + ": <span style='color:red'>error: </span>" + error.message + "\n");
+            }
+            
             return;
         }
 
@@ -100,6 +113,11 @@ class EditorConsole
     clear()
     {
         this.consoleOutput.textContent = "";
+    }
+
+    error(text)
+    {
+        this.print("<span style='color:red'>error: </span>" + text);
     }
 
     print(text)
@@ -330,6 +348,16 @@ class EditorTabs
         this.render();
     }
 
+    getTabName()
+    {
+        if (this.tabIndex < 0 || this.tabIndex >= this.tabs.length)
+        {
+            return "<unkown>";
+        }
+
+        return this.tabs[this.tabIndex].name;
+    }
+
     setText(text)
     {
         if (this.tabIndex < 0 || this.tabIndex >= this.tabs.length)
@@ -464,8 +492,8 @@ class Editor
                 fixedOverflowWidgets: true
             });
             
-            this.editorConsole = new EditorConsole(this.model);    
             this.editorTabs = new EditorTabs(this);
+            this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);    
             
             this.editor.layout();
             this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, () => {});
@@ -506,7 +534,6 @@ class Editor
         
         this.editorTabs.setText(text);
         this.editorConsole.setBytecode(text);
-        this.editorConsole.ready = this.errors.length == 0;
 
         monaco.editor.setModelMarkers(this.model, "owner", this.errors);
     }

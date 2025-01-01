@@ -152,6 +152,17 @@ typedef struct
   VarStmt* variable;
 } AccessExpr;
 
+typedef struct
+{
+  DataType data_type;
+
+  Expr* expr;
+  Token expr_token;
+
+  Expr* index;
+  Token index_token;
+} IndexExpr;
+
 struct _EXPR
 {
   enum
@@ -165,6 +176,7 @@ struct _EXPR
     EXPR_ASSIGN,
     EXPR_CALL,
     EXPR_ACCESS,
+    EXPR_INDEX,
   } type;
 
   union {
@@ -177,6 +189,7 @@ struct _EXPR
     CallExpr call;
     CastExpr cast;
     AccessExpr access;
+    IndexExpr index;
   };
 };
 

@@ -247,9 +247,10 @@ static Expr* call(void)
       call->type = EXPR_CALL;
       call->call.arguments = arguments;
       call->call.callee = expr;
-      call->call.callee_token =
-        (Token){ TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-                 end_token.end_line, end_token.end_column,   "" };
+      call->call.callee_token = (Token){
+        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
+        end_token.end_line, end_token.end_column,   "",
+      };
 
       expr = call;
     }
@@ -260,11 +261,36 @@ static Expr* call(void)
       access->access.name = consume(TOKEN_IDENTIFIER, "Expected an identifier.");
       access->access.variable = NULL;
       access->access.expr = expr;
-      access->access.expr_token =
-        (Token){ TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-                 end_token.end_line, end_token.end_column,   "" };
+      access->access.expr_token = (Token){
+        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
+        end_token.end_line, end_token.end_column,   "",
+      };
 
       expr = access;
+    }
+    else if (match(TOKEN_LEFT_BRACKET))
+    {
+      Token start_index_token = peek();
+      Expr* index_expr = expression();
+      Token end_index_token = previous();
+
+      consume(TOKEN_RIGHT_BRACKET, "Expected ']' after index.");
+
+      Expr* index = EXPR();
+      index->type = EXPR_INDEX;
+      index->index.index = index_expr;
+      index->index.index_token = (Token){
+        TOKEN_IDENTIFIER,         start_index_token.start_line, start_index_token.start_column,
+        end_index_token.end_line, end_index_token.end_column,   "",
+      };
+
+      index->index.expr = expr;
+      index->index.expr_token = (Token){
+        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
+        end_token.end_line, end_token.end_column,   "",
+      };
+
+      expr = index;
     }
     else
     {

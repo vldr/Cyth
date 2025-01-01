@@ -82,6 +82,16 @@ static void error_not_an_object(Token token)
   checker_error(token, "The expression is not an object.");
 }
 
+static void error_not_a_string(Token token)
+{
+  checker_error(token, "The expression is not a string.");
+}
+
+static void error_index_not_an_int(Token token)
+{
+  checker_error(token, "The index must be of type 'int'.");
+}
+
 static void error_not_assignable(Token token)
 {
   checker_error(token, "The expression is not assignable.");
@@ -388,6 +398,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
   if (!equal_data_type(left, right))
   {
     if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_BOOL)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)))
     {
@@ -722,46 +733,12 @@ static DataType check_access_expression(AccessExpr* expression)
   else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
   {
     const char* name = expression->name.lexeme;
-
     if (strcmp("length", name) == 0)
     {
       expression->data_type = data_type;
       expression->variable = NULL;
 
       return DATA_TYPE(TYPE_INTEGER);
-    }
-    else if (strcmp("at", name) == 0)
-    {
-      Token type = { .type = TOKEN_IDENTIFIER_INT };
-      Token name = { .type = TOKEN_IDENTIFIER, .lexeme = "string.at" };
-
-      FuncStmt* function = ALLOC(FuncStmt);
-      function->data_type = DATA_TYPE(TYPE_INTEGER);
-      function->type = type;
-      function->name = name;
-
-      Stmt* parameter = STMT();
-      parameter->type = STMT_VARIABLE_DECL;
-      parameter->var.data_type = DATA_TYPE(TYPE_INTEGER);
-      parameter->var.type = type;
-      parameter->var.name = name;
-      parameter->var.index = 0;
-      parameter->var.initializer = NULL;
-
-      array_init(&function->parameters);
-      array_add(&function->parameters, &parameter->var);
-      array_add(&function->parameters, &parameter->var);
-
-      VarStmt* variable = ALLOC(VarStmt);
-      variable->initializer = NULL;
-      variable->data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
-      variable->data_type.function_member.function = function;
-      variable->data_type.function_member.this = expression->expr;
-
-      expression->variable = variable;
-      expression->data_type = variable->data_type;
-
-      return variable->data_type;
     }
 
     error_cannot_find_member_name(expression->name, name, "string");
@@ -772,6 +749,26 @@ static DataType check_access_expression(AccessExpr* expression)
     error_not_an_object(expression->expr_token);
     return DATA_TYPE(TYPE_VOID);
   }
+}
+
+static DataType check_index_expression(IndexExpr* expression)
+{
+  DataType index_data_type = check_expression(expression->index);
+  if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
+  {
+    error_index_not_an_int(expression->expr_token);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
+  DataType expr_data_type = check_expression(expression->expr);
+  if (!equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
+  {
+    error_not_a_string(expression->expr_token);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
+  expression->data_type = DATA_TYPE(TYPE_INTEGER);
+  return expression->data_type;
 }
 
 static DataType check_expression(Expr* expression)
@@ -796,6 +793,8 @@ static DataType check_expression(Expr* expression)
     return check_call_expression(&expression->call);
   case EXPR_ACCESS:
     return check_access_expression(&expression->access);
+  case EXPR_INDEX:
+    return check_index_expression(&expression->index);
 
   default:
     UNREACHABLE("Unhandled expression");

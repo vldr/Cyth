@@ -175,6 +175,16 @@ static void generate_string_equals_function(void)
 #undef CONSTANT
 }
 
+static void generate_string_length_function(void)
+{
+  const char* name = "string.length";
+
+  BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, codegen.string_type);
+  BinaryenAddFunction(codegen.module, name, codegen.string_type, BinaryenTypeInt32(), NULL, 0,
+                      BinaryenArrayLen(codegen.module, ref));
+  BinaryenAddFunctionExport(codegen.module, name, name);
+}
+
 static void generate_string_at_function(void)
 {
   const char* name = "string.at";
@@ -588,7 +598,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
   {
     if (strcmp(expression->name.lexeme, "length") == 0)
     {
-      return BinaryenArrayLen(codegen.module, ref);
+      return BinaryenCall(codegen.module, "string.length", &ref, 1, BinaryenTypeInt32());
     }
 
     UNREACHABLE("Unhandled string access name");
@@ -598,6 +608,16 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
     BinaryenType type = data_type_to_binaryen_type(expression->data_type);
     return BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
   }
+}
+
+static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
+{
+  BinaryenExpressionRef ref = generate_expression(expression->expr);
+  BinaryenExpressionRef index = generate_expression(expression->index);
+
+  BinaryenExpressionRef operands[] = { ref, index };
+  return BinaryenCall(codegen.module, "string.at", operands,
+                      sizeof(operands) / sizeof_ptr(operands), BinaryenTypeInt32());
 }
 
 static BinaryenExpressionRef generate_expression(Expr* expression)
@@ -622,6 +642,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_call_expression(&expression->call);
   case EXPR_ACCESS:
     return generate_access_expression(&expression->access);
+  case EXPR_INDEX:
+    return generate_index_expression(&expression->index);
 
   default:
     UNREACHABLE("Unhandled expression");
@@ -967,6 +989,7 @@ void codegen_init(ArrayStmt statements)
 
   generate_string_concat_function();
   generate_string_equals_function();
+  generate_string_length_function();
   generate_string_at_function();
 }
 

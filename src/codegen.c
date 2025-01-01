@@ -8,7 +8,6 @@
 #include "statement.h"
 
 #include <binaryen-c.h>
-#include <stdio.h>
 
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenPackedType, BinaryenPackedType);
@@ -53,6 +52,79 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   default:
     UNREACHABLE("Unhandled data type");
   }
+}
+
+static void generate_string_int_cast_function(void)
+{
+#define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
+#define BUFFER() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define INDEX() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define RESULT() (BinaryenLocalGet(codegen.module, 3, codegen.string_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.int_cast";
+  const int buffer_size = 30;
+  const int base = 10;
+
+  BinaryenExpressionRef divider =
+    BinaryenBinary(codegen.module, BinaryenRemUInt32(), NUMBER(), CONSTANT(base));
+  BinaryenExpressionRef adder =
+    BinaryenBinary(codegen.module, BinaryenAddInt32(), divider, CONSTANT('0'));
+
+  BinaryenExpressionRef loop_body_list[] = {
+    BinaryenArraySet(codegen.module, BUFFER(), INDEX(), adder),
+    BinaryenLocalSet(codegen.module, 2,
+                     BinaryenBinary(codegen.module, BinaryenSubInt32(), INDEX(), CONSTANT(1))),
+    BinaryenLocalSet(codegen.module, 0,
+                     BinaryenBinary(codegen.module, BinaryenDivSInt32(), NUMBER(), CONSTANT(base))),
+    BinaryenBreak(codegen.module, "string.int_cast.loop",
+                  BinaryenBinary(codegen.module, BinaryenNeInt32(), NUMBER(), CONSTANT(0)), NULL),
+  };
+
+  BinaryenExpressionRef loop_body =
+    BinaryenBlock(codegen.module, NULL, loop_body_list,
+                  sizeof(loop_body_list) / sizeof_ptr(loop_body_list), BinaryenTypeNone());
+  BinaryenExpressionRef loop = BinaryenLoop(codegen.module, "string.int_cast.loop", loop_body);
+
+  BinaryenExpressionRef body_list[] = {
+    BinaryenLocalSet(
+      codegen.module, 1,
+      BinaryenArrayNew(codegen.module, codegen.string_heap_type, CONSTANT(buffer_size), NULL)),
+    BinaryenLocalSet(codegen.module, 2, CONSTANT(buffer_size - 1)),
+    loop,
+    BinaryenLocalSet(codegen.module, 3,
+                     BinaryenArrayNew(codegen.module, codegen.string_heap_type,
+                                      BinaryenBinary(codegen.module, BinaryenSubInt32(),
+                                                     CONSTANT(buffer_size), INDEX()),
+                                      NULL)),
+    BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), BUFFER(), INDEX(),
+                      BinaryenArrayLen(codegen.module, RESULT())),
+    RESULT(),
+  };
+
+  BinaryenExpressionRef body =
+    BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                  codegen.string_type);
+
+  BinaryenType params_list[] = { BinaryenTypeInt32() };
+  BinaryenType params =
+    BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+  BinaryenType results_list[] = { codegen.string_type };
+  BinaryenType results =
+    BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+  BinaryenType vars_list[] = { codegen.string_type, BinaryenTypeInt32(), codegen.string_type };
+
+  BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                      sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  BinaryenAddFunctionExport(codegen.module, name, name);
+
+#undef NUMBER
+#undef BUFFER
+#undef INDEX
+#undef RESULT
+#undef CONSTANT
 }
 
 static void generate_string_concat_function(void)
@@ -479,6 +551,16 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       expression->from_data_type.type == TYPE_INTEGER)
   {
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
+  }
+  else if (expression->to_data_type.type == TYPE_STRING)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_INTEGER:
+      return BinaryenCall(codegen.module, "string.int_cast", &value, 1, codegen.string_type);
+    default:
+      break;
+    }
   }
   else if (expression->to_data_type.type == TYPE_BOOL)
   {
@@ -991,6 +1073,7 @@ void codegen_init(ArrayStmt statements)
   generate_string_equals_function();
   generate_string_length_function();
   generate_string_at_function();
+  generate_string_int_cast_function();
 }
 
 Codegen codegen_generate(void)

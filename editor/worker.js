@@ -1,4 +1,4 @@
-onmessage = async (event) => 
+onmessage = (event) => 
 {
     const data = event.data;
 
@@ -8,13 +8,30 @@ onmessage = async (event) =>
         {
             try 
             {
-                const env = {
-                    log: function(text) {
-                        postMessage({ type: "print", text});
-                    } 
-                };
+                const module = new WebAssembly.Module(data.bytecode);
+                const instance = new WebAssembly.Instance(module, {
+                    env: {
+                        log: function(output) {
+                            if (typeof(output) === "object")
+                            {
+                                const length = instance.exports["string.length"];
+                                const at = instance.exports["string.at"];
 
-                await WebAssembly.instantiate(data.bytecode, { env });
+                                let text = String();
+                                for (let i = 0; i < length(output); i++)
+                                    text += String.fromCharCode(at(output, i));
+
+                                postMessage({ type: "print", text }); 
+                            }
+                            else 
+                            {
+                                postMessage({ type: "print", text: output });
+                            }
+                        }
+                    }
+                });
+
+                instance.exports["~start"]();
 
                 postMessage({ type: "stop" });
             }

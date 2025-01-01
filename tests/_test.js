@@ -6,7 +6,6 @@ await new Promise(resolve => Module["onRuntimeInitialized"] = resolve);
 
 let errors = [];
 let logs = [];
-let prints = [];
 let bytecode;
 
 Module.set_error_callback = Module.cwrap("set_error_callback", null, ["number"]);
@@ -37,33 +36,35 @@ for await (const path of glob.scan("."))
 
     errors.length = 0;
     logs.length = 0;
-    prints.length = 0;
 
     run(text, true);
 
     const result = await WebAssembly.instantiate(bytecode, { 
       env: {
-        log: (text) => { logs.push(String(text)); },
-        print: (text) => { prints.push(text); }
+        log: (output) => 
+        {
+          if (typeof(output) === "object")
+          {
+            const at = result.instance.exports["string.at"];
+            const length = result.instance.exports["string.length"];
+        
+            let text = "";
+            for (let i = 0; i < length(output); i++)
+            {
+              text += String.fromCharCode(at(output, i));
+            }
+      
+            logs.push(text);
+          }
+          else 
+          {
+            logs.push(String(output)); 
+          }
+        },
       }
     });
 
-    if (prints.length)
-    {
-      const at = result.instance.exports["string.at"];
-      const length = result.instance.exports["string.length"];
-  
-      for (const print of prints)
-      {
-        let output = "";
-        for (let i = 0; i < length(print); i++)
-        {
-          output += String.fromCharCode(at(print, i));
-        }
-
-        logs.push(output);
-      }
-    }
+    result.instance.exports["~start"]();
 
     expect(errors).toBeEmpty();
     expect(logs).toEqual(expectedLogs);

@@ -158,7 +158,7 @@ class EditorConsole
     onWorkerError()
     {
         this.stop();
-        this.print("Program exited unexpectedly due to an error:\n");
+        this.print("Program crashed unexpectedly due to an error:\n");
     }
 
     onWorkerMessage(event)
@@ -183,7 +183,7 @@ class EditorConsole
             {
                 this.onWorkerError();
                 this.print("\n");
-                this.print(data.message);
+                this.error(data.message);
                 break;
             }
         }

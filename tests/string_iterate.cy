@@ -1,24 +1,23 @@
-void log(int n)
-void print(string text)
+void log(string n)
 
 string a = "hello"
 string b = "world"
 string c = a + " " + b
 
 for int i = 0; i < c.length; i = i + 1
-    log(c[i])
+    log("Index: " + i + ", Value: " + c[i])
 
-print(c)
+log(c)
 
-# 104
-# 101
-# 108
-# 108
-# 111
-# 32
-# 119
-# 111
-# 114
-# 108
-# 100
+# Index: 0, Value: 104
+# Index: 1, Value: 101
+# Index: 2, Value: 108
+# Index: 3, Value: 108
+# Index: 4, Value: 111
+# Index: 5, Value: 32
+# Index: 6, Value: 119
+# Index: 7, Value: 111
+# Index: 8, Value: 114
+# Index: 9, Value: 108
+# Index: 10, Value: 100
 # hello world

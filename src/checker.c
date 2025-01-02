@@ -727,18 +727,20 @@ static DataType check_access_expression(AccessExpr* expression)
 
     expression->variable = variable;
     expression->data_type = variable->data_type;
+    expression->expr_data_type = data_type;
 
-    return variable->data_type;
+    return expression->data_type;
   }
   else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
   {
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0)
     {
-      expression->data_type = data_type;
+      expression->data_type = DATA_TYPE(TYPE_INTEGER);
+      expression->expr_data_type = data_type;
       expression->variable = NULL;
 
-      return DATA_TYPE(TYPE_INTEGER);
+      return expression->data_type;
     }
 
     error_cannot_find_member_name(expression->name, name, "string");

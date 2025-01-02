@@ -54,6 +54,15 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   }
 }
 
+static void generate_string_export_functions(void)
+{
+  if (!BinaryenGetExport(codegen.module, "string.length"))
+    BinaryenAddFunctionExport(codegen.module, "string.length", "string.length");
+
+  if (!BinaryenGetExport(codegen.module, "string.at"))
+    BinaryenAddFunctionExport(codegen.module, "string.at", "string.at");
+}
+
 static void generate_string_int_cast_function(void)
 {
 #define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
@@ -143,7 +152,6 @@ static void generate_string_int_cast_function(void)
 
   BinaryenAddFunction(codegen.module, name, params, results, vars_list,
                       sizeof(vars_list) / sizeof_ptr(vars_list), body);
-  BinaryenAddFunctionExport(codegen.module, name, name);
 
 #undef NUMBER
 #undef BUFFER
@@ -200,7 +208,6 @@ static void generate_string_concat_function(void)
     BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
 
   BinaryenAddFunction(codegen.module, name, params, results, &codegen.string_type, 1, body);
-  BinaryenAddFunctionExport(codegen.module, name, name);
 }
 
 static void generate_string_equals_function(void)
@@ -265,7 +272,6 @@ static void generate_string_equals_function(void)
 
   BinaryenAddFunction(codegen.module, name, params, results, vars_list,
                       sizeof(vars_list) / sizeof_ptr(vars_list), body);
-  BinaryenAddFunctionExport(codegen.module, name, name);
 
 #undef LEFT
 #undef RIGHT
@@ -280,7 +286,6 @@ static void generate_string_length_function(void)
   BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, codegen.string_type);
   BinaryenAddFunction(codegen.module, name, codegen.string_type, BinaryenTypeInt32(), NULL, 0,
                       BinaryenArrayLen(codegen.module, ref));
-  BinaryenAddFunctionExport(codegen.module, name, name);
 }
 
 static void generate_string_at_function(void)
@@ -306,7 +311,6 @@ static void generate_string_at_function(void)
 
   BinaryenAddFunction(codegen.module, name, params, results, vars_list,
                       sizeof(vars_list) / sizeof_ptr(vars_list), body);
-  BinaryenAddFunctionExport(codegen.module, name, name);
 }
 
 static BinaryenExpressionRef generate_default_initialization(DataType data_type)
@@ -702,7 +706,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
 {
   BinaryenExpressionRef ref = generate_expression(expression->expr);
 
-  if (expression->data_type.type == TYPE_STRING)
+  if (expression->expr_data_type.type == TYPE_STRING)
   {
     if (strcmp(expression->name.lexeme, "length") == 0)
     {
@@ -887,11 +891,15 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   ArrayBinaryenType parameter_types;
   array_init(&parameter_types);
 
+  bool parameters_contain_string = false;
   VarStmt* parameter;
   array_foreach(&statement->parameters, parameter)
   {
     BinaryenType parameter_data_type = data_type_to_binaryen_type(parameter->data_type);
     array_add(&parameter_types, parameter_data_type);
+
+    if (parameter_data_type == codegen.string_type)
+      parameters_contain_string = true;
   }
 
   ArrayBinaryenType variable_types;
@@ -918,6 +926,9 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   else
   {
     BinaryenAddFunctionImport(codegen.module, name, "env", name, params, results);
+
+    if (parameters_contain_string)
+      generate_string_export_functions();
   }
 
   return NULL;
@@ -977,11 +988,21 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
     generate_function_declaration(function);
   }
 
+  ArrayBinaryenExpressionRef default_initializers;
+  array_init(&default_initializers);
+  array_foreach(&statement->variables, variable)
+  {
+    BinaryenExpressionRef default_initializer =
+      generate_default_initialization(variable->data_type);
+    array_add(&default_initializers, default_initializer);
+  }
+
   ArrayBinaryenExpressionRef initializer_body;
   array_init(&initializer_body);
-  array_add(
-    &initializer_body,
-    BinaryenLocalSet(codegen.module, 0, BinaryenStructNew(codegen.module, NULL, 0, heap_type)));
+  array_add(&initializer_body,
+            BinaryenLocalSet(codegen.module, 0,
+                             BinaryenStructNew(codegen.module, default_initializers.elems,
+                                               default_initializers.size, heap_type)));
 
   array_foreach(&statement->variables, variable)
   {
@@ -1025,7 +1046,6 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
 
   BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, type, NULL, 0,
                       initializer);
-  BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
   codegen.class = previous_class;
   return NULL;

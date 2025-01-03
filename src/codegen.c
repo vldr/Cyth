@@ -86,7 +86,7 @@ static void generate_string_int_cast_function(void)
                      BinaryenBinary(codegen.module, BinaryenSubInt32(), INDEX(), CONSTANT(1))),
     BinaryenArraySet(codegen.module, BUFFER(), INDEX(), adder),
     BinaryenLocalSet(codegen.module, 0,
-                     BinaryenBinary(codegen.module, BinaryenDivSInt32(), NUMBER(), CONSTANT(base))),
+                     BinaryenBinary(codegen.module, BinaryenDivUInt32(), NUMBER(), CONSTANT(base))),
     BinaryenBreak(codegen.module, "string.int_cast.loop",
                   BinaryenBinary(codegen.module, BinaryenNeInt32(), NUMBER(), CONSTANT(0)), NULL),
   };

@@ -73,7 +73,7 @@ typedef struct
 
   union {
     bool boolean;
-    int integer;
+    unsigned int integer;
     float floating;
     const char* string;
   };

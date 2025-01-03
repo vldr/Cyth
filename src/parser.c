@@ -175,7 +175,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_INTEGER);
-    expr->literal.integer = strtol(token.lexeme, NULL, 10);
+    expr->literal.integer = strtoul(token.lexeme, NULL, 10);
 
     break;
   case TOKEN_FLOAT:

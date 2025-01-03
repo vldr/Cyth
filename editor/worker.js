@@ -8,24 +8,25 @@ onmessage = (event) =>
         {
             try 
             {
+                const textDecoder = new TextDecoder("utf-8");
                 const module = new WebAssembly.Module(data.bytecode);
                 const instance = new WebAssembly.Instance(module, {
                     env: {
-                        log: function(output) {
-                            if (typeof(output) === "object")
+                        log: function(text) {
+                            if (typeof(text) === "object")
                             {
                                 const length = instance.exports["string.length"];
                                 const at = instance.exports["string.at"];
 
-                                let text = String();
-                                for (let i = 0; i < length(output); i++)
-                                    text += String.fromCharCode(at(output, i));
+                                const array = new Uint8Array(length(text));
+                                for (let i = 0; i < array.byteLength; i++)
+                                    array[i] = at(text, i);
 
-                                postMessage({ type: "print", text }); 
+                                postMessage({ type: "print", text: textDecoder.decode(array) });
                             }
                             else 
                             {
-                                postMessage({ type: "print", text: output });
+                                postMessage({ type: "print", text });
                             }
                         }
                     }

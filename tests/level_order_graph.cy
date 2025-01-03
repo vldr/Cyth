@@ -1,11 +1,11 @@
-void log(int n)
+void log(string n)
 
 class Tree
     Tree left
     Tree right
-    int value
+    string value
 
-    void __init__(int value)
+    void __init__(string value)
         this.value = value
 
 class Node
@@ -64,9 +64,11 @@ class Stack
             log(node.data.value)
 
 void traverse(Stack list)
+    int level
+
     while list.size
+        log("_________ Level: " + level + " _________")
         list.print()
-        log(-1)
         
         Stack temp = Stack()
 
@@ -80,15 +82,16 @@ void traverse(Stack list)
                 temp.push(node.right)
                 
         list = temp
+        level = level + 1
 
-Tree a = Tree(1)
-Tree b = Tree(2)
-Tree c = Tree(3)
-Tree d = Tree(4)
-Tree e = Tree(5)
-Tree f = Tree(6)
-Tree g = Tree(7)
-Tree h = Tree(8)
+Tree a = Tree("1")
+Tree b = Tree("2")
+Tree c = Tree("3")
+Tree d = Tree("4")
+Tree e = Tree("5")
+Tree f = Tree("6")
+Tree g = Tree("7")
+Tree h = Tree("8")
 
 a.left = b
 a.right = c
@@ -103,15 +106,15 @@ Stack stack = Stack()
 stack.push(a)
 traverse(stack)
 
+# _________ Level: 0 _________
 # 1
-# -1
+# _________ Level: 1 _________
 # 2
 # 3
-# -1
+# _________ Level: 2 _________
 # 4
 # 5
 # 6
-# -1
+# _________ Level: 3 _________
 # 7
 # 8
-# -1

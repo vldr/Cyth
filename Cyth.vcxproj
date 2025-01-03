@@ -165,7 +165,7 @@
   </ImportGroup>
   <Target Name="UnzipArchive" BeforeTargets="PrepareForBuild">
     <Unzip
-      SourceFiles="$(SolutionDir)third_party\binaryen-version_121.zip"
+      SourceFiles="$(SolutionDir).dependencies"
       DestinationFolder="$(SolutionDir)"
       Condition="!Exists('$(SolutionDir)libs') Or !Exists('$(SolutionDir)includes')"
     />

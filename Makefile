@@ -2,7 +2,6 @@ OUTPUT = output/cyth
 CXX = clang
 CXXFLAGS = -Iincludes -MMD -O0 -g -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
 LINKFLAGS = -Wl,-rpath,libs -Llibs -lbinaryen
-BINARYEN = third_party/binaryen-version_121.zip
 
 EM_OUTPUT = output/cyth.js
 EM_CXX = emcc
@@ -34,10 +33,10 @@ output/:
 	mkdir output
 
 includes/:
-	unzip -q $(BINARYEN) "includes/*" -d .
+	unzip -q .dependencies "includes/*" -d .
 	
 libs/:
-	unzip -q $(BINARYEN) "libs/*" -d .
+	unzip -q .dependencies "libs/*" -d .
 
 objects/%.o: src/%.c
 	$(CXX) $(CXXFLAGS) -c $< -o $@

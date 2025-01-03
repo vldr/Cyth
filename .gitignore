@@ -1,5 +1,7 @@
 output/
-objs/
+objects/
+libs/
+includes/
 editor/cyth.js
 editor/cyth.wasm
 compile_commands.json

@@ -602,10 +602,13 @@ static Stmt* if_statement(void)
   stmt->cond.keyword = advance();
   stmt->cond.condition = expression();
 
-  consume(TOKEN_NEWLINE, "Expected a newline after condition.");
-  stmt->cond.then_branch = statements();
-
+  array_init(&stmt->cond.then_branch);
   array_init(&stmt->cond.else_branch);
+
+  consume(TOKEN_NEWLINE, "Expected a newline after condition.");
+
+  if (check(TOKEN_INDENT))
+    stmt->cond.then_branch = statements();
 
   if (match(TOKEN_ELSE))
   {
@@ -616,7 +619,9 @@ static Stmt* if_statement(void)
     else
     {
       consume(TOKEN_NEWLINE, "Expected a newline after else.");
-      stmt->cond.else_branch = statements();
+
+      if (check(TOKEN_INDENT))
+        stmt->cond.else_branch = statements();
     }
   }
 

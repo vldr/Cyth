@@ -4,8 +4,12 @@
 #include "array.h"
 #include "memory.h"
 
+#define TOKEN_EMPTY() ((Token){ 0 })
+
 typedef enum
 {
+  TOKEN_NONE,
+
   TOKEN_INDENT,
   TOKEN_DEDENT,
   TOKEN_NEWLINE,
@@ -67,6 +71,7 @@ typedef enum
   TOKEN_WHILE,
   TOKEN_CONTINUE,
   TOKEN_BREAK,
+  TOKEN_IMPORT,
 
   TOKEN_EOF
 } TokenType;
@@ -84,6 +89,7 @@ typedef struct
 array_def(Token, Token);
 
 void lexer_init(const char* source);
+void lexer_print(void);
 ArrayToken lexer_scan(void);
 
 #endif

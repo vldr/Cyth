@@ -1,4 +1,5 @@
-void log(string n)
+import "env"
+    void log(string n)
 
 class Node
     int data

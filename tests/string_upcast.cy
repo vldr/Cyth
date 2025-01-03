@@ -1,4 +1,5 @@
-void log(string n)
+import "env"
+    void log(string n)
 
 log("" + 2147483647)
 log("" + -2147483648)

@@ -916,19 +916,20 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
   BinaryenType results = data_type_to_binaryen_type(statement->data_type);
 
-  if (statement->body.elems)
+  if (statement->import.type == TOKEN_STRING)
+  {
+    BinaryenAddFunctionImport(codegen.module, name, statement->import.lexeme, name, params,
+                              results);
+
+    if (parameters_contain_string)
+      generate_string_export_functions();
+  }
+  else
   {
     BinaryenExpressionRef body = generate_statements(&statement->body);
     BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
                         variable_types.size, body);
     BinaryenAddFunctionExport(codegen.module, name, name);
-  }
-  else
-  {
-    BinaryenAddFunctionImport(codegen.module, name, "env", name, params, results);
-
-    if (parameters_contain_string)
-      generate_string_export_functions();
   }
 
   return NULL;
@@ -1051,6 +1052,17 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   return NULL;
 }
 
+static BinaryenExpressionRef generate_import_declaration(ImportStmt* statement)
+{
+  Stmt* body_statement;
+  array_foreach(&statement->body, body_statement)
+  {
+    generate_statement(body_statement);
+  }
+
+  return NULL;
+}
+
 static BinaryenExpressionRef generate_statement(Stmt* statement)
 {
   switch (statement->type)
@@ -1073,6 +1085,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_function_declaration(&statement->func);
   case STMT_CLASS_DECL:
     return generate_class_declaration(&statement->class);
+  case STMT_IMPORT_DECL:
+    return generate_import_declaration(&statement->import);
 
   default:
     UNREACHABLE("Unhandled statement");

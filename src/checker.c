@@ -14,13 +14,15 @@ static struct
 
   Environment* global_environment;
   Environment* environment;
+
   FuncStmt* function;
   ClassStmt* class;
   WhileStmt* loop;
 } checker;
 
-static DataType check_expression(Expr* expression);
+static void init_statement(Stmt* statement);
 static void check_statement(Stmt* statement);
+static DataType check_expression(Expr* expression);
 
 static void checker_error(Token token, const char* message)
 {
@@ -107,6 +109,11 @@ static void error_unexpected_class(Token token)
   checker_error(token, "A class declaration is not allowed here.");
 }
 
+static void error_unexpected_import(Token token)
+{
+  checker_error(token, "An import declaration is not allowed here.");
+}
+
 static void error_unexpected_return(Token token)
 {
   checker_error(token, "A return statement can only appear inside a function.");
@@ -141,6 +148,11 @@ static void error_invalid_arity(Token token, int expected, int got)
 {
   checker_error(token,
                 memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
+}
+
+static void error_imported_functions_cannot_have_bodies(Token token)
+{
+  checker_error(token, "An imported function cannot have a body.");
 }
 
 bool equal_data_type(DataType left, DataType right)
@@ -324,6 +336,15 @@ static void init_class_declaration(ClassStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
+static void init_import_declaration(ImportStmt* statement)
+{
+  Stmt* body_statement;
+  array_foreach(&statement->body, body_statement)
+  {
+    init_statement(body_statement);
+  }
+}
+
 static void init_statement(Stmt* statement)
 {
   checker.error = false;
@@ -335,6 +356,9 @@ static void init_statement(Stmt* statement)
     break;
   case STMT_CLASS_DECL:
     init_class_declaration(&statement->class);
+    break;
+  case STMT_IMPORT_DECL:
+    init_import_declaration(&statement->import);
     break;
 
   default:
@@ -984,6 +1008,12 @@ static void check_function_declaration(FuncStmt* statement)
     return;
   }
 
+  if (statement->body.size && statement->import.type == TOKEN_STRING)
+  {
+    error_imported_functions_cannot_have_bodies(statement->name);
+    return;
+  }
+
   FuncStmt* previous_function = checker.function;
 
   checker.environment = environment_init(checker.environment);
@@ -1062,6 +1092,21 @@ static void check_class_declaration(ClassStmt* statement)
   checker.environment = checker.environment->parent;
 }
 
+static void check_import_declaration(ImportStmt* statement)
+{
+  if (checker.function || checker.loop || checker.class)
+  {
+    error_unexpected_import(statement->keyword);
+    return;
+  }
+
+  Stmt* body_statement;
+  array_foreach(&statement->body, body_statement)
+  {
+    check_statement(body_statement);
+  }
+}
+
 static void check_statement(Stmt* statement)
 {
   checker.error = false;
@@ -1094,6 +1139,9 @@ static void check_statement(Stmt* statement)
     break;
   case STMT_CLASS_DECL:
     check_class_declaration(&statement->class);
+    break;
+  case STMT_IMPORT_DECL:
+    check_import_declaration(&statement->import);
     break;
 
   default:

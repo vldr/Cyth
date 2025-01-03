@@ -1,4 +1,5 @@
-void log(int n)
+import "env"
+    void log(int n)
 
 int binomialCoeff(int n, int k) 
     int res = 1

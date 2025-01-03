@@ -1,12 +1,10 @@
-void log(int n)
+log("hello world")
 
-int test
+import "empty_import"
+void empty_function()
 
-log(
-    test = 42
-)
 
-log(test)
+import "env"
+    void log(string n)
 
-# 42
-# 42
+# hello world

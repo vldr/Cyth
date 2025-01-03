@@ -1,6 +1,5 @@
-void log(int n)
-void poop(string n)
-void poo2p(string n)
+import "env"
+    void log(int n)
 
 class Test
     int num = 10

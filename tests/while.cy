@@ -1,4 +1,5 @@
-void log(int n)
+import "env"
+    void log(int n)
 
 int fib(int n)
     int a

@@ -29,7 +29,6 @@
     <ClInclude Include="src\map.h" />
     <ClInclude Include="src\memory.h" />
     <ClInclude Include="src\parser.h" />
-    <ClInclude Include="src\printer.h" />
     <ClInclude Include="src\statement.h" />
   </ItemGroup>
   <ItemGroup>
@@ -41,7 +40,6 @@
     <ClCompile Include="src\map.c" />
     <ClCompile Include="src\memory.c" />
     <ClCompile Include="src\parser.c" />
-    <ClCompile Include="src\printer.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -164,10 +162,6 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <Target Name="UnzipArchive" BeforeTargets="PrepareForBuild">
-    <Unzip
-      SourceFiles="$(SolutionDir).dependencies"
-      DestinationFolder="$(SolutionDir)"
-      Condition="!Exists('$(SolutionDir)libs') Or !Exists('$(SolutionDir)includes')"
-    />
+    <Unzip SourceFiles="$(SolutionDir).dependencies" DestinationFolder="$(SolutionDir)" Condition="!Exists('$(SolutionDir)libs') Or !Exists('$(SolutionDir)includes')" />
   </Target>
 </Project>

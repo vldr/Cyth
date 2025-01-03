@@ -57,6 +57,7 @@ typedef struct _FUNC_STMT
 
   Token type;
   Token name;
+  Token import;
 
   ArrayVarStmt variables;
   ArrayVarStmt parameters;
@@ -87,6 +88,12 @@ typedef struct _CLASS_STMT
   uintptr_t ref;
 } ClassStmt;
 
+typedef struct _IMPORT_STMT
+{
+  Token keyword;
+  ArrayStmt body;
+} ImportStmt;
+
 struct _STMT
 {
   enum
@@ -100,6 +107,7 @@ struct _STMT
     STMT_FUNCTION_DECL,
     STMT_VARIABLE_DECL,
     STMT_CLASS_DECL,
+    STMT_IMPORT_DECL,
   } type;
 
   union {
@@ -112,6 +120,7 @@ struct _STMT
     BreakStmt brk;
     ContinueStmt cont;
     ClassStmt class;
+    ImportStmt import;
   };
 };
 

@@ -1,4 +1,5 @@
-void log(bool n)
+import "env"
+    void log(bool n)
 
 string a = "hello"
 string b = "world"

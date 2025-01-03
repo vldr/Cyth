@@ -1,4 +1,5 @@
-void log(float n)
+import "env"
+    void log(float n)
 
 int sqrt(int x)
     int s

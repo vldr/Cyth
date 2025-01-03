@@ -214,9 +214,13 @@ static void literal(void)
     default:
       KEYWORD_GROUP('f')
       KEYWORD("if", TOKEN_IF)
+
       KEYWORD_GROUP('n')
       KEYWORD("in", TOKEN_IN)
       KEYWORD("int", TOKEN_IDENTIFIER_INT)
+
+      KEYWORD_GROUP('m')
+      KEYWORD("import", TOKEN_IMPORT)
     }
 
     KEYWORD_GROUP('n')
@@ -496,4 +500,83 @@ ArrayToken lexer_scan(void)
   add_custom_token(TOKEN_EOF, NULL, 0);
 
   return lexer.tokens;
+}
+
+void lexer_print(void)
+{
+  Token token;
+  array_foreach(&lexer.tokens, token)
+  {
+    static const char* types[] = {
+      "TOKEN_NONE",
+
+      "TOKEN_INDENT",
+      "TOKEN_DEDENT",
+      "TOKEN_NEWLINE",
+
+      "TOKEN_LEFT_PAREN",
+      "TOKEN_RIGHT_PAREN",
+      "TOKEN_LEFT_BRACE",
+      "TOKEN_RIGHT_BRACE",
+      "TOKEN_LEFT_BRACKET",
+      "TOKEN_RIGHT_BRACKET",
+      "TOKEN_SEMICOLON",
+      "TOKEN_COLON",
+      "TOKEN_COMMA",
+      "TOKEN_DOT",
+      "TOKEN_MINUS",
+      "TOKEN_MINUS_MINUS",
+      "TOKEN_MINUS_EQUAL",
+      "TOKEN_PLUS",
+      "TOKEN_PLUS_PLUS",
+      "TOKEN_PLUS_EQUAL",
+      "TOKEN_SLASH",
+      "TOKEN_SLASH_EQUAL",
+      "TOKEN_STAR",
+      "TOKEN_STAR_EQUAL",
+      "TOKEN_PERCENT",
+      "TOKEN_PERCENT_EQUAL",
+
+      "TOKEN_BANG",
+      "TOKEN_BANG_EQUAL",
+      "TOKEN_EQUAL",
+      "TOKEN_EQUAL_EQUAL",
+      "TOKEN_GREATER",
+      "TOKEN_GREATER_EQUAL",
+      "TOKEN_LESS",
+      "TOKEN_LESS_EQUAL",
+
+      "TOKEN_IDENTIFIER",
+      "TOKEN_IDENTIFIER_VOID",
+      "TOKEN_IDENTIFIER_INT",
+      "TOKEN_IDENTIFIER_FLOAT",
+      "TOKEN_IDENTIFIER_BOOL",
+      "TOKEN_IDENTIFIER_STRING",
+      "TOKEN_STRING",
+      "TOKEN_INTEGER",
+      "TOKEN_FLOAT",
+
+      "TOKEN_AND",
+      "TOKEN_CLASS",
+      "TOKEN_ELSE",
+      "TOKEN_FALSE",
+      "TOKEN_FOR",
+      "TOKEN_IF",
+      "TOKEN_IN",
+      "TOKEN_NULL",
+      "TOKEN_OR",
+      "TOKEN_NOT",
+      "TOKEN_RETURN",
+      "TOKEN_TRUE",
+      "TOKEN_WHILE",
+      "TOKEN_CONTINUE",
+      "TOKEN_BREAK",
+      "TOKEN_IMPORT",
+
+      "TOKEN_EOF",
+    };
+
+    printf("%d,%d-%d,%d \t%s    \t'%s'  \n", token.start_line, token.start_column, token.end_line,
+           token.end_column, types[token.type], token.lexeme);
+  }
 }

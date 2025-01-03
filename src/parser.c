@@ -435,12 +435,13 @@ static Expr* expression(void)
   return assignment();
 }
 
-static Stmt* function_declaration_statement(Token type, Token name)
+static Stmt* function_declaration_statement(Token type, Token name, Token import)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_FUNCTION_DECL;
   stmt->func.type = type;
   stmt->func.name = name;
+  stmt->func.import = import;
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);
@@ -521,7 +522,8 @@ static Stmt* class_declaration_statement(void)
         Token token = peek();
 
         if (token.type == TOKEN_LEFT_PAREN)
-          array_add(&stmt->class.functions, &function_declaration_statement(type, name)->func);
+          array_add(&stmt->class.functions,
+                    &function_declaration_statement(type, name, TOKEN_EMPTY())->func);
         else
           array_add(&stmt->class.variables, &variable_declaration_statement(type, name, true)->var);
       }
@@ -530,6 +532,32 @@ static Stmt* class_declaration_statement(void)
         parser_error(advance(),
                      "Only function and variable declarations can appear inside classes.");
       }
+    }
+
+    consume(TOKEN_DEDENT, "Expected a dedent.");
+  }
+
+  return stmt;
+}
+
+static Stmt* import_declaration_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_IMPORT_DECL;
+  stmt->import.keyword = advance();
+  array_init(&stmt->import.body);
+
+  Token import = consume(TOKEN_STRING, "Expected a string after import keyword.");
+  consume(TOKEN_NEWLINE, "Expected a newline.");
+
+  if (match(TOKEN_INDENT))
+  {
+    while (!eof() && !check(TOKEN_DEDENT))
+    {
+      Token type = consume_data_type("Expected a type.");
+      Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
+
+      array_add(&stmt->import.body, function_declaration_statement(type, name, import));
     }
 
     consume(TOKEN_DEDENT, "Expected a dedent.");
@@ -720,7 +748,7 @@ static Stmt* statement(void)
     switch (token.type)
     {
     case TOKEN_LEFT_PAREN:
-      return function_declaration_statement(type, name);
+      return function_declaration_statement(type, name, TOKEN_EMPTY());
     default:
       return variable_declaration_statement(type, name, true);
     }
@@ -745,6 +773,8 @@ static Stmt* statement(void)
       return for_statement();
     case TOKEN_CLASS:
       return class_declaration_statement();
+    case TOKEN_IMPORT:
+      return import_declaration_statement();
     default:
       return expression_statement(true);
     }

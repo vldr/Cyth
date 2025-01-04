@@ -1,31 +1,33 @@
 import "env"
-    void log(int n)
+    void log(float n)
 
 bool test = false
 bool test2 = true
 
+class Hello
+
 if test
 else 
     if test2
-        log(10)
+        log(10.0)
 
 if test
 else if test2
-    log(20)
+    log(20.0)
 
 if test
 else
-    log(30)
+    log(30.0)
 
 if test2
-    log(40)
+    log(40.0)
 else
 
 if test2
 else if test
 
 if test
-log(50)
+log(50.0)
 
 int counter = 100
 

@@ -39,7 +39,7 @@ for await (const path of glob.scan("."))
 
     run(text, true);
 
-    const result = await WebAssembly.instantiate(bytecode, { 
+    const result = await WebAssembly.instantiate(bytecode, {
       env: {
         log: (output) => 
         {

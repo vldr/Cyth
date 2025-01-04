@@ -38,6 +38,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_VOID:
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
+  case TYPE_PROTOTYPE:
     return BinaryenTypeNone();
   case TYPE_BOOL:
   case TYPE_INTEGER:
@@ -73,7 +74,7 @@ static void generate_string_int_cast_function(void)
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   const char* name = "string.int_cast";
-  const int buffer_size = 32;
+  const int size = 32;
   const int base = 10;
 
   BinaryenExpressionRef divider =
@@ -122,15 +123,15 @@ static void generate_string_int_cast_function(void)
     negative_check,
     BinaryenLocalSet(
       codegen.module, 1,
-      BinaryenArrayNew(codegen.module, codegen.string_heap_type, CONSTANT(buffer_size), NULL)),
-    BinaryenLocalSet(codegen.module, 2, CONSTANT(buffer_size)),
+      BinaryenArrayNew(codegen.module, codegen.string_heap_type, CONSTANT(size), NULL)),
+    BinaryenLocalSet(codegen.module, 2, CONSTANT(size)),
     loop,
     negative_append,
-    BinaryenLocalSet(codegen.module, 3,
-                     BinaryenArrayNew(codegen.module, codegen.string_heap_type,
-                                      BinaryenBinary(codegen.module, BinaryenSubInt32(),
-                                                     CONSTANT(buffer_size), INDEX()),
-                                      NULL)),
+    BinaryenLocalSet(
+      codegen.module, 3,
+      BinaryenArrayNew(codegen.module, codegen.string_heap_type,
+                       BinaryenBinary(codegen.module, BinaryenSubInt32(), CONSTANT(size), INDEX()),
+                       NULL)),
     BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), BUFFER(), INDEX(),
                       BinaryenArrayLen(codegen.module, RESULT())),
     RESULT(),
@@ -612,6 +613,10 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
 static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
 {
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+  if (type == BinaryenTypeNone())
+  {
+    return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
+  }
 
   switch (expression->variable->scope)
   {

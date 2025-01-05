@@ -5,6 +5,7 @@
 #include "main.h"
 #include "statement.h"
 
+#include <math.h>
 #include <stdio.h>
 
 static Expr* expression(void);
@@ -209,6 +210,22 @@ static Expr* primary(void)
     expr->type = EXPR_VAR;
     expr->var.name = token;
     expr->var.variable = NULL;
+
+    break;
+  case TOKEN_INFINITY:
+    advance();
+
+    expr->type = EXPR_LITERAL;
+    expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
+    expr->literal.floating = INFINITY;
+
+    break;
+  case TOKEN_NAN:
+    advance();
+
+    expr->type = EXPR_LITERAL;
+    expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
+    expr->literal.floating = NAN;
 
     break;
   default:

@@ -405,7 +405,9 @@ class Editor
                     'this',
                     'and',
                     'or',
-                    'not'
+                    'not',
+                    'inf',
+                    'nan',
                 ],
                 keywords: [
                     'return', 

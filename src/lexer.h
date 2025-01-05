@@ -72,6 +72,8 @@ typedef enum
   TOKEN_CONTINUE,
   TOKEN_BREAK,
   TOKEN_IMPORT,
+  TOKEN_NAN,
+  TOKEN_INFINITY,
 
   TOKEN_EOF
 } TokenType;

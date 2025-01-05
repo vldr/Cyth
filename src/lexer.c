@@ -218,6 +218,7 @@ static void literal(void)
       KEYWORD_GROUP('n')
       KEYWORD("in", TOKEN_IN)
       KEYWORD("int", TOKEN_IDENTIFIER_INT)
+      KEYWORD("inf", TOKEN_INFINITY)
 
       KEYWORD_GROUP('m')
       KEYWORD("import", TOKEN_IMPORT)
@@ -231,6 +232,8 @@ static void literal(void)
       KEYWORD("null", TOKEN_NULL)
       KEYWORD_GROUP('o')
       KEYWORD("not", TOKEN_NOT)
+      KEYWORD_GROUP('a')
+      KEYWORD("nan", TOKEN_NAN)
     }
 
     KEYWORD_GROUP('t')
@@ -572,6 +575,8 @@ void lexer_print(void)
       "TOKEN_CONTINUE",
       "TOKEN_BREAK",
       "TOKEN_IMPORT",
+      "TOKEN_NAN",
+      "TOKEN_INFINITY",
 
       "TOKEN_EOF",
     };

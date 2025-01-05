@@ -16,6 +16,9 @@ log("" + -inf)
 log("" + nan)
 log("" + -nan)
 
+log("" + true)
+log("" + false)
+
 log("" + 2147483647)
 log("" + -2147483648)
 
@@ -39,6 +42,8 @@ for i = -100; i <= 100; i = i + 1
 # -inf
 # nan
 # -nan
+# true
+# false
 # 2147483647
 # -2147483648
 # -100

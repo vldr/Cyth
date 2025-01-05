@@ -65,6 +65,45 @@ static void generate_string_export_functions(void)
     BinaryenAddFunctionExport(codegen.module, "string.at", "string.at");
 }
 
+static void generate_string_bool_cast_function(void)
+{
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.bool_cast";
+
+  BinaryenExpressionRef false_string[] = {
+    CONSTANT('f'), CONSTANT('a'), CONSTANT('l'), CONSTANT('s'), CONSTANT('e'),
+  };
+
+  BinaryenExpressionRef true_string[] = {
+    CONSTANT('t'),
+    CONSTANT('r'),
+    CONSTANT('u'),
+    CONSTANT('e'),
+  };
+
+  BinaryenExpressionRef value = BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32());
+  BinaryenExpressionRef body =
+    BinaryenSelect(codegen.module, value,
+                   BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, true_string,
+                                         sizeof(true_string) / sizeof_ptr(true_string)),
+                   BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, false_string,
+                                         sizeof(false_string) / sizeof_ptr(false_string)),
+                   codegen.string_type);
+
+  BinaryenType params_list[] = { BinaryenTypeInt32() };
+  BinaryenType params =
+    BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+  BinaryenType results_list[] = { codegen.string_type };
+  BinaryenType results =
+    BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+  BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+
+#undef CONSTANT
+}
+
 static void generate_string_float_cast_function(void)
 {
 #define INPUT() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeFloat32()))
@@ -840,6 +879,8 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_BOOL:
+      return BinaryenCall(codegen.module, "string.bool_cast", &value, 1, codegen.string_type);
     case TYPE_FLOAT:
       return BinaryenCall(codegen.module, "string.float_cast", &value, 1, codegen.string_type);
     case TYPE_INTEGER:
@@ -1393,8 +1434,9 @@ void codegen_init(ArrayStmt statements)
   generate_string_equals_function();
   generate_string_length_function();
   generate_string_at_function();
-  generate_string_int_cast_function();
+  generate_string_bool_cast_function();
   generate_string_float_cast_function();
+  generate_string_int_cast_function();
 }
 
 Codegen codegen_generate(void)
@@ -1406,6 +1448,7 @@ Codegen codegen_generate(void)
   BinaryenAddFunctionExport(codegen.module, "~start", "~start");
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC() |
                                               BinaryenFeatureNontrappingFPToInt());
+  BinaryenModulePrint(codegen.module);
 
   if (BinaryenModuleValidate(codegen.module))
   {
@@ -1418,7 +1461,6 @@ Codegen codegen_generate(void)
     result.size = binaryen_result.binaryBytes;
   }
 
-  BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
   return result;
 }

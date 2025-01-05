@@ -107,13 +107,14 @@ static void generate_string_bool_cast_function(void)
 static void generate_string_float_cast_function(void)
 {
 #define INPUT() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeFloat32()))
-#define INT_NUMBER() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define INT_NUMBER() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt64()))
 #define FLOAT_NUMBER() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
 #define BUFFER() (BinaryenLocalGet(codegen.module, 3, codegen.string_type))
 #define INDEX() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
 #define RESULT() (BinaryenLocalGet(codegen.module, 5, codegen.string_type))
 #define DECIMAL_COUNT() (BinaryenLocalGet(codegen.module, 6, BinaryenTypeInt32()))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+#define CONSTANTL(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt64(_v)))
 #define CONSTANTF(_v) (BinaryenConst(codegen.module, BinaryenLiteralFloat32(_v)))
 
   const char* name = "string.float_cast";
@@ -182,9 +183,10 @@ static void generate_string_float_cast_function(void)
   BinaryenExpressionRef integer_loop;
   {
     BinaryenExpressionRef divider =
-      BinaryenBinary(codegen.module, BinaryenRemUInt32(), INT_NUMBER(), CONSTANT(base));
+      BinaryenBinary(codegen.module, BinaryenRemUInt64(), INT_NUMBER(), CONSTANTL(base));
     BinaryenExpressionRef adder =
-      BinaryenBinary(codegen.module, BinaryenAddInt32(), divider, CONSTANT('0'));
+      BinaryenBinary(codegen.module, BinaryenAddInt32(),
+                     BinaryenUnary(codegen.module, BinaryenWrapInt64(), divider), CONSTANT('0'));
 
     BinaryenExpressionRef adder_if_body_list[] = {
       BinaryenLocalSet(codegen.module, 4,
@@ -199,9 +201,9 @@ static void generate_string_float_cast_function(void)
       adder_if_body,
       BinaryenLocalSet(
         codegen.module, 1,
-        BinaryenBinary(codegen.module, BinaryenDivUInt32(), INT_NUMBER(), CONSTANT(base))),
+        BinaryenBinary(codegen.module, BinaryenDivUInt64(), INT_NUMBER(), CONSTANTL(base))),
       BinaryenBreak(codegen.module, "string.int_cast.loop",
-                    BinaryenBinary(codegen.module, BinaryenNeInt32(), INT_NUMBER(), CONSTANT(0)),
+                    BinaryenBinary(codegen.module, BinaryenNeInt64(), INT_NUMBER(), CONSTANTL(0)),
                     NULL),
     };
     BinaryenExpressionRef loop_body =
@@ -296,7 +298,7 @@ static void generate_string_float_cast_function(void)
     nan_exit,
 
     BinaryenLocalSet(codegen.module, 1,
-                     BinaryenUnary(codegen.module, BinaryenTruncSatSFloat32ToInt32(),
+                     BinaryenUnary(codegen.module, BinaryenTruncSatSFloat32ToInt64(),
                                    BinaryenUnary(codegen.module, BinaryenAbsFloat32(), INPUT()))),
     BinaryenLocalSet(
       codegen.module, 2,
@@ -305,7 +307,7 @@ static void generate_string_float_cast_function(void)
                       codegen.module, BinaryenMulFloat32(), CONSTANTF(1000000.0f),
                       BinaryenBinary(codegen.module, BinaryenSubFloat32(),
                                      BinaryenUnary(codegen.module, BinaryenAbsFloat32(), INPUT()),
-                                     BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(),
+                                     BinaryenUnary(codegen.module, BinaryenConvertSInt64ToFloat32(),
                                                    INT_NUMBER()))))),
     BinaryenLocalSet(
       codegen.module, 3,
@@ -340,7 +342,7 @@ static void generate_string_float_cast_function(void)
     BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
 
   BinaryenType vars_list[] = {
-    BinaryenTypeInt32(), BinaryenTypeInt32(), codegen.string_type,
+    BinaryenTypeInt64(), BinaryenTypeInt32(), codegen.string_type,
     BinaryenTypeInt32(), codegen.string_type, BinaryenTypeInt32(),
   };
 

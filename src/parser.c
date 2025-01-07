@@ -75,12 +75,12 @@ static bool match(TokenType type)
 
 static Token consume(TokenType type, const char* message)
 {
-  if (match(type))
-    return previous();
+  if (!check(type))
+  {
+    parser_error(peek(), message);
+  }
 
-  parser_error(peek(), message);
-
-  return peek();
+  return advance();
 }
 
 static bool is_data_type(TokenType type)
@@ -107,12 +107,12 @@ static bool is_data_type_and_identifier(void)
 
 static Token consume_data_type(const char* message)
 {
-  if (is_data_type(peek().type))
-    return advance();
+  if (!is_data_type(peek().type))
+  {
+    parser_error(peek(), message);
+  }
 
-  parser_error(peek(), message);
-
-  return peek();
+  return advance();
 }
 
 static void synchronize(void)

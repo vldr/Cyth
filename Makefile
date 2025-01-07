@@ -6,8 +6,8 @@ LINKFLAGS = -Wl,-rpath,libs -Llibs -lbinaryen
 EM_OUTPUT = output/cyth.js
 EM_CXX = emcc
 EM_CXXFLAGS = -Iincludes -MMD -flto -fno-rtti -O3 -Wall -Wextra -pedantic
-EM_LINKFLAGS = --closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 -sEXPORTED_RUNTIME_METHODS=cwrap,addFunction,UTF8ToString \
-               -sEXPORTED_FUNCTIONS=_free,_run,_set_error_callback,_set_result_callback -Llibs -lbinaryen
+EM_LINKFLAGS = --closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString \
+               -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_run,_set_error_callback,_set_result_callback -Llibs -lbinaryen
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(patsubst src/%, objects/%, $(patsubst %.c, %.o, $(SRCS)))

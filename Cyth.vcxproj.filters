@@ -21,9 +21,6 @@
     <ClInclude Include="src\parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\printer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\statement.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -54,9 +51,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\parser.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\printer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\checker.c">

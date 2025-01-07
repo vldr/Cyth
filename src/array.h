@@ -43,7 +43,7 @@
                                                                                                    \
       _cap = (a)->cap == 0 ? 8 : (a)->cap * 2;                                                     \
       _element_size = sizeof_ptr(((a)->elems));                                                    \
-      _p = memory_realloc(&memory, (a)->elems, (a)->cap * _element_size, _cap * _element_size);    \
+      _p = memory_realloc((a)->elems, (a)->cap * _element_size, _cap * _element_size);             \
       if (_p == NULL)                                                                              \
       {                                                                                            \
         (a)->oom = true;                                                                           \

@@ -71,7 +71,7 @@
     v++;                                                                                           \
                                                                                                    \
     *cap = v;                                                                                      \
-    t = memory_alloc(&memory, (v + 1) * sizeof(*t));                                               \
+    t = memory_alloc((v + 1) * sizeof(*t));                                                        \
     memset(t, 0, (v + 1) * sizeof(*t));                                                            \
     return t ? &t[1] : NULL;                                                                       \
   }                                                                                                \

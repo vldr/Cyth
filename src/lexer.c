@@ -51,7 +51,7 @@ static void add_custom_token(TokenType type, const char* lexeme, int length)
   token.start_column = lexer.start_column;
   token.end_line = lexer.current_line;
   token.end_column = lexer.current_column;
-  token.lexeme = memory_strldup(&memory, lexeme, length);
+  token.lexeme = memory_strldup(lexeme, length);
 
   array_add(&lexer.tokens, token);
 }

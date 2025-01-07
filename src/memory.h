@@ -2,26 +2,16 @@
 #define memory_h
 
 #include <stddef.h>
-#include <stdint.h>
 
-#define ALLOC(type) ((type*)memory_alloc(&memory, sizeof(type)))
+#define ALLOC(type) ((type*)memory_alloc(sizeof(type)))
 
-typedef struct _BUCKET Bucket;
-typedef struct
-{
-  Bucket* begin;
-  Bucket* end;
-} Memory;
-
-extern Memory memory;
-
-void* memory_alloc(Memory* memory, size_t size_bytes);
-void* memory_realloc(Memory* memory, void* old_pointer, size_t old_size, size_t new_size);
-char* memory_strdup(Memory* memory, const char* cstr);
-char* memory_strldup(Memory* a, const char* str, size_t length);
-void* memory_memdup(Memory* memory, void* data, size_t size);
-char* memory_sprintf(Memory* memory, const char* format, ...);
-void memory_reset(Memory* memory);
-void memory_free(Memory* memory);
+void* memory_alloc(size_t size_bytes);
+void* memory_realloc(void* old_pointer, size_t old_size, size_t new_size);
+char* memory_strdup(const char* cstr);
+char* memory_strldup(const char* str, size_t length);
+void* memory_memdup(void* data, size_t size);
+char* memory_sprintf(const char* format, ...);
+void memory_reset(void);
+void memory_free(void);
 
 #endif

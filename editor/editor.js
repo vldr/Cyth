@@ -2,7 +2,7 @@ class EditorConsole
 {
     constructor(model, editorTabs, editor) 
     {
-        window.set_result_callback(
+        Module._set_result_callback(
             Module.addFunction(this.upload.bind(this), 'vii')
         );
 
@@ -10,7 +10,6 @@ class EditorConsole
         this.editor = editor;
         this.editorTabs = editorTabs;
         this.running = false;
-        this.bytecode = "";
 
         this.consoleStatus = document.getElementById("console-status");
         this.consoleOutput = document.getElementById("console-output"); 
@@ -79,7 +78,7 @@ class EditorConsole
             throw new Error("worker is not undefined");
         }
 
-        window.run(this.bytecode, true);
+        Module._run(this.editor.getText(), true);
     }
 
     stop()
@@ -192,11 +191,6 @@ class EditorConsole
     setStatus(status)
     {
         this.consoleStatus.innerHTML = status;
-    }
-
-    setBytecode(bytecode)
-    {
-        this.bytecode = bytecode;
     }
 }
 
@@ -374,7 +368,7 @@ class Editor
 {
     constructor() 
     {
-        window.set_error_callback(
+        Module._set_error_callback(
             Module.addFunction(this.onError.bind(this), 'viiiii')
         );
 
@@ -495,6 +489,7 @@ class Editor
                   
             this.errors = [];
             this.model = monaco.editor.createModel("", "cyth"); 
+            this.encoder = new TextEncoder();
 
             this.editorDeltaDecorationsList = [];
             this.editorElement = document.getElementById("editor");
@@ -507,9 +502,9 @@ class Editor
                 minimap: { enabled: false },
                 fixedOverflowWidgets: true
             });
-            
+ 
             this.editorTabs = new EditorTabs(this);
-            this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);    
+            this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);
             
             this.editor.layout();
             this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, () => {});
@@ -527,7 +522,19 @@ class Editor
 
     setReadOnly(value)
     {
-        this.editor.updateOptions({readOnly: value});
+        this.editor.updateOptions({ readOnly: value });
+    }
+
+    getText()
+    {
+        const text = this.editor.getValue();
+        const data = Module._memory_alloc(text.length + 1);
+        const array = Module.HEAPU8.subarray(data, data + text.length + 1);
+        array[text.length] = 0;
+
+        this.encoder.encodeInto(text, array);
+
+        return data;
     }
 
     onError(startLineNumber, startColumn, endLineNumber, endColumn, message)
@@ -544,12 +551,10 @@ class Editor
     onInput() 
     {
         this.errors.length = 0;
+    
+        Module._run(this.getText(), false);
         
-        const text = this.editor.getValue();
-        window.run(text, false);
-        
-        this.editorTabs.setText(text);
-        this.editorConsole.setBytecode(text);
+        this.editorTabs.setText(this.editor.getValue());
 
         monaco.editor.setModelMarkers(this.model, "owner", this.errors);
     }
@@ -558,10 +563,6 @@ class Editor
 var Module = {
     preRun: [],
     onRuntimeInitialized: function() {
-        window.set_error_callback =  Module.cwrap("set_error_callback", null, ["number"]);
-        window.set_result_callback =  Module.cwrap("set_result_callback", null, ["number"]);
-        window.run = Module.cwrap("run", null, ["string", "number"]);
-
         new Editor();
     },
 };

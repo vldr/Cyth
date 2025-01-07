@@ -48,19 +48,19 @@ void run(const char* source, bool codegen)
   ArrayToken tokens = lexer_scan();
 
   if (cyth.error)
-    return;
+    goto clean_up;
 
   parser_init(tokens);
   ArrayStmt statements = parser_parse();
 
   if (cyth.error)
-    return;
+    goto clean_up;
 
   checker_init(statements);
   checker_validate();
 
   if (cyth.error)
-    return;
+    goto clean_up;
 
   if (codegen)
   {
@@ -70,7 +70,8 @@ void run(const char* source, bool codegen)
     cyth.result_callback(codegen.size, codegen.data);
   }
 
-  memory_reset(&memory);
+clean_up:
+  memory_reset();
 }
 
 static void run_file(void)
@@ -86,7 +87,7 @@ static void run_file(void)
   size_t file_size = ftell(file);
   rewind(file);
 
-  char* source = memory_alloc(&memory, file_size + 1);
+  char* source = memory_alloc(file_size + 1);
   size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
 
   if (file_size != bytes_read)
@@ -155,7 +156,7 @@ int main(int argc, char* argv[])
   set_result_callback(handle_result);
 
   run_file();
+  memory_free();
 
-  memory_free(&memory);
   return 0;
 }

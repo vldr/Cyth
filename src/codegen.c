@@ -649,11 +649,11 @@ static BinaryenExpressionRef generate_string_literal_expression(const char* lite
     BinaryenExpressionRef initializer =
       BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, values.elems, values.size);
 
-    const char* name = memory_sprintf(&memory, "string.%d", index);
+    const char* name = memory_sprintf("string.%d", index);
     BinaryenAddGlobal(codegen.module, name, codegen.string_type, false, initializer);
   }
 
-  const char* name = memory_sprintf(&memory, "string.%d", index);
+  const char* name = memory_sprintf("string.%d", index);
   return BinaryenGlobalGet(codegen.module, name, codegen.string_type);
 }
 
@@ -1094,9 +1094,9 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 {
   codegen.loops++;
 
-  const char* continue_name = memory_sprintf(&memory, "continue|%d", codegen.loops);
-  const char* break_name = memory_sprintf(&memory, "break|%d", codegen.loops);
-  const char* loop_name = memory_sprintf(&memory, "loop|%d", codegen.loops);
+  const char* continue_name = memory_sprintf("continue|%d", codegen.loops);
+  const char* break_name = memory_sprintf("break|%d", codegen.loops);
+  const char* loop_name = memory_sprintf("loop|%d", codegen.loops);
 
   BinaryenExpressionRef continue_block = generate_statements(&statement->body);
   BinaryenBlockSetName(continue_block, continue_name);
@@ -1144,13 +1144,13 @@ static BinaryenExpressionRef generate_return_statement(ReturnStmt* statement)
 
 static BinaryenExpressionRef generate_continue_statement(void)
 {
-  const char* name = memory_sprintf(&memory, "continue|%d", codegen.loops);
+  const char* name = memory_sprintf("continue|%d", codegen.loops);
   return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 
 static BinaryenExpressionRef generate_break_statement(void)
 {
-  const char* name = memory_sprintf(&memory, "break|%d", codegen.loops);
+  const char* name = memory_sprintf("break|%d", codegen.loops);
   return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 
@@ -1279,7 +1279,7 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   codegen.class = type;
 
   const char* initalizer_name = statement->name.lexeme;
-  const char* initalizer_function_name = memory_sprintf(&memory, "%s.__init__", initalizer_name);
+  const char* initalizer_function_name = memory_sprintf("%s.__init__", initalizer_name);
 
   FuncStmt* function;
   FuncStmt* initializer_function = NULL;

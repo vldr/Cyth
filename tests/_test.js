@@ -8,11 +8,8 @@ let errors = [];
 let logs = [];
 let bytecode;
 
-Module.set_error_callback = Module.cwrap("set_error_callback", null, ["number"]);
-Module.set_result_callback = Module.cwrap("set_result_callback", null, ["number"]);
-
-Module.set_result_callback(Module.addFunction((size, data) => bytecode = Module.HEAPU8.subarray(data, data + size), "vii"));
-Module.set_error_callback(Module.addFunction((startLineNumber, startColumn, endLineNumber, endColumn, message) => errors.push({
+Module._set_result_callback(Module.addFunction((size, data) => bytecode = Module.HEAPU8.subarray(data, data + size), "vii"));
+Module._set_error_callback(Module.addFunction((startLineNumber, startColumn, endLineNumber, endColumn, message) => errors.push({
   startLineNumber,
   startColumn,
   endLineNumber,
@@ -21,7 +18,25 @@ Module.set_error_callback(Module.addFunction((startLineNumber, startColumn, endL
 }), "viiiii"));
 
 const glob = new Glob(import.meta.dir + "/*.cy");
-const run = Module.cwrap("run", null, ["string", "number"]);
+const encoder = new TextEncoder();
+
+let lastEncodedText;
+
+function encodeText(text)
+{
+  const data = Module._memory_alloc(text.length + 1);
+  const array = Module.HEAPU8.subarray(data, data + text.length + 1);
+  array[text.length] = 0;
+
+  encoder.encodeInto(text, array);
+
+  if (lastEncodedText)
+    expect(lastEncodedText).toEqual(data);
+
+  lastEncodedText = data;
+
+  return data;
+}
 
 for await (const path of glob.scan("."))
 {
@@ -30,14 +45,16 @@ for await (const path of glob.scan("."))
     const file = Bun.file(path);
     const text = await file.text();
     const expectedLogs = text
-                        .split("\n") 
-                        .filter(line => line.includes("#"))
-                        .map(line => line.substring(line.indexOf("#") + 1).trim());
+                      .split("\n") 
+                      .filter(line => line.includes("#"))
+                      .map(line => line.substring(line.indexOf("#") + 1).trim());
+
+
 
     errors.length = 0;
     logs.length = 0;
 
-    run(text, true);
+    Module._run(encodeText(text), true);
 
     const result = await WebAssembly.instantiate(bytecode, {
       env: {

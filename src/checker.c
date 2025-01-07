@@ -40,38 +40,37 @@ static void error_type_mismatch(Token token)
 
 static void error_operation_not_defined(Token token, const char* type)
 {
-  checker_error(token,
-                memory_sprintf(&memory, "Operator '%s' only defined for %s.", token.lexeme, type));
+  checker_error(token, memory_sprintf("Operator '%s' only defined for %s.", token.lexeme, type));
 }
 
 static void error_name_already_exists(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf(&memory, "The name '%s' already exists.", name));
+  checker_error(token, memory_sprintf("The name '%s' already exists.", name));
 }
 
 static void error_type_cannot_be_void(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf(&memory, "The type %s cannot be used here", name));
+  checker_error(token, memory_sprintf("The type %s cannot be used here", name));
 }
 
 static void error_cannot_find_name(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf(&memory, "Undeclared identifier '%s'.", name));
+  checker_error(token, memory_sprintf("Undeclared identifier '%s'.", name));
 }
 
 static void error_cannot_find_member_name(Token token, const char* name, const char* class_name)
 {
-  checker_error(token, memory_sprintf(&memory, "No member named '%s' in '%s'.", name, class_name));
+  checker_error(token, memory_sprintf("No member named '%s' in '%s'.", name, class_name));
 }
 
 static void error_cannot_find_type(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf(&memory, "Undeclared type '%s'.", name));
+  checker_error(token, memory_sprintf("Undeclared type '%s'.", name));
 }
 
 static void error_not_a_type(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf(&memory, "The name '%s' is not a type.", name));
+  checker_error(token, memory_sprintf("The name '%s' is not a type.", name));
 }
 
 static void error_not_a_function(Token token)
@@ -146,8 +145,7 @@ static void error_invalid_initializer_return_type(Token token)
 
 static void error_invalid_arity(Token token, int expected, int got)
 {
-  checker_error(token,
-                memory_sprintf(&memory, "Expected %d parameter(s) but got %d.", expected, got));
+  checker_error(token, memory_sprintf("Expected %d parameter(s) but got %d.", expected, got));
 }
 
 static void error_imported_functions_cannot_have_bodies(Token token)
@@ -1071,7 +1069,7 @@ static void check_class_declaration(ClassStmt* statement)
     const char* function_name = function_statement->name.lexeme;
 
     function_statement->data_type = token_to_data_type(function_statement->type, false);
-    function_statement->name.lexeme = memory_sprintf(&memory, "%s.%s", class_name, function_name);
+    function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
   }
 
   int count = 0;

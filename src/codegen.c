@@ -891,12 +891,39 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       break;
     }
   }
+  else if (expression->to_data_type.type == TYPE_FLOAT)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_BOOL:
+    case TYPE_INTEGER:
+      return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
+    default:
+      break;
+    }
+  }
+  else if (expression->to_data_type.type == TYPE_INTEGER)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_BOOL:
+      return value;
+    case TYPE_FLOAT:
+      return BinaryenUnary(codegen.module, BinaryenTruncSatSFloat32ToInt32(), value);
+    default:
+      break;
+    }
+  }
   else if (expression->to_data_type.type == TYPE_BOOL)
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_FLOAT:
+      return BinaryenBinary(codegen.module, BinaryenNeFloat32(), value,
+                            BinaryenConst(codegen.module, BinaryenLiteralFloat32(0.0f)));
     case TYPE_INTEGER:
-      return value;
+      return BinaryenBinary(codegen.module, BinaryenNeInt32(), value,
+                            BinaryenConst(codegen.module, BinaryenLiteralInt32(0)));
     case TYPE_OBJECT:
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
                            BinaryenRefIsNull(codegen.module, value));
@@ -1450,7 +1477,6 @@ Codegen codegen_generate(void)
   BinaryenAddFunctionExport(codegen.module, "~start", "~start");
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC() |
                                               BinaryenFeatureNontrappingFPToInt());
-  BinaryenModulePrint(codegen.module);
 
   if (BinaryenModuleValidate(codegen.module))
   {
@@ -1463,6 +1489,7 @@ Codegen codegen_generate(void)
     result.size = binaryen_result.binaryBytes;
   }
 
+  BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
   return result;
 }

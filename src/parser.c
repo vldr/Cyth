@@ -198,10 +198,24 @@ static Expr* primary(void)
   case TOKEN_LEFT_PAREN:
     advance();
 
-    expr->type = EXPR_GROUP;
-    expr->group.expr = expression();
+    if (is_data_type(peek().type) && peek_next().type == TOKEN_RIGHT_PAREN)
+    {
+      Token type = advance();
+      advance();
 
-    consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
+      expr->type = EXPR_CAST;
+      expr->cast.expr = expression();
+      expr->cast.type = type;
+      expr->cast.to_data_type = DATA_TYPE(TYPE_VOID);
+      expr->cast.from_data_type = DATA_TYPE(TYPE_VOID);
+    }
+    else
+    {
+      expr->type = EXPR_GROUP;
+      expr->group.expr = expression();
+
+      consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.");
+    }
 
     break;
   case TOKEN_IDENTIFIER:

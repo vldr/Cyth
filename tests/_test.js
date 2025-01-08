@@ -49,43 +49,40 @@ for await (const path of glob.scan("."))
                       .filter(line => line.includes("#"))
                       .map(line => line.substring(line.indexOf("#") + 1).trim());
 
-
-
     errors.length = 0;
     logs.length = 0;
 
     Module._run(encodeText(text), true);
 
-    const result = await WebAssembly.instantiate(bytecode, {
-      env: {
-        log: (output) => 
-        {
-          if (typeof(output) === "object")
+    if (errors.length === 0)
+    {
+      const result = await WebAssembly.instantiate(bytecode, {
+        env: {
+          log: (output) => 
           {
-            const at = result.instance.exports["string.at"];
-            const length = result.instance.exports["string.length"];
-        
-            let text = "";
-            for (let i = 0; i < length(output); i++)
+            if (typeof(output) === "object")
             {
-              text += String.fromCharCode(at(output, i));
+              const at = result.instance.exports["string.at"];
+              const length = result.instance.exports["string.length"];
+          
+              let text = "";
+              for (let i = 0; i < length(output); i++)
+                text += String.fromCharCode(at(output, i));
+        
+              logs.push(text);
             }
-      
-            logs.push(text);
-          }
-          else 
-          {
-            logs.push(String(output)); 
-          }
-        },
-      }
-    });
-
-    result.instance.exports["~start"]();
+            else 
+            {
+              logs.push(String(output)); 
+            }
+          },
+        }
+      });
+  
+      result.instance.exports["~start"]();
+    }
 
     expect(errors).toBeEmpty();
     expect(logs).toEqual(expectedLogs);
-
-    Module._free(bytecode);
   });
 }

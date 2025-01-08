@@ -135,6 +135,8 @@ typedef struct
 
 typedef struct
 {
+  Token type;
+
   DataType from_data_type;
   DataType to_data_type;
 

@@ -148,6 +148,11 @@ static void error_invalid_arity(Token token, int expected, int got)
   checker_error(token, memory_sprintf("Expected %d parameter(s) but got %d.", expected, got));
 }
 
+static void error_invalid_type_conversion(Token token)
+{
+  checker_error(token, "Invalid type conversion.");
+}
+
 static void error_imported_functions_cannot_have_bodies(Token token)
 {
   checker_error(token, "An imported function cannot have a body.");
@@ -212,6 +217,7 @@ static Expr* cast_to_bool(Expr* expression, DataType data_type)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
+    cast_expression->cast.type = TOKEN_EMPTY();
     cast_expression->cast.from_data_type = data_type;
     cast_expression->cast.to_data_type = DATA_TYPE(TYPE_BOOL);
     cast_expression->cast.expr = expression;
@@ -245,6 +251,7 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
 
   Expr* cast_expression = EXPR();
   cast_expression->type = EXPR_CAST;
+  cast_expression->cast.type = TOKEN_EMPTY();
   cast_expression->cast.from_data_type = from;
   cast_expression->cast.to_data_type = to;
   cast_expression->cast.expr = *target;
@@ -366,6 +373,62 @@ static void init_statement(Stmt* statement)
 
 static DataType check_cast_expression(CastExpr* expression)
 {
+  if (equal_data_type(expression->from_data_type, DATA_TYPE(TYPE_VOID)) &&
+      equal_data_type(expression->to_data_type, DATA_TYPE(TYPE_VOID)))
+  {
+    expression->from_data_type = check_expression(expression->expr);
+    expression->to_data_type = token_to_data_type(expression->type, false);
+
+    bool valid = false;
+
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_INTEGER:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_BOOL:
+      case TYPE_FLOAT:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_FLOAT:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_BOOL:
+      case TYPE_INTEGER:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_BOOL:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_FLOAT:
+      case TYPE_INTEGER:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    default:
+      break;
+    }
+
+    if (!valid)
+    {
+      error_invalid_type_conversion(expression->type);
+    }
+  }
+
   return expression->to_data_type;
 }
 

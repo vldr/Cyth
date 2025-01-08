@@ -1,7 +1,11 @@
 import "env"
     void log(string n)
 
-void test()
+int test()
+    return 10
+
+class Test
+    int data = 9
 
 float a = (float)10
 bool b = (bool)10
@@ -17,6 +21,12 @@ float h = (float)true
 int i = (int)false
 float j = (float)false
 
+float k = (float)Test().data
+float l = (float)test()
+
+bool m = (bool)test()
+bool n = (bool)Test().data
+
 log("" + a)
 log("" + b)
 log("" + c)
@@ -27,6 +37,10 @@ log("" + g)
 log("" + h)
 log("" + i)
 log("" + j)
+log("" + k)
+log("" + l)
+log("" + m)
+log("" + n)
 
 # 10
 # true
@@ -41,3 +55,9 @@ log("" + j)
 
 # 0
 # 0
+
+# 9
+# 10
+
+# true
+# true

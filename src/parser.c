@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 
+static Expr* prefix_unary(void);
 static Expr* expression(void);
 static Stmt* statement(void);
 static ArrayStmt statements(void);
@@ -204,7 +205,7 @@ static Expr* primary(void)
       advance();
 
       expr->type = EXPR_CAST;
-      expr->cast.expr = expression();
+      expr->cast.expr = prefix_unary();
       expr->cast.type = type;
       expr->cast.to_data_type = DATA_TYPE(TYPE_VOID);
       expr->cast.from_data_type = DATA_TYPE(TYPE_VOID);

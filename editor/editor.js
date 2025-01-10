@@ -391,6 +391,7 @@ class Editor
                     'int',
                     'float',
                     'bool',
+                    'char',
                     'class',
                     'void', 
                     'null',
@@ -447,17 +448,17 @@ class Editor
                         }],
                         { include: '@whitespace' },
 
-                        [/"([^"\\]|\\.)*$/, "string.invalid" ],
-                        [/"/,  { token: "string.quote", bracket: "@open", next: "@string" } ],
+                        [/("|')([^"\\]|\\.)*$/, "string.invalid" ],
+                        [/("|')/,  { token: "string.quote", bracket: "@open", next: "@string" } ],
 
-                        [/"[^\\"]"/, "string"],
-                        [/"/, "string.invalid"]
+                        [/("|')[^\\("|')]("|')/, "string"],
+                        [/("|')/, "string.invalid"]
                     ],
 
                     string: [
-                        [/[^\\"]+/,  "string"],
+                        [/[^\\("|')]+/,  "string"],
                         [/\\./,      "string.escape.invalid"],
-                        [/"/,        { token: "string.quote", bracket: "@close", next: "@pop" } ]
+                        [/("|')/,        { token: "string.quote", bracket: "@close", next: "@pop" } ]
                     ],
     
                     whitespace: [

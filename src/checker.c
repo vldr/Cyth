@@ -178,6 +178,8 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
     return DATA_TYPE(TYPE_INTEGER);
   case TOKEN_IDENTIFIER_FLOAT:
     return DATA_TYPE(TYPE_FLOAT);
+  case TOKEN_IDENTIFIER_CHAR:
+    return DATA_TYPE(TYPE_CHAR);
   case TOKEN_IDENTIFIER_STRING:
     return DATA_TYPE(TYPE_STRING);
   case TOKEN_IDENTIFIER: {
@@ -383,11 +385,25 @@ static DataType check_cast_expression(CastExpr* expression)
 
     switch (expression->from_data_type.type)
     {
+    case TYPE_CHAR:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_INTEGER:
+      case TYPE_STRING:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
     case TYPE_INTEGER:
       switch (expression->to_data_type.type)
       {
       case TYPE_BOOL:
       case TYPE_FLOAT:
+      case TYPE_STRING:
+      case TYPE_CHAR:
         valid = true;
 
       default:
@@ -400,6 +416,7 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_BOOL:
       case TYPE_INTEGER:
+      case TYPE_STRING:
         valid = true;
 
       default:
@@ -412,6 +429,7 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_FLOAT:
       case TYPE_INTEGER:
+      case TYPE_STRING:
         valid = true;
 
       default:
@@ -483,6 +501,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
   if (!equal_data_type(left, right))
   {
     if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_CHAR), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
@@ -525,8 +544,9 @@ static DataType check_binary_expression(BinaryExpr* expression)
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)) &&
+        !equal_data_type(left, DATA_TYPE(TYPE_CHAR)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
-      error_operation_not_defined(op, "'int', 'float', 'bool', 'class'");
+      error_operation_not_defined(op, "'int', 'float', 'bool', 'class', 'char'");
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -856,7 +876,7 @@ static DataType check_index_expression(IndexExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
-  expression->data_type = DATA_TYPE(TYPE_INTEGER);
+  expression->data_type = DATA_TYPE(TYPE_CHAR);
   return expression->data_type;
 }
 

@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 static Expr* prefix_unary(void);
 static Expr* expression(void);
@@ -90,6 +91,7 @@ static bool is_data_type(TokenType type)
   {
   case TOKEN_IDENTIFIER:
   case TOKEN_IDENTIFIER_VOID:
+  case TOKEN_IDENTIFIER_CHAR:
   case TOKEN_IDENTIFIER_INT:
   case TOKEN_IDENTIFIER_FLOAT:
   case TOKEN_IDENTIFIER_BOOL:
@@ -186,6 +188,19 @@ static Expr* primary(void)
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
     expr->literal.floating = (float)strtod(token.lexeme, NULL);
+
+    break;
+  case TOKEN_CHAR:
+    advance();
+
+    expr->type = EXPR_LITERAL;
+    expr->literal.data_type = DATA_TYPE(TYPE_CHAR);
+    expr->literal.string = token.lexeme;
+
+    if (strlen(expr->literal.string) > 1)
+      parser_error(token, "Character constant cannot have multiple characters.");
+    else if (strlen(expr->literal.string) == 0)
+      parser_error(token, "Character constant cannot be empty.");
 
     break;
   case TOKEN_STRING:

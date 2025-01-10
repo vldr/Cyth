@@ -45,6 +45,7 @@ typedef struct _DATA_TYPE
   {
     TYPE_VOID,
     TYPE_BOOL,
+    TYPE_CHAR,
     TYPE_INTEGER,
     TYPE_FLOAT,
     TYPE_STRING,

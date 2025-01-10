@@ -6,6 +6,9 @@ string b = "world"
 string c = a + " " + b
 
 for int i = 0; i < c.length; i = i + 1
+    log("Index: " + i + ", Value: " + (int)c[i])
+
+for i = 0; i < c.length; i = i + 1
     log("Index: " + i + ", Value: " + c[i])
 
 log(c)
@@ -21,4 +24,15 @@ log(c)
 # Index: 8, Value: 114
 # Index: 9, Value: 108
 # Index: 10, Value: 100
+# Index: 0, Value: h
+# Index: 1, Value: e
+# Index: 2, Value: l
+# Index: 3, Value: l
+# Index: 4, Value: o
+# Index: 5, Value:  
+# Index: 6, Value: w
+# Index: 7, Value: o
+# Index: 8, Value: r
+# Index: 9, Value: l
+# Index: 10, Value: d
 # hello world

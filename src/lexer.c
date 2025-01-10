@@ -123,8 +123,33 @@ static void string(void)
     advance();
   }
 
-  add_custom_token(TOKEN_STRING, lexer.start + 1, (int)(lexer.current - lexer.start - 1));
   advance();
+  add_custom_token(TOKEN_STRING, lexer.start + 1, (int)(lexer.current - lexer.start - 2));
+}
+
+static void character(void)
+{
+  while (peek() != '\'')
+  {
+    if (peek() == '\n')
+    {
+      advance();
+      newline();
+      continue;
+    }
+
+    if (peek() == '\0')
+    {
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unterminated character");
+      return;
+    }
+
+    advance();
+  }
+
+  advance();
+  add_custom_token(TOKEN_CHAR, lexer.start + 1, (int)(lexer.current - lexer.start - 2));
 }
 
 static void number(void)
@@ -180,6 +205,9 @@ static void literal(void)
 
       KEYWORD_GROUP('o')
       KEYWORD("continue", TOKEN_CONTINUE)
+
+      KEYWORD_GROUP('h')
+      KEYWORD("char", TOKEN_IDENTIFIER_CHAR)
     }
 
     KEYWORD_GROUP('e')
@@ -352,6 +380,10 @@ static void scan_token(void)
 
   case '"':
     string();
+    break;
+
+  case '\'':
+    character();
     break;
 
   case ' ':
@@ -554,7 +586,9 @@ void lexer_print(void)
       "TOKEN_IDENTIFIER_INT",
       "TOKEN_IDENTIFIER_FLOAT",
       "TOKEN_IDENTIFIER_BOOL",
+      "TOKEN_IDENTIFIER_CHAR",
       "TOKEN_IDENTIFIER_STRING",
+      "TOKEN_CHAR",
       "TOKEN_STRING",
       "TOKEN_INTEGER",
       "TOKEN_FLOAT",

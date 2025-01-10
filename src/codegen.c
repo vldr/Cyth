@@ -42,6 +42,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_PROTOTYPE:
     return BinaryenTypeNone();
   case TYPE_BOOL:
+  case TYPE_CHAR:
   case TYPE_INTEGER:
     return BinaryenTypeInt32();
   case TYPE_FLOAT:
@@ -613,6 +614,7 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   switch (data_type.type)
   {
   case TYPE_INTEGER:
+  case TYPE_CHAR:
   case TYPE_BOOL:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
   case TYPE_FLOAT:
@@ -669,6 +671,8 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->boolean));
   case TYPE_OBJECT:
     return BinaryenRefNull(codegen.module, BinaryenTypeNullref());
+  case TYPE_CHAR:
+    return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->string[0]));
   case TYPE_STRING:
     return generate_string_literal_expression(expression->string);
   default:
@@ -738,7 +742,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_EQUAL_EQUAL:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenEqInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenEqFloat32();
@@ -756,15 +761,24 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_BANG_EQUAL:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenNeInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenNeFloat32();
     else if (data_type.type == TYPE_OBJECT)
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
                            BinaryenRefEq(codegen.module, left, right));
+    else if (data_type.type == TYPE_STRING)
+    {
+      BinaryenExpressionRef operands[] = { left, right };
+      return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
+                           BinaryenCall(codegen.module, "string.equals", operands,
+                                        sizeof(operands) / sizeof_ptr(operands),
+                                        BinaryenTypeInt32()));
+    }
     else
-      UNREACHABLE("Unsupported binary type for ==");
+      UNREACHABLE("Unsupported binary type for !=");
 
     break;
 
@@ -887,6 +901,8 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       return BinaryenCall(codegen.module, "string.float_cast", &value, 1, codegen.string_type);
     case TYPE_INTEGER:
       return BinaryenCall(codegen.module, "string.int_cast", &value, 1, codegen.string_type);
+    case TYPE_CHAR:
+      return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, &value, 1);
     default:
       break;
     }
@@ -902,10 +918,22 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       break;
     }
   }
+  else if (expression->to_data_type.type == TYPE_CHAR)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_INTEGER:
+      return BinaryenBinary(codegen.module, BinaryenAndInt32(), value,
+                            BinaryenConst(codegen.module, BinaryenLiteralInt32(0xFF)));
+    default:
+      break;
+    }
+  }
   else if (expression->to_data_type.type == TYPE_INTEGER)
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_CHAR:
     case TYPE_BOOL:
       return value;
     case TYPE_FLOAT:

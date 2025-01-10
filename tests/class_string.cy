@@ -8,7 +8,7 @@ class Test
 Test test = Test()
 test.a = "hello"
 
-log(test.a[0])
+log((int)test.a[0])
 log(test.a.length)
 log(test.num)
 log("test".length)

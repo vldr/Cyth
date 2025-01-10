@@ -47,7 +47,7 @@ for await (const path of glob.scan("."))
     const expectedLogs = text
                       .split("\n") 
                       .filter(line => line.includes("#"))
-                      .map(line => line.substring(line.indexOf("#") + 1).trim());
+                      .map(line => line.substring(line.indexOf("#") + 1).trimStart());
 
     errors.length = 0;
     logs.length = 0;

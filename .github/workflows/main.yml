@@ -33,7 +33,7 @@ jobs:
 
       - name: Build
         run: |
-          make web -j`nproc`
+          make web -j3
 
       - name: Test
         run: |

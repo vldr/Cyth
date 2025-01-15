@@ -89,8 +89,7 @@ static void generate_string_bool_cast_function(void)
                    BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, true_string,
                                          sizeof(true_string) / sizeof_ptr(true_string)),
                    BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, false_string,
-                                         sizeof(false_string) / sizeof_ptr(false_string)),
-                   codegen.string_type);
+                                         sizeof(false_string) / sizeof_ptr(false_string)));
 
   BinaryenType params_list[] = { BinaryenTypeInt32() };
   BinaryenType params =
@@ -141,8 +140,7 @@ static void generate_string_float_cast_function(void)
 
     BinaryenExpressionRef adder_if_condition =
       BinaryenSelect(codegen.module, BinaryenExpressionCopy(divider, codegen.module), CONSTANT(1),
-                     BinaryenBinary(codegen.module, BinaryenNeInt32(), INDEX(), CONSTANT(size)),
-                     BinaryenTypeInt32());
+                     BinaryenBinary(codegen.module, BinaryenNeInt32(), INDEX(), CONSTANT(size)));
 
     BinaryenExpressionRef adder_if =
       BinaryenIf(codegen.module, adder_if_condition, adder_if_body, NULL);
@@ -257,8 +255,7 @@ static void generate_string_float_cast_function(void)
                      BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, negative_inf,
                                            sizeof(negative_inf) / sizeof_ptr(negative_inf)),
                      BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, inf,
-                                           sizeof(inf) / sizeof_ptr(inf)),
-                     codegen.string_type)),
+                                           sizeof(inf) / sizeof_ptr(inf)))),
                  NULL);
   }
 
@@ -289,8 +286,7 @@ static void generate_string_float_cast_function(void)
           BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, negative_nan,
                                 sizeof(negative_nan) / sizeof_ptr(negative_nan)),
           BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, nan,
-                                sizeof(nan) / sizeof_ptr(nan)),
-          codegen.string_type)),
+                                sizeof(nan) / sizeof_ptr(nan)))),
       NULL);
   }
 

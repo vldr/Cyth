@@ -39,12 +39,12 @@ jobs:
         run: |
           make test
 
-      - name: Upload files
-        uses: pressidium/lftp-mirror-action@v1
+      - name: Deploy
+        uses: wangyucode/sftp-upload-action@v2.0.4
         with:
           host: ${{ secrets.sftp_host }}
-          user: ${{ secrets.sftp_username }}
-          pass: ${{ secrets.sftp_password }}
+          username: ${{ secrets.sftp_username }}
+          password: ${{ secrets.sftp_password }}
           port: ${{ secrets.sftp_port }}
           localDir: "editor/"
           remoteDir: "/cyth/"

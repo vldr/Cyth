@@ -16,7 +16,7 @@ DEPS = $(patsubst %.o, %.d, $(OBJS))
 EM_OBJS = $(patsubst src/%, objects/%, $(patsubst %.c, %.wasm.o, $(SRCS)))
 EM_DEPS = $(patsubst %.wasm.o, %.wasm.d, $(EM_OBJS))
  
-all: objects/ output/ desktop 
+all: desktop 
 
 objects/:
 	mkdir objects
@@ -36,10 +36,10 @@ objects/%.o: src/%.c
 objects/%.wasm.o: src/%.c
 	$(EM_CXX) $(EM_CXXFLAGS) -c $< -o $@
 
-desktop: third_party/binaryen/output/libbinaryen.so $(OBJS)
+desktop: output/ objects/ third_party/binaryen/output/libbinaryen.so $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
 
-web: third_party/binaryen/output/libbinaryen.a $(EM_OBJS)
+web: output/ objects/ third_party/binaryen/output/libbinaryen.a $(EM_OBJS)
 	$(EM_CXX) $(EM_CXXFLAGS) -o $(EM_OUTPUT) $(EM_OBJS) $(EM_LINKFLAGS)
 	@cp output/cyth.js editor/cyth.js
 	@cp output/cyth.wasm editor/cyth.wasm

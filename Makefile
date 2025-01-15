@@ -1,7 +1,7 @@
 OUTPUT = output/cyth
 CXX = clang
 CXXFLAGS = -Ithird_party/binaryen/src -MMD -O0 -g -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
-LINKFLAGS = -Wl,-rpath,libs -Lthird_party/binaryen/output -lbinaryen
+LINKFLAGS = -Wl,-rpath,third_party/binaryen/output -Lthird_party/binaryen/output -lbinaryen
 
 EM_OUTPUT = output/cyth.js
 EM_CXX = emcc
@@ -51,6 +51,8 @@ clean:
 	rm -f $(OBJS) $(DEPS) $(EM_OBJS) $(EM_DEPS)
 
 cleanall: clean
+	rm -f third_party/binaryen/output/libbinaryen.a
+	rm -f third_party/binaryen/output/libbinaryen.so
 	$(MAKE) clean -C third_party/binaryen
 
 -include $(DEPS)

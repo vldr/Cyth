@@ -111,9 +111,6 @@
     <ClCompile Include="src\passes\pass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\passes\test_passes.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\passes\AbstractTypeRefining.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -489,9 +486,6 @@
     <ClCompile Include="src\parser\parse-5-defs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\parser\wast-parser.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\parser\wat-parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -517,9 +511,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\support\dfa_minimization.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\support\file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\support\istring.cpp">
@@ -606,105 +597,6 @@
     <ClCompile Include="third_party\llvm-project\Debug.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DJB.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\Dwarf.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\dwarf2yaml.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFAbbreviationDeclaration.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFAcceleratorTable.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFAddressRange.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFCompileUnit.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFContext.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDataExtractor.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugAbbrev.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugAddr.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugAranges.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugArangeSet.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugFrame.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugInfoEntry.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugLine.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugLoc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugMacro.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugPubTable.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugRangeList.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDebugRnglists.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFDie.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFEmitter.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFExpression.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFFormValue.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFGdbIndex.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFListTable.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFTypeUnit.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFUnit.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFUnitIndex.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFVerifier.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFVisitor.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\DWARFYAML.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="third_party\llvm-project\Error.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -750,9 +642,6 @@
     <ClCompile Include="third_party\llvm-project\raw_ostream.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="third_party\llvm-project\ScopedPrinter.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="third_party\llvm-project\SmallVector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -774,13 +663,10 @@
     <ClCompile Include="third_party\llvm-project\UnicodeCaseFold.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="third_party\llvm-project\WithColor.cpp">
+    <ClCompile Include="src\passes\test_passes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="third_party\llvm-project\YAMLParser.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="third_party\llvm-project\YAMLTraits.cpp">
+    <ClCompile Include="src\support\file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

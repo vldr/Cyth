@@ -2414,17 +2414,11 @@ extern "C"
   // ========== Module Operations ==========
   //
 
-  // Parse a module in s-expression text format
-  BINARYEN_API BinaryenModuleRef BinaryenModuleParse(const char* text);
-
   // Print a module to stdout in s-expression text format. Useful for debugging.
   BINARYEN_API void BinaryenModulePrint(BinaryenModuleRef module);
 
   // Print a module to stdout in stack IR text format. Useful for debugging.
   BINARYEN_API void BinaryenModulePrintStackIR(BinaryenModuleRef module);
-
-  // Print a module to stdout in asm.js syntax.
-  BINARYEN_API void BinaryenModulePrintAsmjs(BinaryenModuleRef module);
 
   // Validate a module, showing errors on problems.
   //  @return 0 if an error occurred, 1 if validated succesfully
@@ -2651,11 +2645,6 @@ extern "C"
   // Deserialize a module from binary form, enabling the given feature set.
   BINARYEN_API BinaryenModuleRef BinaryenModuleReadWithFeatures(char* input, size_t inputSize,
                                                                 BinaryenFeatures featureSet);
-
-  // Execute a module in the Binaryen interpreter. This will create an instance of
-  // the module, run it in the interpreter - which means running the start method
-  // - and then destroying the instance.
-  BINARYEN_API void BinaryenModuleInterpret(BinaryenModuleRef module);
 
   // Adds a debug info file name to the module and returns its index.
   BINARYEN_API BinaryenIndex BinaryenModuleAddDebugInfoFileName(BinaryenModuleRef module,

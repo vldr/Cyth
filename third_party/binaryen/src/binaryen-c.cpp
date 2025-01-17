@@ -23,9 +23,7 @@
 #include "binaryen-c.h"
 #include "cfg/Relooper.h"
 #include "ir/utils.h"
-#include "parser/wat-parser.h"
 #include "pass.h"
-#include "shell-interface.h"
 #include "support/colors.h"
 #include "support/string.h"
 #include "wasm-binary.h"
@@ -34,7 +32,6 @@
 #include "wasm-stack.h"
 #include "wasm-validator.h"
 #include "wasm.h"
-#include "wasm2js.h"
 #include <iostream>
 #include <sstream>
 
@@ -5306,35 +5303,12 @@ void BinaryenModuleSetFeatures(BinaryenModuleRef module,
 // ========== Module Operations ==========
 //
 
-BinaryenModuleRef BinaryenModuleParse(const char* text) {
-  auto* wasm = new Module;
-  auto parsed = WATParser::parseModule(*wasm, text);
-  if (auto* err = parsed.getErr()) {
-    Fatal() << err->msg << "\n";
-  }
-  return wasm;
-}
-
 void BinaryenModulePrint(BinaryenModuleRef module) {
   std::cout << *(Module*)module;
 }
 
 void BinaryenModulePrintStackIR(BinaryenModuleRef module) {
   wasm::printStackIR(std::cout, (Module*)module, globalPassOptions);
-}
-
-void BinaryenModulePrintAsmjs(BinaryenModuleRef module) {
-  auto* wasm = (Module*)module;
-  Wasm2JSBuilder::Flags flags;
-  Wasm2JSBuilder wasm2js(flags, globalPassOptions);
-  auto asmjs = wasm2js.processWasm(wasm);
-  JSPrinter jser(true, true, asmjs);
-  Output out("", Flags::Text); // stdout
-  Wasm2JSGlue glue(*wasm, out, flags, "asmFunc");
-  glue.emitPre();
-  jser.printAst();
-  std::cout << jser.buffer << std::endl;
-  glue.emitPost();
 }
 
 bool BinaryenModuleValidate(BinaryenModuleRef module) {
@@ -5644,11 +5618,6 @@ BinaryenModuleRef BinaryenModuleReadWithFeatures(char* input,
 
 BinaryenModuleRef BinaryenModuleRead(char* input, size_t inputSize) {
   return BinaryenModuleReadWithFeatures(input, inputSize, BinaryenFeatureMVP());
-}
-
-void BinaryenModuleInterpret(BinaryenModuleRef module) {
-  ShellExternalInterface interface;
-  ModuleRunner instance(*(Module*)module, &interface, {});
 }
 
 BinaryenIndex BinaryenModuleAddDebugInfoFileName(BinaryenModuleRef module,

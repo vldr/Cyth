@@ -48,7 +48,7 @@ web: output objects $(EM_BINARYEN) $(EM_OBJS)
 	@cp output/cyth.wasm editor/cyth.wasm
 
 test:
-	bun test --bail test/
+	bun test --bail tests/
 
 clean:
 	rm -f $(OBJS) $(DEPS) $(EM_OBJS) $(EM_DEPS)

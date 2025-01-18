@@ -24,18 +24,17 @@ let lastEncodedText;
 
 function encodeText(text)
 {
-  const data = Module._memory_alloc(text.length + 1);
-  const array = Module.HEAPU8.subarray(data, data + text.length + 1);
-  array[text.length] = 0;
-
-  encoder.encodeInto(text, array);
+  const data = encoder.encode(text);
+  const offset = Module._memory_alloc(data.byteLength + 1);
+  Module.HEAPU8.set(data, offset);
+  Module.HEAPU8[offset + data.byteLength] = 0;
 
   if (lastEncodedText)
-    expect(lastEncodedText).toEqual(data);
+    expect(lastEncodedText).toEqual(offset);
 
-  lastEncodedText = data;
+  lastEncodedText = offset;
 
-  return data;
+  return offset;
 }
 
 for await (const path of glob.scan("."))

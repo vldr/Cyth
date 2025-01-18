@@ -529,13 +529,12 @@ class Editor
     getText()
     {
         const text = this.editor.getValue();
-        const data = Module._memory_alloc(text.length + 1);
-        const array = Module.HEAPU8.subarray(data, data + text.length + 1);
-        array[text.length] = 0;
+        const data = this.encoder.encode(text);
+        const offset = Module._memory_alloc(data.byteLength + 1);
+        Module.HEAPU8.set(data, offset);
+        Module.HEAPU8[offset + data.byteLength] = 0;
 
-        this.encoder.encodeInto(text, array);
-
-        return data;
+        return offset;
     }
 
     onError(startLineNumber, startColumn, endLineNumber, endColumn, message)

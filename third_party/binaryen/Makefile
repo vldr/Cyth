@@ -90,11 +90,11 @@ objects/:
 	mkdir objects
 
 objects/%.o: %.cpp
-	@ mkdir -p $$(dirname $@)
+	@mkdir -p $$(dirname $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 objects/%.wasm.o: %.cpp
-	@ mkdir -p $$(dirname $@)
+	@mkdir -p $$(dirname $@)
 	$(EM_CXX) $(EM_CXXFLAGS) $(CXXFLAGS) -c $< -o $@
 
 desktop: output/ $(OBJS)

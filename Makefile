@@ -39,25 +39,20 @@ $(BINARYEN):
 $(EM_BINARYEN):
 	$(MAKE) web -C third_party/binaryen
 
-.PHONY: desktop
 desktop: output objects $(BINARYEN) $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
 
-.PHONY: web
 web: output objects $(EM_BINARYEN) $(EM_OBJS)
 	$(EM_CXX) $(EM_CXXFLAGS) -o $(EM_OUTPUT) $(EM_OBJS) $(EM_LINKFLAGS)
 	@cp output/cyth.js editor/cyth.js
 	@cp output/cyth.wasm editor/cyth.wasm
 
-.PHONY: test
 test:
 	bun test --bail test/
 
-.PHONY: clean
 clean:
 	rm -f $(OBJS) $(DEPS) $(EM_OBJS) $(EM_DEPS)
 
-.PHONY: cleanall
 cleanall: clean
 	$(MAKE) clean -C third_party/binaryen
 	rm -f $(BINARYEN)

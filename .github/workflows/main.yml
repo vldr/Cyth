@@ -6,34 +6,19 @@ permissions:
 on:
   push:
     branches: [master]
-  pull_request:
-    branches: [master]
-
-env:
-  EM_VERSION: 3.1.34
-  EM_CACHE_FOLDER: "emsdk-cache"
 
 jobs:
   build-web:
     name: Web
     concurrency: ci-web-${{ github.ref }}
-    runs-on: macos-latest
+    runs-on: self-hosted
     steps:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v11
-        with:
-          version: ${{env.EM_VERSION}}
-          actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Build
         run: |
-          make web -j3
+          make web -j8
 
       - name: Test
         run: |

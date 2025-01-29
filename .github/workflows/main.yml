@@ -39,12 +39,7 @@ jobs:
         run: |
           make test
 
-      - name: Deploy
-        uses: wangyucode/sftp-upload-action@v2.0.4
+      - name: Publish
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          host: ${{ secrets.sftp_host }}
-          username: ${{ secrets.sftp_username }}
-          password: ${{ secrets.sftp_password }}
-          port: ${{ secrets.sftp_port }}
-          localDir: "editor/"
-          remoteDir: "/cyth/"
+          folder: editor

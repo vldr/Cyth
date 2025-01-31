@@ -27,7 +27,16 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Build
+      - name: Build (Windows)
+        run: |
+          export PATH=/home/ubuntu/msvc-wine/msvc/bin/x64:$PATH
+          msbuild
+
+      - name: Build (Linux)
+        run: |
+          make -j8
+
+      - name: Build (Web)
         run: |
           make web -j8
 

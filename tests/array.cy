@@ -1,3 +1,6 @@
+import "env"
+    void log(int n)
+
 string[][][] array
 
 string[] test
@@ -11,3 +14,8 @@ string[] hello(bool hi)
         return test
     else
         return froop 
+
+
+log(array.length)
+
+# 0

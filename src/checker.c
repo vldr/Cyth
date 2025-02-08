@@ -163,7 +163,8 @@ bool equal_data_type(DataType left, DataType right)
   if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
     return left.class == right.class;
 
-  if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY)
+  if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY && left.array.data_type &&
+      right.array.data_type)
     return left.array.count == right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
 
@@ -861,7 +862,8 @@ static DataType check_access_expression(AccessExpr* expression)
 
     return expression->data_type;
   }
-  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
+  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)) ||
+           equal_data_type(data_type, DATA_TYPE(TYPE_ARRAY)))
   {
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0)
@@ -873,7 +875,8 @@ static DataType check_access_expression(AccessExpr* expression)
       return expression->data_type;
     }
 
-    error_cannot_find_member_name(expression->name, name, "string");
+    error_cannot_find_member_name(expression->name, name,
+                                  data_type.type == TYPE_STRING ? "string" : "array");
     return DATA_TYPE(TYPE_VOID);
   }
   else

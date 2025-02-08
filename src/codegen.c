@@ -1111,6 +1111,15 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
 
     UNREACHABLE("Unhandled string access name");
   }
+  else if (expression->expr_data_type.type == TYPE_ARRAY)
+  {
+    if (strcmp(expression->name.lexeme, "length") == 0)
+    {
+      return BinaryenStructGet(codegen.module, 1, ref, BinaryenTypeInt32(), false);
+    }
+
+    UNREACHABLE("Unhandled array access name");
+  }
   else
   {
     BinaryenType type = data_type_to_binaryen_type(expression->data_type);

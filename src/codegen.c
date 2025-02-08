@@ -584,16 +584,17 @@ static void generate_string_at_function(void)
 
 static BinaryenHeapType generate_array_binaryen_type(DataType data_type)
 {
-  int count = data_type.array.count;
+  const int count = data_type.array.count * 2;
+  assert(count < 256);
 
-  TypeBuilderRef type_builder = TypeBuilderCreate(count * 2);
+  TypeBuilderRef type_builder = TypeBuilderCreate(count);
   BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
   bool mutable = true;
 
   BinaryenType temporary_type = data_type_to_binaryen_type(*data_type.array.data_type);
   BinaryenHeapType temporary_heap_type;
 
-  for (int i = 0; i < count * 2; i += 2)
+  for (int i = 0; i < count; i += 2)
   {
     TypeBuilderSetArrayType(type_builder, i, temporary_type, packed_type, mutable);
 
@@ -612,10 +613,10 @@ static BinaryenHeapType generate_array_binaryen_type(DataType data_type)
     temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, false);
   }
 
-  BinaryenHeapType heap_types[count * 2];
+  BinaryenHeapType heap_types[256];
   TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
 
-  return heap_types[count * 2 - 1];
+  return heap_types[count - 1];
 }
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)

@@ -116,7 +116,7 @@ static void string(void)
     if (peek() == '\0')
     {
       error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unterminated string");
+            "Unterminated string.");
       return;
     }
 
@@ -141,7 +141,7 @@ static void character(void)
     if (peek() == '\0')
     {
       error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unterminated character");
+            "Unterminated character.");
       return;
     }
 
@@ -293,6 +293,11 @@ static void scan_token(void)
     break;
   case ')':
     lexer.multi_line--;
+    if (lexer.multi_line < 0)
+    {
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unexpected ')' character.");
+    }
 
     add_token(TOKEN_RIGHT_PAREN);
     break;
@@ -303,6 +308,11 @@ static void scan_token(void)
     break;
   case '}':
     lexer.multi_line--;
+    if (lexer.multi_line < 0)
+    {
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unexpected '}' character.");
+    }
 
     add_token(TOKEN_RIGHT_BRACE);
     break;
@@ -313,6 +323,11 @@ static void scan_token(void)
     break;
   case ']':
     lexer.multi_line--;
+    if (lexer.multi_line < 0)
+    {
+      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+            "Unexpected ']' character.");
+    }
 
     add_token(TOKEN_RIGHT_BRACKET);
     break;
@@ -397,7 +412,6 @@ static void scan_token(void)
 
     newline();
     break;
-
   default:
     if (isdigit(c))
     {
@@ -411,7 +425,7 @@ static void scan_token(void)
     }
 
     error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Unexpected character");
+          "Unexpected character.");
     break;
   }
 }
@@ -464,7 +478,7 @@ static void scan_indentation(void)
   if ((lexer.indentation_type & INDENTATION_SPACE) && (lexer.indentation_type & INDENTATION_TAB))
   {
     error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Mixing of tabs and spaces");
+          "Mixing of tabs and spaces.");
     lexer.indentation_type = INDENTATION_NONE;
   }
 
@@ -484,7 +498,7 @@ static void scan_indentation(void)
     if (indentation != array_last(&lexer.indentation))
     {
       error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unexpected deindent");
+            "Unexpected deindent.");
     }
   }
 }

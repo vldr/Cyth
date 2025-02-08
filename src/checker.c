@@ -163,6 +163,10 @@ bool equal_data_type(DataType left, DataType right)
   if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
     return left.class == right.class;
 
+  if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY)
+    return left.array.count == right.array.count &&
+           equal_data_type(*left.array.data_type, *right.array.data_type);
+
   return left.type == right.type;
 }
 
@@ -212,6 +216,23 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
   }
 }
 
+static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared)
+{
+  if (type.count > 0)
+  {
+    DataType data_type = DATA_TYPE(TYPE_ARRAY);
+    data_type.array.count = type.count;
+    data_type.array.data_type = ALLOC(DataType);
+    *data_type.array.data_type = token_to_data_type(type.token, ignore_undeclared);
+
+    return data_type;
+  }
+  else
+  {
+    return token_to_data_type(type.token, ignore_undeclared);
+  }
+}
+
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
   if (equal_data_type(data_type, DATA_TYPE(TYPE_OBJECT)) ||
@@ -219,7 +240,7 @@ static Expr* cast_to_bool(Expr* expression, DataType data_type)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
-    cast_expression->cast.type = TOKEN_EMPTY();
+    cast_expression->cast.type = (DataTypeToken){ .token = TOKEN_EMPTY(), .count = 0 };
     cast_expression->cast.from_data_type = data_type;
     cast_expression->cast.to_data_type = DATA_TYPE(TYPE_BOOL);
     cast_expression->cast.expr = expression;
@@ -253,7 +274,7 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
 
   Expr* cast_expression = EXPR();
   cast_expression->type = EXPR_CAST;
-  cast_expression->cast.type = TOKEN_EMPTY();
+  cast_expression->cast.type = (DataTypeToken){ .token = TOKEN_EMPTY(), .count = 0 };
   cast_expression->cast.from_data_type = from;
   cast_expression->cast.to_data_type = to;
   cast_expression->cast.expr = *target;
@@ -275,7 +296,7 @@ static void init_function_declaration(FuncStmt* statement)
 
   if (checker.class)
   {
-    if (strcmp(name, "__init__") == 0 && statement->type.type != TOKEN_IDENTIFIER_VOID)
+    if (strcmp(name, "__init__") == 0 && statement->type.token.type != TOKEN_IDENTIFIER_VOID)
     {
       error_invalid_initializer_return_type(statement->name);
       return;
@@ -283,7 +304,7 @@ static void init_function_declaration(FuncStmt* statement)
 
     VarStmt* parameter = ALLOC(VarStmt);
     parameter->name = (Token){ .lexeme = "this" };
-    parameter->type = checker.class->name;
+    parameter->type = (DataTypeToken){ .token = checker.class->name, .count = 0 };
     parameter->initializer = NULL;
     parameter->index = 0;
     parameter->scope = SCOPE_LOCAL;
@@ -301,7 +322,7 @@ static void init_function_declaration(FuncStmt* statement)
     statement->parameters = parameters;
   }
 
-  statement->data_type = token_to_data_type(statement->type, true);
+  statement->data_type = data_type_token_to_data_type(statement->type, true);
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
@@ -333,7 +354,7 @@ static void init_class_declaration(ClassStmt* statement)
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
-  variable->type = statement->name;
+  variable->type = (DataTypeToken){ .token = statement->name, .count = 0 };
   variable->initializer = NULL;
   variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
@@ -379,7 +400,7 @@ static DataType check_cast_expression(CastExpr* expression)
       equal_data_type(expression->to_data_type, DATA_TYPE(TYPE_VOID)))
   {
     expression->from_data_type = check_expression(expression->expr);
-    expression->to_data_type = token_to_data_type(expression->type, false);
+    expression->to_data_type = data_type_token_to_data_type(expression->type, false);
 
     bool valid = false;
 
@@ -443,7 +464,7 @@ static DataType check_cast_expression(CastExpr* expression)
 
     if (!valid)
     {
-      error_invalid_type_conversion(expression->type);
+      error_invalid_type_conversion(expression->type.token);
     }
   }
 
@@ -698,7 +719,8 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type, false)))
+      if (!equal_data_type(check_expression(argument),
+                           data_type_token_to_data_type(parameter->type, false)))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -727,7 +749,8 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument), token_to_data_type(parameter->type, false)))
+      if (!equal_data_type(check_expression(argument),
+                           data_type_token_to_data_type(parameter->type, false)))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -782,7 +805,7 @@ static DataType check_call_expression(CallExpr* expression)
         VarStmt* parameter = function->parameters.elems[i];
 
         if (!equal_data_type(check_expression(argument),
-                             token_to_data_type(parameter->type, false)))
+                             data_type_token_to_data_type(parameter->type, false)))
         {
           error_type_mismatch(expression->callee_token);
         }
@@ -1057,11 +1080,11 @@ static void check_variable_declaration(VarStmt* statement)
     return;
   }
 
-  statement->data_type = token_to_data_type(statement->type, false);
+  statement->data_type = data_type_token_to_data_type(statement->type, false);
 
   if (equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)))
   {
-    error_type_cannot_be_void(statement->type, statement->type.lexeme);
+    error_type_cannot_be_void(statement->type.token, statement->type.token.lexeme);
     return;
   }
 
@@ -1116,7 +1139,7 @@ static void check_function_declaration(FuncStmt* statement)
 
     parameter->scope = SCOPE_LOCAL;
     parameter->index = index++;
-    parameter->data_type = token_to_data_type(parameter->type, false);
+    parameter->data_type = data_type_token_to_data_type(parameter->type, false);
 
     environment_set_variable(checker.environment, name, parameter);
   }
@@ -1151,7 +1174,7 @@ static void check_class_declaration(ClassStmt* statement)
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
 
-    function_statement->data_type = token_to_data_type(function_statement->type, false);
+    function_statement->data_type = data_type_token_to_data_type(function_statement->type, false);
     function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
   }
 

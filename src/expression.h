@@ -57,16 +57,28 @@ typedef struct _DATA_TYPE
   } type;
 
   union {
-    struct _DATA_TYPE* array;
     struct _CLASS_STMT* class;
     struct _FUNC_STMT* function;
+
     struct
     {
       struct _FUNC_STMT* function;
       struct _EXPR* this;
     } function_member;
+
+    struct
+    {
+      struct _DATA_TYPE* data_type;
+      int count;
+    } array;
   };
 } DataType;
+
+typedef struct
+{
+  Token token;
+  int count;
+} DataTypeToken;
 
 typedef struct
 {
@@ -136,7 +148,7 @@ typedef struct
 
 typedef struct
 {
-  Token type;
+  DataTypeToken type;
 
   DataType from_data_type;
   DataType to_data_type;

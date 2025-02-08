@@ -54,8 +54,8 @@ typedef struct _WHILE_STMT
 typedef struct _FUNC_STMT
 {
   DataType data_type;
+  DataTypeToken type;
 
-  Token type;
   Token name;
   Token import;
 
@@ -66,11 +66,12 @@ typedef struct _FUNC_STMT
 
 typedef struct _VAR_STMT
 {
+  DataType data_type;
+  DataTypeToken type;
+
   int index;
   Scope scope;
-  DataType data_type;
 
-  Token type;
   Token name;
   Expr* initializer;
 } VarStmt;

@@ -12,11 +12,13 @@
 
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenPackedType, BinaryenPackedType);
+array_def(BinaryenHeapType, BinaryenHeapType);
 array_def(BinaryenType, BinaryenType);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
 static BinaryenExpressionRef generate_statement(Stmt* statement);
 static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
+static BinaryenType data_type_to_binaryen_type(DataType data_type);
 
 static struct
 {
@@ -31,31 +33,6 @@ static struct
   int strings;
   int loops;
 } codegen;
-
-static BinaryenType data_type_to_binaryen_type(DataType data_type)
-{
-  switch (data_type.type)
-  {
-  case TYPE_VOID:
-  case TYPE_FUNCTION:
-  case TYPE_FUNCTION_MEMBER:
-  case TYPE_PROTOTYPE:
-    return BinaryenTypeNone();
-  case TYPE_BOOL:
-  case TYPE_CHAR:
-  case TYPE_INTEGER:
-    return BinaryenTypeInt32();
-  case TYPE_FLOAT:
-    return BinaryenTypeFloat32();
-  case TYPE_STRING:
-    return codegen.string_type;
-  case TYPE_OBJECT:
-    return data_type.class->ref;
-
-  default:
-    UNREACHABLE("Unhandled data type");
-  }
-}
 
 static void generate_string_export_functions(void)
 {
@@ -605,6 +582,68 @@ static void generate_string_at_function(void)
                       sizeof(vars_list) / sizeof_ptr(vars_list), body);
 }
 
+static BinaryenHeapType generate_array_binaryen_type(DataType data_type)
+{
+  int count = data_type.array.count;
+
+  TypeBuilderRef type_builder = TypeBuilderCreate(count * 2);
+  BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
+  bool mutable = true;
+
+  BinaryenType temporary_type = data_type_to_binaryen_type(*data_type.array.data_type);
+  BinaryenHeapType temporary_heap_type;
+
+  for (int i = 0; i < count * 2; i += 2)
+  {
+    TypeBuilderSetArrayType(type_builder, i, temporary_type, packed_type, mutable);
+
+    temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, i);
+    temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, true);
+
+    BinaryenType field_types[] = { temporary_type, BinaryenTypeInt32() };
+    BinaryenPackedType field_packed_types[] = { BinaryenPackedTypeNotPacked(),
+                                                BinaryenPackedTypeNotPacked() };
+    bool field_mutables[] = { true, true };
+
+    TypeBuilderSetStructType(type_builder, i + 1, field_types, field_packed_types, field_mutables,
+                             sizeof(field_types) / sizeof_ptr(field_types));
+
+    temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, i + 1);
+    temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, false);
+  }
+
+  BinaryenHeapType heap_types[count * 2];
+  TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
+
+  return heap_types[count * 2 - 1];
+}
+
+static BinaryenType data_type_to_binaryen_type(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_VOID:
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_PROTOTYPE:
+    return BinaryenTypeNone();
+  case TYPE_BOOL:
+  case TYPE_CHAR:
+  case TYPE_INTEGER:
+    return BinaryenTypeInt32();
+  case TYPE_FLOAT:
+    return BinaryenTypeFloat32();
+  case TYPE_STRING:
+    return codegen.string_type;
+  case TYPE_OBJECT:
+    return data_type.class->ref;
+  case TYPE_ARRAY:
+    return BinaryenTypeFromHeapType(generate_array_binaryen_type(data_type), false);
+  default:
+    UNREACHABLE("Unhandled data type");
+  }
+}
+
 static BinaryenExpressionRef generate_default_initialization(DataType data_type)
 {
   switch (data_type.type)
@@ -619,6 +658,8 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     return BinaryenRefNull(codegen.module, data_type.class->ref);
   case TYPE_STRING:
     return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, NULL, 0);
+  case TYPE_ARRAY:
+    return BinaryenStructNew(codegen.module, NULL, 0, generate_array_binaryen_type(data_type));
   default:
     UNREACHABLE("Unexpected default initializer");
   }

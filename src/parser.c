@@ -36,9 +36,9 @@ static Token peek(void)
   return array_at(&parser.tokens, parser.current);
 }
 
-static Token peek_next(void)
+static Token peek_offset(int offset)
 {
-  return array_at(&parser.tokens, parser.current + 1);
+  return array_at(&parser.tokens, parser.current + offset);
 }
 
 static Token previous(void)
@@ -85,9 +85,9 @@ static Token consume(TokenType type, const char* message)
   return advance();
 }
 
-static bool is_data_type(TokenType type)
+static bool is_data_type(int* offset, int* count)
 {
-  switch (type)
+  switch (peek().type)
   {
   case TOKEN_IDENTIFIER:
   case TOKEN_IDENTIFIER_VOID:
@@ -96,34 +96,72 @@ static bool is_data_type(TokenType type)
   case TOKEN_IDENTIFIER_FLOAT:
   case TOKEN_IDENTIFIER_BOOL:
   case TOKEN_IDENTIFIER_STRING:
-    return true;
-
+    break;
   default:
     return false;
   }
+
+  *offset = 1;
+  *count = 0;
+
+  while (peek_offset(*offset).type == TOKEN_LEFT_BRACKET)
+  {
+    if (peek_offset(*offset + 1).type != TOKEN_RIGHT_BRACKET)
+    {
+      return false;
+    }
+
+    *offset += 2;
+    *count += 1;
+  }
+
+  return true;
 }
 
 static bool is_data_type_and_identifier(void)
 {
-  return is_data_type(peek().type) && peek_next().type == TOKEN_IDENTIFIER;
+  int offset;
+  int count;
+
+  return is_data_type(&offset, &count) && peek_offset(offset).type == TOKEN_IDENTIFIER;
 }
 
-static Token consume_data_type(const char* message)
+static bool is_data_type_and_right_paren(void)
 {
-  if (!is_data_type(peek().type))
+  int offset;
+  int count;
+
+  return is_data_type(&offset, &count) && peek_offset(offset).type == TOKEN_RIGHT_PAREN;
+}
+
+static DataTypeToken consume_data_type(const char* message)
+{
+  int offset;
+  int count;
+
+  if (!is_data_type(&offset, &count))
   {
     parser_error(peek(), message);
   }
 
-  return advance();
+  DataTypeToken token = { .token = peek(), .count = count };
+  parser.current += offset;
+
+  return token;
 }
 
 static void synchronize(void)
 {
-  advance();
-
   while (!eof())
   {
+    if (match(TOKEN_INDENT))
+    {
+      while (!eof() && peek().type != TOKEN_DEDENT)
+        advance();
+
+      match(TOKEN_DEDENT);
+    }
+
     if (previous().type == TOKEN_NEWLINE)
       return;
 
@@ -139,7 +177,6 @@ static void synchronize(void)
       return;
     default:
       advance();
-      break;
     }
   }
 }
@@ -214,10 +251,10 @@ static Expr* primary(void)
   case TOKEN_LEFT_PAREN:
     advance();
 
-    if (is_data_type(peek().type) && peek_next().type == TOKEN_RIGHT_PAREN)
+    if (is_data_type_and_right_paren())
     {
-      Token type = advance();
-      advance();
+      DataTypeToken type = consume_data_type("Expected a type.");
+      consume(TOKEN_RIGHT_PAREN, "Expected a ')' after type.");
 
       expr->type = EXPR_CAST;
       expr->cast.expr = prefix_unary();
@@ -482,13 +519,13 @@ static Expr* expression(void)
   return assignment();
 }
 
-static Stmt* function_declaration_statement(Token type, Token name, Token import)
+static Stmt* function_declaration_statement(DataTypeToken type, Token name)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_FUNCTION_DECL;
+  stmt->func.import = TOKEN_EMPTY();
   stmt->func.type = type;
   stmt->func.name = name;
-  stmt->func.import = import;
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);
@@ -500,7 +537,7 @@ static Stmt* function_declaration_statement(Token type, Token name, Token import
   {
     do
     {
-      Token type = consume_data_type("Expected a type after '('");
+      DataTypeToken type = consume_data_type("Expected a type after '('");
       Token name = consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
 
       Stmt* parameter = STMT();
@@ -523,7 +560,7 @@ static Stmt* function_declaration_statement(Token type, Token name, Token import
   return stmt;
 }
 
-static Stmt* variable_declaration_statement(Token type, Token name, bool newline)
+static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool newline)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_VARIABLE_DECL;
@@ -558,30 +595,25 @@ static Stmt* class_declaration_statement(void)
 
   if (check(TOKEN_INDENT))
   {
-    consume(TOKEN_INDENT, "Expected an indent.");
+    Stmt* body_statement;
+    ArrayStmt body_statements = statements();
 
-    while (!eof() && !check(TOKEN_DEDENT))
+    array_foreach(&body_statements, body_statement)
     {
-      if (is_data_type_and_identifier())
+      if (body_statement->type == STMT_FUNCTION_DECL)
       {
-        Token type = consume_data_type("Expected a type.");
-        Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
-        Token token = peek();
-
-        if (token.type == TOKEN_LEFT_PAREN)
-          array_add(&stmt->class.functions,
-                    &function_declaration_statement(type, name, TOKEN_EMPTY())->func);
-        else
-          array_add(&stmt->class.variables, &variable_declaration_statement(type, name, true)->var);
+        array_add(&stmt->class.functions, &body_statement->func);
+      }
+      else if (body_statement->type == STMT_VARIABLE_DECL)
+      {
+        array_add(&stmt->class.variables, &body_statement->var);
       }
       else
       {
-        parser_error(advance(),
-                     "Only function and variable declarations can appear inside classes.");
+        parser_error(stmt->class.keyword,
+                     "Only functions and variables can appear inside 'class' declarations.");
       }
     }
-
-    consume(TOKEN_DEDENT, "Expected a dedent.");
   }
 
   return stmt;
@@ -597,17 +629,24 @@ static Stmt* import_declaration_statement(void)
   Token import = consume(TOKEN_STRING, "Expected a string after import keyword.");
   consume(TOKEN_NEWLINE, "Expected a newline.");
 
-  if (match(TOKEN_INDENT))
+  if (check(TOKEN_INDENT))
   {
-    while (!eof() && !check(TOKEN_DEDENT))
+    Stmt* body_statement;
+    ArrayStmt body_statements = statements();
+
+    array_foreach(&body_statements, body_statement)
     {
-      Token type = consume_data_type("Expected a type.");
-      Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
-
-      array_add(&stmt->import.body, function_declaration_statement(type, name, import));
+      if (body_statement->type == STMT_FUNCTION_DECL)
+      {
+        body_statement->func.import = import;
+        array_add(&stmt->import.body, body_statement);
+      }
+      else
+      {
+        parser_error(stmt->import.keyword,
+                     "Only function signatures can appear inside 'import' declarations.");
+      }
     }
-
-    consume(TOKEN_DEDENT, "Expected a dedent.");
   }
 
   return stmt;
@@ -736,7 +775,7 @@ static Stmt* for_statement(void)
   {
     if (is_data_type_and_identifier())
     {
-      Token type = consume_data_type("Expected a type.");
+      DataTypeToken type = consume_data_type("Expected a type.");
       Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
       stmt->loop.initializer = variable_declaration_statement(type, name, false);
@@ -787,7 +826,7 @@ static Stmt* statement(void)
 {
   if (is_data_type_and_identifier())
   {
-    Token type = consume_data_type("Expected a type.");
+    DataTypeToken type = consume_data_type("Expected a type.");
     Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
     Token token = peek();
@@ -795,7 +834,7 @@ static Stmt* statement(void)
     switch (token.type)
     {
     case TOKEN_LEFT_PAREN:
-      return function_declaration_statement(type, name, TOKEN_EMPTY());
+      return function_declaration_statement(type, name);
     default:
       return variable_declaration_statement(type, name, true);
     }

@@ -31,6 +31,7 @@
 typedef struct _EXPR Expr;
 typedef struct _VAR_STMT VarStmt;
 array_def(Expr*, Expr);
+array_def(struct _DATA_TYPE, DataType);
 
 typedef enum _SCOPE
 {
@@ -41,7 +42,7 @@ typedef enum _SCOPE
 
 typedef struct _DATA_TYPE
 {
-  enum
+  enum _DATA_TYPE_ENUM
   {
     TYPE_VOID,
     TYPE_BOOL,
@@ -51,6 +52,7 @@ typedef struct _DATA_TYPE
     TYPE_STRING,
     TYPE_FUNCTION,
     TYPE_FUNCTION_MEMBER,
+    TYPE_FUNCTION_INTERNAL,
     TYPE_PROTOTYPE,
     TYPE_OBJECT,
     TYPE_ARRAY,
@@ -65,6 +67,15 @@ typedef struct _DATA_TYPE
       struct _FUNC_STMT* function;
       struct _EXPR* this;
     } function_member;
+
+    struct
+    {
+      const char* name;
+      struct _EXPR* this;
+
+      enum _DATA_TYPE_ENUM return_type;
+      ArrayDataType parameter_types;
+    } function_internal;
 
     struct
     {
@@ -170,7 +181,8 @@ typedef struct
 
 typedef struct
 {
-  DataType data_type;
+  DataType element_data_type;
+  DataType expr_data_type;
 
   Expr* expr;
   Token expr_token;

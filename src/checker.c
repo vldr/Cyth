@@ -83,9 +83,9 @@ static void error_not_an_object(Token token)
   checker_error(token, "The expression is not an object.");
 }
 
-static void error_not_a_string(Token token)
+static void error_not_indexable(Token token)
 {
-  checker_error(token, "The expression is not a string.");
+  checker_error(token, "The expression cannot be indexed.");
 }
 
 static void error_index_not_an_int(Token token)
@@ -231,6 +231,25 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
   else
   {
     return token_to_data_type(type.token, ignore_undeclared);
+  }
+}
+
+static DataType array_data_type_to_element_data_type(DataType array_data_type)
+{
+  assert(array_data_type.type == TYPE_ARRAY);
+  assert(array_data_type.array.count >= 1);
+
+  if (array_data_type.array.count == 1)
+  {
+    return *array_data_type.array.data_type;
+  }
+  else
+  {
+    DataType element_data_type = DATA_TYPE(TYPE_ARRAY);
+    element_data_type.array.data_type = array_data_type.array.data_type;
+    element_data_type.array.count = array_data_type.array.count - 1;
+
+    return element_data_type;
   }
 }
 
@@ -762,6 +781,50 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
+  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_INTERNAL)))
+  {
+    if (callee_data_type.function_internal.this)
+    {
+      ArrayExpr arguments;
+      Expr* argument = callee_data_type.function_member.this;
+
+      array_init(&arguments);
+      array_add(&arguments, argument);
+      array_foreach(&expression->arguments, argument)
+      {
+        array_add(&arguments, argument);
+      }
+
+      expression->arguments = arguments;
+    }
+
+    int number_of_arguments = array_size(&expression->arguments);
+    int expected_number_of_arguments =
+      array_size(&callee_data_type.function_internal.parameter_types);
+
+    if (number_of_arguments != expected_number_of_arguments)
+    {
+      error_invalid_arity(expression->callee_token, expected_number_of_arguments,
+                          number_of_arguments);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    for (int i = 0; i < number_of_arguments; i++)
+    {
+      Expr* argument = expression->arguments.elems[i];
+      DataType parameter = callee_data_type.function_internal.parameter_types.elems[i];
+
+      if (!equal_data_type(check_expression(argument), parameter))
+      {
+        error_type_mismatch(expression->callee_token);
+      }
+    }
+
+    expression->return_data_type = DATA_TYPE(callee_data_type.function_internal.return_type);
+    expression->callee_data_type = callee_data_type;
+
+    return expression->return_data_type;
+  }
   else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE)))
   {
     ClassStmt* class = callee_data_type.class;
@@ -862,8 +925,39 @@ static DataType check_access_expression(AccessExpr* expression)
 
     return expression->data_type;
   }
-  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)) ||
-           equal_data_type(data_type, DATA_TYPE(TYPE_ARRAY)))
+  else if (equal_data_type(data_type, DATA_TYPE(TYPE_ARRAY)))
+  {
+    const char* name = expression->name.lexeme;
+    if (strcmp("length", name) == 0 || strcmp("capacity", name) == 0)
+    {
+      expression->data_type = DATA_TYPE(TYPE_INTEGER);
+      expression->expr_data_type = data_type;
+      expression->variable = NULL;
+
+      return expression->data_type;
+    }
+    else if (strcmp("push", name) == 0)
+    {
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = "array.push";
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = TYPE_VOID;
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+      array_add(&expression->data_type.function_internal.parameter_types,
+                array_data_type_to_element_data_type(data_type));
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
+
+    error_cannot_find_member_name(expression->name, name, "array");
+    return DATA_TYPE(TYPE_VOID);
+  }
+  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
   {
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0)
@@ -875,8 +969,7 @@ static DataType check_access_expression(AccessExpr* expression)
       return expression->data_type;
     }
 
-    error_cannot_find_member_name(expression->name, name,
-                                  data_type.type == TYPE_STRING ? "string" : "array");
+    error_cannot_find_member_name(expression->name, name, "string");
     return DATA_TYPE(TYPE_VOID);
   }
   else
@@ -896,14 +989,23 @@ static DataType check_index_expression(IndexExpr* expression)
   }
 
   DataType expr_data_type = check_expression(expression->expr);
-  if (!equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
+  if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
   {
-    error_not_a_string(expression->expr_token);
-    return DATA_TYPE(TYPE_VOID);
+    expression->expr_data_type = expr_data_type;
+    expression->element_data_type = DATA_TYPE(TYPE_CHAR);
+
+    return expression->element_data_type;
+  }
+  else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_ARRAY)))
+  {
+    expression->expr_data_type = expr_data_type;
+    expression->element_data_type = array_data_type_to_element_data_type(expr_data_type);
+
+    return expression->element_data_type;
   }
 
-  expression->data_type = DATA_TYPE(TYPE_CHAR);
-  return expression->data_type;
+  error_not_indexable(expression->expr_token);
+  return DATA_TYPE(TYPE_VOID);
 }
 
 static DataType check_expression(Expr* expression)

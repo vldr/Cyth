@@ -747,6 +747,66 @@ static const char* generate_array_push_function(DataType callee_data_type)
 #undef CONSTANT
 }
 
+static const char* generate_array_pop_function(DataType callee_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
+#define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
+#define CAPACITY() (BinaryenArrayLen(codegen.module, ARRAY()))
+#define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  DataType element_data_type = array_at(&callee_data_type.function_internal.parameter_types, 0);
+  if (element_data_type.array.count == 1)
+    element_data_type = *element_data_type.array.data_type;
+  else
+    element_data_type.array.count--;
+
+  BinaryenType this_type =
+    data_type_to_binaryen_type(array_at(&callee_data_type.function_internal.parameter_types, 0));
+  BinaryenType element_type = data_type_to_binaryen_type(element_data_type);
+
+  const char* name = memory_sprintf("array.pop.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenLeSInt32(), SIZE(), CONSTANT(0)),
+                 BinaryenUnreachable(codegen.module), NULL),
+
+      BinaryenStructSet(codegen.module, 1, THIS(),
+                        BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), CONSTANT(1))),
+
+      BinaryenReturn(codegen.module,
+                     BinaryenArrayGet(codegen.module, ARRAY(), SIZE(), BinaryenTypeAuto(), false))
+
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    BinaryenType params_list[] = { this_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { element_type };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef VALUE
+#undef ARRAY
+#undef CAPACITY
+#undef SIZE
+#undef CONSTANT
+}
+
 static BinaryenExpressionRef generate_group_expression(GroupExpr* expression)
 {
   return generate_expression(expression->expr);
@@ -1108,40 +1168,73 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 {
   BinaryenExpressionRef value = generate_expression(expression->value);
   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+
   VarStmt* variable = expression->variable;
-
-  switch (variable->scope)
+  if (variable)
   {
-  case SCOPE_LOCAL:
-    return BinaryenLocalTee(codegen.module, variable->index, value, type);
+    switch (variable->scope)
+    {
+    case SCOPE_LOCAL:
+      return BinaryenLocalTee(codegen.module, variable->index, value, type);
 
-  case SCOPE_GLOBAL: {
-    BinaryenExpressionRef list[] = {
-      BinaryenGlobalSet(codegen.module, variable->name.lexeme, value),
-      BinaryenGlobalGet(codegen.module, variable->name.lexeme, type),
-    };
+    case SCOPE_GLOBAL: {
+      BinaryenExpressionRef list[] = {
+        BinaryenGlobalSet(codegen.module, variable->name.lexeme, value),
+        BinaryenGlobalGet(codegen.module, variable->name.lexeme, type),
+      };
 
-    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
+      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
+    }
+
+    case SCOPE_CLASS: {
+      BinaryenExpressionRef ref;
+      if (expression->target->type == EXPR_ACCESS)
+        ref = generate_expression(expression->target->access.expr);
+      else
+        ref = BinaryenLocalGet(codegen.module, 0, codegen.class);
+
+      BinaryenExpressionRef list[] = {
+        BinaryenStructSet(codegen.module, variable->index, ref, value),
+        BinaryenStructGet(codegen.module, variable->index,
+                          BinaryenExpressionCopy(ref, codegen.module), codegen.class, false),
+      };
+
+      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
+    }
+
+    default:
+      UNREACHABLE("Unhandled scope type");
+    }
   }
+  else
+  {
+    if (expression->target->type == EXPR_INDEX)
+    {
+      BinaryenExpressionRef ref = generate_expression(expression->target->index.expr);
+      BinaryenExpressionRef index = generate_expression(expression->target->index.index);
 
-  case SCOPE_CLASS: {
-    BinaryenExpressionRef ref;
-    if (expression->target->type == EXPR_ACCESS)
-      ref = generate_expression(expression->target->access.expr);
-    else
-      ref = BinaryenLocalGet(codegen.module, 0, codegen.class);
+      BinaryenExpressionRef array =
+        BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
+      BinaryenExpressionRef length = BinaryenStructGet(
+        codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
-    BinaryenExpressionRef list[] = {
-      BinaryenStructSet(codegen.module, variable->index, ref, value),
-      BinaryenStructGet(codegen.module, variable->index,
-                        BinaryenExpressionCopy(ref, codegen.module), codegen.class, false),
-    };
+      BinaryenExpressionRef check = BinaryenIf(
+        codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
+        BinaryenUnreachable(codegen.module), NULL);
 
-    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
-  }
+      BinaryenExpressionRef list[] = {
+        check,
+        BinaryenArraySet(codegen.module, array, BinaryenExpressionCopy(index, codegen.module),
+                         value),
+        BinaryenArrayGet(codegen.module, BinaryenExpressionCopy(array, codegen.module),
+                         BinaryenExpressionCopy(index, codegen.module), BinaryenTypeAuto(), false),
+      };
 
-  default:
-    UNREACHABLE("Unhandled scope type");
+      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
+                           BinaryenTypeAuto());
+    }
+
+    UNREACHABLE("Unhandled expression type");
   }
 }
 
@@ -1166,6 +1259,8 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 
     if (strcmp(name, "array.push") == 0)
       name = generate_array_push_function(callee_data_type);
+    else if (strcmp(name, "array.pop") == 0)
+      name = generate_array_pop_function(callee_data_type);
     else
       UNREACHABLE("Unhandled function internal");
 
@@ -1226,24 +1321,34 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
 {
   BinaryenExpressionRef ref = generate_expression(expression->expr);
   BinaryenExpressionRef index = generate_expression(expression->index);
+  BinaryenType type = data_type_to_binaryen_type(expression->data_type);
 
   switch (expression->expr_data_type.type)
   {
   case TYPE_STRING: {
     BinaryenExpressionRef operands[] = { ref, index };
     return BinaryenCall(codegen.module, "string.at", operands,
-                        sizeof(operands) / sizeof_ptr(operands), BinaryenTypeInt32());
+                        sizeof(operands) / sizeof_ptr(operands), type);
   }
-  case TYPE_ARRAY:
-    return BinaryenArrayGet(
-      codegen.module, BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false),
-      BinaryenIf(
-        codegen.module,
-        BinaryenBinary(codegen.module, BinaryenLtSInt32(), index,
-                       BinaryenStructGet(codegen.module, 1, ref, BinaryenTypeInt32(), false)),
-        index, BinaryenConst(codegen.module, BinaryenLiteralInt32(-1))),
-      BinaryenTypeAuto(), false);
+  case TYPE_ARRAY: {
+    BinaryenExpressionRef array =
+      BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
+    BinaryenExpressionRef length = BinaryenStructGet(
+      codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
+    BinaryenExpressionRef check =
+      BinaryenIf(codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
+                 BinaryenUnreachable(codegen.module), NULL);
+
+    BinaryenExpressionRef list[] = {
+      check,
+      BinaryenArrayGet(codegen.module, array, BinaryenExpressionCopy(index, codegen.module),
+                       BinaryenTypeAuto(), false),
+    };
+
+    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
+                         BinaryenTypeAuto());
+  }
   default:
     UNREACHABLE("Unhandled index type");
   }

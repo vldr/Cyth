@@ -685,6 +685,13 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
     return expression->data_type;
   }
+  else if (target->type == EXPR_INDEX)
+  {
+    expression->variable = NULL;
+    expression->data_type = value_data_type;
+
+    return expression->data_type;
+  }
 
   error_not_assignable(expression->op);
   return DATA_TYPE(TYPE_VOID);
@@ -820,7 +827,7 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
-    expression->return_data_type = DATA_TYPE(callee_data_type.function_internal.return_type);
+    expression->return_data_type = *callee_data_type.function_internal.return_type;
     expression->callee_data_type = callee_data_type;
 
     return expression->return_data_type;
@@ -941,12 +948,30 @@ static DataType check_access_expression(AccessExpr* expression)
       expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
       expression->data_type.function_internal.name = "array.push";
       expression->data_type.function_internal.this = expression->expr;
-      expression->data_type.function_internal.return_type = TYPE_VOID;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      expression->data_type.function_internal.return_type->type = TYPE_VOID;
 
       array_init(&expression->data_type.function_internal.parameter_types);
       array_add(&expression->data_type.function_internal.parameter_types, data_type);
       array_add(&expression->data_type.function_internal.parameter_types,
                 array_data_type_to_element_data_type(data_type));
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
+    else if (strcmp("pop", name) == 0)
+    {
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = "array.pop";
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      *expression->data_type.function_internal.return_type =
+        array_data_type_to_element_data_type(data_type);
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
 
       expression->variable = NULL;
       expression->expr_data_type = data_type;
@@ -991,17 +1016,17 @@ static DataType check_index_expression(IndexExpr* expression)
   DataType expr_data_type = check_expression(expression->expr);
   if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
   {
+    expression->data_type = DATA_TYPE(TYPE_CHAR);
     expression->expr_data_type = expr_data_type;
-    expression->element_data_type = DATA_TYPE(TYPE_CHAR);
 
-    return expression->element_data_type;
+    return expression->data_type;
   }
   else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_ARRAY)))
   {
+    expression->data_type = array_data_type_to_element_data_type(expr_data_type);
     expression->expr_data_type = expr_data_type;
-    expression->element_data_type = array_data_type_to_element_data_type(expr_data_type);
 
-    return expression->element_data_type;
+    return expression->data_type;
   }
 
   error_not_indexable(expression->expr_token);

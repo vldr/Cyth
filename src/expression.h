@@ -42,7 +42,7 @@ typedef enum _SCOPE
 
 typedef struct _DATA_TYPE
 {
-  enum _DATA_TYPE_ENUM
+  enum
   {
     TYPE_VOID,
     TYPE_BOOL,
@@ -73,7 +73,7 @@ typedef struct _DATA_TYPE
       const char* name;
       struct _EXPR* this;
 
-      enum _DATA_TYPE_ENUM return_type;
+      struct _DATA_TYPE* return_type;
       ArrayDataType parameter_types;
     } function_internal;
 
@@ -181,7 +181,7 @@ typedef struct
 
 typedef struct
 {
-  DataType element_data_type;
+  DataType data_type;
   DataType expr_data_type;
 
   Expr* expr;

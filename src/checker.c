@@ -171,6 +171,33 @@ bool equal_data_type(DataType left, DataType right)
   return left.type == right.type;
 }
 
+unsigned int array_data_type_hash(DataType array_data_type)
+{
+  assert(array_data_type.type == TYPE_ARRAY);
+  assert(array_data_type.array.count >= 1);
+
+  return (array_data_type.array.data_type->type << 16) | array_data_type.array.count;
+}
+
+DataType array_data_type_element(DataType array_data_type)
+{
+  assert(array_data_type.type == TYPE_ARRAY);
+  assert(array_data_type.array.count >= 1);
+
+  if (array_data_type.array.count == 1)
+  {
+    return *array_data_type.array.data_type;
+  }
+  else
+  {
+    DataType element_data_type = DATA_TYPE(TYPE_ARRAY);
+    element_data_type.array.data_type = array_data_type.array.data_type;
+    element_data_type.array.count = array_data_type.array.count - 1;
+
+    return element_data_type;
+  }
+}
+
 static DataType token_to_data_type(Token token, bool ignore_undeclared)
 {
   switch (token.type)
@@ -231,25 +258,6 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
   else
   {
     return token_to_data_type(type.token, ignore_undeclared);
-  }
-}
-
-static DataType array_data_type_to_element_data_type(DataType array_data_type)
-{
-  assert(array_data_type.type == TYPE_ARRAY);
-  assert(array_data_type.array.count >= 1);
-
-  if (array_data_type.array.count == 1)
-  {
-    return *array_data_type.array.data_type;
-  }
-  else
-  {
-    DataType element_data_type = DATA_TYPE(TYPE_ARRAY);
-    element_data_type.array.data_type = array_data_type.array.data_type;
-    element_data_type.array.count = array_data_type.array.count - 1;
-
-    return element_data_type;
   }
 }
 
@@ -954,7 +962,7 @@ static DataType check_access_expression(AccessExpr* expression)
       array_init(&expression->data_type.function_internal.parameter_types);
       array_add(&expression->data_type.function_internal.parameter_types, data_type);
       array_add(&expression->data_type.function_internal.parameter_types,
-                array_data_type_to_element_data_type(data_type));
+                array_data_type_element(data_type));
 
       expression->variable = NULL;
       expression->expr_data_type = data_type;
@@ -967,8 +975,7 @@ static DataType check_access_expression(AccessExpr* expression)
       expression->data_type.function_internal.name = "array.pop";
       expression->data_type.function_internal.this = expression->expr;
       expression->data_type.function_internal.return_type = ALLOC(DataType);
-      *expression->data_type.function_internal.return_type =
-        array_data_type_to_element_data_type(data_type);
+      *expression->data_type.function_internal.return_type = array_data_type_element(data_type);
 
       array_init(&expression->data_type.function_internal.parameter_types);
       array_add(&expression->data_type.function_internal.parameter_types, data_type);
@@ -1023,7 +1030,7 @@ static DataType check_index_expression(IndexExpr* expression)
   }
   else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_ARRAY)))
   {
-    expression->data_type = array_data_type_to_element_data_type(expr_data_type);
+    expression->data_type = array_data_type_element(expr_data_type);
     expression->expr_data_type = expr_data_type;
 
     return expression->data_type;

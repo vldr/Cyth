@@ -77,6 +77,7 @@ map_dec_scalar(32, 32, uint32_t, uint32_t)
 map_dec_scalar(64, 64, uint64_t, uint64_t)
 map_dec_scalar(64v, 64v, uint64_t, void *)
 map_dec_scalar(64s, 64s, uint64_t, const char *)
+map_dec_scalar(BinaryenHeapType, binaryen_heap_type, unsigned int, uintptr_t)
 
 map_dec_strkey(Str, str, const char *, const char *)
 map_dec_strkey(Sv, sv, const char *, void *)

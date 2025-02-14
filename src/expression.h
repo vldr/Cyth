@@ -80,7 +80,7 @@ typedef struct _DATA_TYPE
     struct
     {
       struct _DATA_TYPE* data_type;
-      int count;
+      unsigned char count;
     } array;
   };
 } DataType;

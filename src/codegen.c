@@ -11,15 +11,26 @@
 #include <binaryen-c.h>
 #include <math.h>
 
+typedef struct
+{
+  unsigned int hash;
+  unsigned int index;
+} HashIndex;
+
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenPackedType, BinaryenPackedType);
 array_def(BinaryenHeapType, BinaryenHeapType);
 array_def(BinaryenType, BinaryenType);
+array_def(HashIndex, HashIndex);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
 static BinaryenExpressionRef generate_statement(Stmt* statement);
 static BinaryenExpressionRef generate_statements(ArrayStmt* statements);
+
 static BinaryenType data_type_to_binaryen_type(DataType data_type);
+static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_builder_ref,
+                                                         ArrayHashIndex* hash_indices,
+                                                         DataType data_type);
 
 static struct
 {
@@ -27,7 +38,7 @@ static struct
   BinaryenType class;
   ArrayStmt statements;
 
-  MapBinaryenHeapType array_heap_types;
+  MapBinaryenHeapType heap_types;
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
   MapSInt string_constants;
@@ -584,26 +595,40 @@ static void generate_string_at_function(void)
                       sizeof(vars_list) / sizeof_ptr(vars_list), body);
 }
 
-static BinaryenHeapType generate_array_heap_binaryen_type(DataType data_type)
+static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_builder_ref,
+                                                          ArrayHashIndex* hash_indices,
+                                                          DataType data_type)
 {
-  assert(data_type.type == TYPE_ARRAY);
-  assert(data_type.array.count >= 1);
-
   unsigned int hash = array_data_type_hash(data_type);
-  BinaryenHeapType array_binaryen_type =
-    map_get_binaryen_heap_type(&codegen.array_heap_types, hash);
+  BinaryenHeapType array_binaryen_type = map_get_binaryen_heap_type(&codegen.heap_types, hash);
 
   if (!array_binaryen_type)
   {
-    BinaryenType element_data_type = data_type_to_binaryen_type(array_data_type_element(data_type));
+    BinaryenType element_data_type;
+    TypeBuilderRef type_builder;
+    int offset;
 
-    TypeBuilderRef type_builder = TypeBuilderCreate(2);
+    if (type_builder_ref)
+    {
+      type_builder = type_builder_ref;
+      element_data_type = data_type_to_temporary_binaryen_type(type_builder_ref, hash_indices,
+                                                               array_data_type_element(data_type));
+      offset = TypeBuilderGetSize(type_builder);
+
+      TypeBuilderGrow(type_builder, 2);
+    }
+    else
+    {
+      type_builder = TypeBuilderCreate(2);
+      element_data_type = data_type_to_binaryen_type(array_data_type_element(data_type));
+      offset = 0;
+    }
+
     BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
     bool mutable = true;
 
-    TypeBuilderSetArrayType(type_builder, 0, element_data_type, packed_type, mutable);
-
-    BinaryenHeapType temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, 0);
+    TypeBuilderSetArrayType(type_builder, offset, element_data_type, packed_type, mutable);
+    BinaryenHeapType temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, offset);
     BinaryenType temporary_type =
       TypeBuilderGetTempRefType(type_builder, temporary_heap_type, true);
 
@@ -612,14 +637,24 @@ static BinaryenHeapType generate_array_heap_binaryen_type(DataType data_type)
                                                 BinaryenPackedTypeNotPacked() };
     bool field_mutables[] = { true, true };
 
-    TypeBuilderSetStructType(type_builder, 1, field_types, field_packed_types, field_mutables,
-                             sizeof(field_types) / sizeof_ptr(field_types));
+    TypeBuilderSetStructType(type_builder, offset + 1, field_types, field_packed_types,
+                             field_mutables, sizeof(field_types) / sizeof_ptr(field_types));
 
-    BinaryenHeapType heap_types[2];
-    TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
+    if (type_builder_ref)
+    {
+      array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
 
-    array_binaryen_type = heap_types[1];
-    map_put_binaryen_heap_type(&codegen.array_heap_types, hash, array_binaryen_type);
+      HashIndex hash_index = { .hash = hash, .index = offset + 1 };
+      array_add(hash_indices, hash_index);
+    }
+    else
+    {
+      BinaryenHeapType heap_types[2];
+      TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
+
+      array_binaryen_type = heap_types[1];
+      map_put_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
+    }
   }
 
   return array_binaryen_type;
@@ -645,9 +680,24 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_OBJECT:
     return data_type.class->ref;
   case TYPE_ARRAY:
-    return BinaryenTypeFromHeapType(generate_array_heap_binaryen_type(data_type), true);
+    return BinaryenTypeFromHeapType(generate_array_heap_binaryen_type(NULL, NULL, data_type), true);
   default:
     UNREACHABLE("Unhandled data type");
+  }
+}
+
+static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_builder_ref,
+                                                         ArrayHashIndex* hash_indices,
+                                                         DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_ARRAY:
+    return TypeBuilderGetTempRefType(
+      type_builder_ref,
+      generate_array_heap_binaryen_type(type_builder_ref, hash_indices, data_type), true);
+  default:
+    return data_type_to_binaryen_type(data_type);
   }
 }
 
@@ -666,7 +716,8 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_STRING:
     return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, NULL, 0);
   case TYPE_ARRAY:
-    return BinaryenStructNew(codegen.module, NULL, 0, generate_array_heap_binaryen_type(data_type));
+    return BinaryenStructNew(codegen.module, NULL, 0,
+                             generate_array_heap_binaryen_type(NULL, NULL, data_type));
   default:
     UNREACHABLE("Unexpected default initializer");
   }
@@ -1568,15 +1619,26 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   ArrayBinaryenType types;
   ArrayBinaryenPackedType packed_types;
   ArrayBool mutables;
+  ArrayHashIndex hash_indices;
+  bool recursive = false;
 
   array_init(&types);
   array_init(&packed_types);
   array_init(&mutables);
+  array_init(&hash_indices);
 
   VarStmt* variable;
   array_foreach(&statement->variables, variable)
   {
-    BinaryenType type = data_type_to_binaryen_type(variable->data_type);
+    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_ARRAY)) &&
+        data_type_to_binaryen_type(*variable->data_type.array.data_type) == temporary_type)
+    {
+      recursive = true;
+    }
+
+    BinaryenType type =
+      data_type_to_temporary_binaryen_type(type_builder, &hash_indices, variable->data_type);
+
     BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
     bool mutable = true;
 
@@ -1588,9 +1650,23 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   TypeBuilderSetStructType(type_builder, 0, types.elems, packed_types.elems, mutables.elems,
                            types.size);
 
-  BinaryenHeapType heap_type;
-  TypeBuilderBuildAndDispose(type_builder, &heap_type, 0, 0);
+  if (recursive)
+  {
+    TypeBuilderCreateRecGroup(type_builder, 0, TypeBuilderGetSize(type_builder));
+  }
 
+  BinaryenHeapType heap_types[128];
+  assert(TypeBuilderGetSize(type_builder) <= 128);
+
+  TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
+
+  HashIndex hash_index;
+  array_foreach(&hash_indices, hash_index)
+  {
+    map_put_binaryen_heap_type(&codegen.heap_types, hash_index.hash, heap_types[hash_index.index]);
+  }
+
+  BinaryenHeapType heap_type = heap_types[0];
   BinaryenType type = BinaryenTypeFromHeapType(heap_type, true);
   statement->ref = type;
 
@@ -1750,7 +1826,7 @@ void codegen_init(ArrayStmt statements)
 
   codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, false);
   map_init_sint(&codegen.string_constants, 0, 0);
-  map_init_binaryen_heap_type(&codegen.array_heap_types, 0, 0);
+  map_init_binaryen_heap_type(&codegen.heap_types, 0, 0);
 
   generate_string_concat_function();
   generate_string_equals_function();

@@ -1405,6 +1405,36 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
   }
 }
 
+static BinaryenExpressionRef generate_array_expression(LiteralArrayExpr* expression)
+{
+  BinaryenHeapType type = generate_array_heap_binaryen_type(NULL, NULL, expression->data_type);
+  BinaryenHeapType array_type = BinaryenTypeGetHeapType(BinaryenStructTypeGetFieldType(type, 0));
+
+  ArrayBinaryenExpressionRef values;
+  array_init(&values);
+
+  Expr* value;
+  array_foreach(&expression->values, value)
+  {
+    array_add(&values, generate_expression(value));
+  }
+
+  if (values.elems)
+  {
+    BinaryenExpressionRef operands[] = {
+      BinaryenArrayNewFixed(codegen.module, array_type, values.elems, values.size),
+      BinaryenConst(codegen.module, BinaryenLiteralInt32(values.size))
+    };
+
+    return BinaryenStructNew(codegen.module, operands, sizeof(operands) / sizeof_ptr(operands),
+                             type);
+  }
+  else
+  {
+    return BinaryenStructNew(codegen.module, NULL, 0, type);
+  }
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -1429,6 +1459,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_access_expression(&expression->access);
   case EXPR_INDEX:
     return generate_index_expression(&expression->index);
+  case EXPR_ARRAY:
+    return generate_array_expression(&expression->array);
 
   default:
     UNREACHABLE("Unhandled expression");
@@ -1620,7 +1652,6 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   ArrayBinaryenPackedType packed_types;
   ArrayBool mutables;
   ArrayHashIndex hash_indices;
-  bool recursive = false;
 
   array_init(&types);
   array_init(&packed_types);
@@ -1630,12 +1661,6 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   VarStmt* variable;
   array_foreach(&statement->variables, variable)
   {
-    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_ARRAY)) &&
-        data_type_to_binaryen_type(*variable->data_type.array.data_type) == temporary_type)
-    {
-      recursive = true;
-    }
-
     BinaryenType type =
       data_type_to_temporary_binaryen_type(type_builder, &hash_indices, variable->data_type);
 
@@ -1650,14 +1675,13 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   TypeBuilderSetStructType(type_builder, 0, types.elems, packed_types.elems, mutables.elems,
                            types.size);
 
-  if (recursive)
+  if (array_size(&hash_indices))
   {
+    assert(TypeBuilderGetSize(type_builder) <= 128);
     TypeBuilderCreateRecGroup(type_builder, 0, TypeBuilderGetSize(type_builder));
   }
 
   BinaryenHeapType heap_types[128];
-  assert(TypeBuilderGetSize(type_builder) <= 128);
-
   TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
 
   HashIndex hash_index;

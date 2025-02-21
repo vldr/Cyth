@@ -158,6 +158,11 @@ static void error_imported_functions_cannot_have_bodies(Token token)
   checker_error(token, "An imported function cannot have a body.");
 }
 
+static void error_cannot_duduce_conflicting_type(Token token)
+{
+  checker_error(token, "This type conflicts with the other deduced types.");
+}
+
 bool equal_data_type(DataType left, DataType right)
 {
   if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
@@ -1040,6 +1045,79 @@ static DataType check_index_expression(IndexExpr* expression)
   return DATA_TYPE(TYPE_VOID);
 }
 
+static DataType check_array_expression(LiteralArrayExpr* expression)
+{
+  DataType data_type = DATA_TYPE(TYPE_ARRAY);
+  DataType element_data_type = DATA_TYPE(TYPE_VOID);
+
+  ArrayDataType void_data_types;
+  array_init(&void_data_types);
+
+  for (unsigned int i = 0; i < expression->values.size; i++)
+  {
+    Expr* value = expression->values.elems[i];
+    Token token = expression->tokens.elems[i];
+
+    DataType value_data_type = check_expression(value);
+    if (value_data_type.type == TYPE_ARRAY && value_data_type.array.data_type->type == TYPE_VOID)
+    {
+      array_add(&void_data_types, value_data_type);
+    }
+
+    if (equal_data_type(element_data_type, DATA_TYPE(TYPE_VOID)))
+    {
+      element_data_type = value_data_type;
+    }
+
+    // [], [], [1,2]
+    if (value_data_type.type == TYPE_ARRAY && element_data_type.type == TYPE_ARRAY &&
+        value_data_type.array.data_type->type != TYPE_VOID &&
+        element_data_type.array.data_type->type == TYPE_VOID &&
+        element_data_type.array.count == value_data_type.array.count)
+    {
+      element_data_type.array.data_type->type = value_data_type.array.data_type->type;
+    }
+
+    // [1,2], [], []
+    if (element_data_type.type == TYPE_ARRAY && value_data_type.type == TYPE_ARRAY &&
+        element_data_type.array.data_type->type != TYPE_VOID &&
+        value_data_type.array.data_type->type == TYPE_VOID &&
+        value_data_type.array.count == element_data_type.array.count)
+    {
+      value_data_type.array.data_type->type = element_data_type.array.data_type->type;
+    }
+
+    if (!equal_data_type(element_data_type, value_data_type))
+    {
+      error_cannot_duduce_conflicting_type(token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+  }
+
+  if (equal_data_type(element_data_type, DATA_TYPE(TYPE_ARRAY)))
+  {
+    data_type.array.count = element_data_type.array.count + 1;
+    data_type.array.data_type = element_data_type.array.data_type;
+
+    DataType void_data_type;
+    array_foreach(&void_data_types, void_data_type)
+    {
+      *void_data_type.array.ref_data_type = data_type.array.data_type;
+    }
+  }
+  else
+  {
+    data_type.array.count = 1;
+    data_type.array.data_type = ALLOC(DataType);
+    *data_type.array.data_type = element_data_type;
+  }
+
+  expression->data_type = data_type;
+  expression->data_type.array.ref_data_type = &expression->data_type.array.data_type;
+
+  return expression->data_type;
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -1064,6 +1142,8 @@ static DataType check_expression(Expr* expression)
     return check_access_expression(&expression->access);
   case EXPR_INDEX:
     return check_index_expression(&expression->index);
+  case EXPR_ARRAY:
+    return check_array_expression(&expression->array);
 
   default:
     UNREACHABLE("Unhandled expression");
@@ -1228,6 +1308,12 @@ static void check_variable_declaration(VarStmt* statement)
   if (statement->initializer)
   {
     DataType initializer_data_type = check_expression(statement->initializer);
+
+    if (initializer_data_type.type == TYPE_ARRAY &&
+        initializer_data_type.array.data_type->type == TYPE_VOID)
+    {
+      initializer_data_type.array.data_type->type = statement->data_type.array.data_type->type;
+    }
 
     if (!equal_data_type(statement->data_type, initializer_data_type))
     {

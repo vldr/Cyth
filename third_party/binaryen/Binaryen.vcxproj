@@ -287,9 +287,10 @@
     <IncludePath>$(MSBuildProjectDirectory)\src;$(MSBuildProjectDirectory)\third_party\llvm-project\include;$(MSBuildProjectDirectory)\third_party\FP16\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IntDir>objects\$(Platform)\$(Configuration)\</IntDir>
-    <OutDir>$(SolutionDir)output\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\objects\$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>$(MSBuildProjectDirectory)\output\</OutDir>
     <IncludePath>$(MSBuildProjectDirectory)\src;$(MSBuildProjectDirectory)\third_party\llvm-project\include;$(MSBuildProjectDirectory)\third_party\FP16\include;$(WindowsSDK_IncludePath);</IncludePath>
+    <TargetName>$(ProjectName).release</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

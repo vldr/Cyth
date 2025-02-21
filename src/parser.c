@@ -271,6 +271,43 @@ static Expr* primary(void)
     }
 
     break;
+  case TOKEN_LEFT_BRACKET:
+    advance();
+
+    ArrayToken tokens;
+    ArrayExpr values;
+    array_init(&tokens);
+    array_init(&values);
+
+    if (!check(TOKEN_RIGHT_BRACKET))
+    {
+      do
+      {
+        Token start_token = peek();
+        Expr* value = expression();
+        Token end_token = previous();
+
+        Token token = {
+          .type = TOKEN_IDENTIFIER,
+          .start_line = start_token.start_line,
+          .start_column = start_token.start_column,
+          .end_line = end_token.end_line,
+          .end_column = end_token.end_column,
+          .lexeme = "",
+        };
+
+        array_add(&values, value);
+        array_add(&tokens, token);
+      } while (match(TOKEN_COMMA));
+    }
+
+    consume(TOKEN_RIGHT_BRACKET, "Expected ']' at the end of list.");
+
+    expr->type = EXPR_ARRAY;
+    expr->array.values = values;
+    expr->array.tokens = tokens;
+
+    break;
   case TOKEN_IDENTIFIER:
     advance();
 

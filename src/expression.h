@@ -80,7 +80,9 @@ typedef struct _DATA_TYPE
     struct
     {
       struct _DATA_TYPE* data_type;
+      struct _DATA_TYPE** ref_data_type;
       unsigned char count;
+
     } array;
   };
 } DataType;
@@ -91,7 +93,7 @@ typedef struct
   int count;
 } DataTypeToken;
 
-typedef struct
+typedef struct _LITERAL_EXPR
 {
   DataType data_type;
 
@@ -103,7 +105,14 @@ typedef struct
   };
 } LiteralExpr;
 
-typedef struct
+typedef struct _LITERAL_ARRAY_EXPR
+{
+  DataType data_type;
+  ArrayExpr values;
+  ArrayToken tokens;
+} LiteralArrayExpr;
+
+typedef struct _BINARY_EXPR
 {
   DataType return_data_type;
   DataType operand_data_type;
@@ -113,7 +122,7 @@ typedef struct
   Expr* right;
 } BinaryExpr;
 
-typedef struct
+typedef struct _UNARY_EXPR
 {
   DataType data_type;
 
@@ -121,14 +130,14 @@ typedef struct
   Expr* expr;
 } UnaryExpr;
 
-typedef struct
+typedef struct _GROUP_EXPR
 {
   DataType data_type;
 
   Expr* expr;
 } GroupExpr;
 
-typedef struct
+typedef struct _VAR_EXPR
 {
   DataType data_type;
 
@@ -136,7 +145,7 @@ typedef struct
   VarStmt* variable;
 } VarExpr;
 
-typedef struct
+typedef struct _ASSIGN_EXPR
 {
   DataType data_type;
 
@@ -147,7 +156,7 @@ typedef struct
   VarStmt* variable;
 } AssignExpr;
 
-typedef struct
+typedef struct _CALL_EXPR
 {
   DataType callee_data_type;
   DataType return_data_type;
@@ -157,7 +166,7 @@ typedef struct
   ArrayExpr arguments;
 } CallExpr;
 
-typedef struct
+typedef struct _CAST_EXPR
 {
   DataTypeToken type;
 
@@ -167,7 +176,7 @@ typedef struct
   Expr* expr;
 } CastExpr;
 
-typedef struct
+typedef struct _ACCESS_EXPR
 {
   DataType data_type;
   DataType expr_data_type;
@@ -179,7 +188,7 @@ typedef struct
   VarStmt* variable;
 } AccessExpr;
 
-typedef struct
+typedef struct _INDEX_EXPR
 {
   DataType data_type;
   DataType expr_data_type;
@@ -196,6 +205,7 @@ struct _EXPR
   enum
   {
     EXPR_LITERAL,
+    EXPR_ARRAY,
     EXPR_BINARY,
     EXPR_UNARY,
     EXPR_GROUP,
@@ -212,6 +222,7 @@ struct _EXPR
     UnaryExpr unary;
     GroupExpr group;
     LiteralExpr literal;
+    LiteralArrayExpr array;
     VarExpr var;
     AssignExpr assign;
     CallExpr call;

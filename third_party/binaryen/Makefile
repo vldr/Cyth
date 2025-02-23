@@ -1,14 +1,14 @@
-OUTPUT = output/libbinaryen.so
+OUTPUT = output/libbinaryen.a
 CXX = clang++
 
-EM_OUTPUT = output/libbinaryen.a
+EM_OUTPUT = output/libbinaryen_web.a
 EM_CXX = emcc
 
 CXXFLAGS = -DBUILD_STATIC_LIBRARY -Isrc -Ithird_party/FP16/include -Ithird_party/llvm-project/include \
-		   -fno-omit-frame-pointer -fno-rtti -fPIC -O3 -DNDEBUG -UNDEBUG -std=c++17 -Wno-everything
+           -fno-omit-frame-pointer -fno-rtti -fPIC -O3 -DNDEBUG -UNDEBUG -std=c++17 -Wno-everything
 EM_CXXFLAGS = -flto -sDISABLE_EXCEPTION_CATCHING=1
 
-LINKFLAGS = -pthread -shared
+LINKFLAGS =
 EM_LINKFLAGS =
 
 SRCS = src/binaryen-c.cpp src/ir/ExpressionAnalyzer.cpp src/ir/ExpressionManipulator.cpp \
@@ -98,7 +98,7 @@ objects/%.wasm.o: %.cpp
 	$(EM_CXX) $(EM_CXXFLAGS) $(CXXFLAGS) -c $< -o $@
 
 desktop: output/ $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(OUTPUT) $(OBJS) $(LINKFLAGS)
+	ar rc $(OUTPUT) $(OBJS)
 
 web: output/ $(EM_OBJS)
 	emar rc $(EM_OUTPUT) $(EM_OBJS)

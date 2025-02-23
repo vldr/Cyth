@@ -1,6 +1,6 @@
 OUTPUT = output/cyth
 CXX = clang
-CXXFLAGS = -Ithird_party/binaryen/src -MMD -O3 -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
+CXXFLAGS = -Ithird_party/binaryen/src -MMD -O0 -g -Wall -Wextra -pedantic -fsanitize=address -fsanitize=undefined
 LINKFLAGS = -Wl,-rpath,third_party/binaryen/output -Lthird_party/binaryen/output -lbinaryen
 
 EM_OUTPUT = output/cyth.js

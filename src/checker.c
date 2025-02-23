@@ -1045,7 +1045,7 @@ static DataType check_index_expression(IndexExpr* expression)
   return DATA_TYPE(TYPE_VOID);
 }
 
-static DataType check_array_expression(LiteralArrayExpr* expression)
+NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* expression)
 {
   DataType data_type = DATA_TYPE(TYPE_ARRAY);
   DataType element_data_type = DATA_TYPE(TYPE_VOID);
@@ -1069,7 +1069,6 @@ static DataType check_array_expression(LiteralArrayExpr* expression)
       element_data_type = value_data_type;
     }
 
-    // [], [], [1,2]
     if (value_data_type.type == TYPE_ARRAY && element_data_type.type == TYPE_ARRAY &&
         value_data_type.array.data_type->type != TYPE_VOID &&
         element_data_type.array.data_type->type == TYPE_VOID &&
@@ -1078,7 +1077,6 @@ static DataType check_array_expression(LiteralArrayExpr* expression)
       element_data_type.array.data_type->type = value_data_type.array.data_type->type;
     }
 
-    // [1,2], [], []
     if (element_data_type.type == TYPE_ARRAY && value_data_type.type == TYPE_ARRAY &&
         element_data_type.array.data_type->type != TYPE_VOID &&
         value_data_type.array.data_type->type == TYPE_VOID &&

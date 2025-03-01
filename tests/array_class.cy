@@ -4,6 +4,7 @@ import "env"
 class Node
     string value
     Node[][] next
+    Node[][] next2
 
     void __init__(string value)
         this.value = value

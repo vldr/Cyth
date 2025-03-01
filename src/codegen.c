@@ -642,10 +642,10 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
 
     if (type_builder_ref)
     {
-      array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
-
       HashIndex hash_index = { .hash = hash, .index = offset + 1 };
       array_add(hash_indices, hash_index);
+
+      array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
     }
     else
     {
@@ -653,8 +653,9 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
       TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
 
       array_binaryen_type = heap_types[1];
-      map_put_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
     }
+
+    map_put_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
   }
 
   return array_binaryen_type;

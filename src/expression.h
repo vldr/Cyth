@@ -29,8 +29,10 @@
 #define DATA_TYPE(a) ((DataType){ .type = a })
 
 typedef struct _EXPR Expr;
+typedef struct _LITERAL_ARRAY_EXPR LiteralArrayExpr;
 typedef struct _VAR_STMT VarStmt;
 array_def(Expr*, Expr);
+array_def(LiteralArrayExpr*, LiteralArrayExpr);
 array_def(struct _DATA_TYPE, DataType);
 
 typedef enum _SCOPE
@@ -80,9 +82,9 @@ typedef struct _DATA_TYPE
     struct
     {
       struct _DATA_TYPE* data_type;
-      struct _DATA_TYPE** ref_data_type;
       unsigned char count;
 
+      ArrayLiteralArrayExpr* list;
     } array;
   };
 } DataType;
@@ -108,6 +110,7 @@ typedef struct _LITERAL_EXPR
 typedef struct _LITERAL_ARRAY_EXPR
 {
   DataType data_type;
+
   ArrayExpr values;
   ArrayToken tokens;
 } LiteralArrayExpr;

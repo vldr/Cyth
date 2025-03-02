@@ -1,7 +1,11 @@
 import "env"
     void log(string n)
 
-int[][][] b = [[[ 1, 2 ]], [[ ]], [[]], [[1,2]]]
+int[][][] b = [ [[]], [[],[]]]
+int[][][] c = [[[], [], [8]], [[], [], []]]
+
+int[][][] getC()
+    return c
 
 int[][][] getB()
     return b

@@ -18,6 +18,7 @@ static struct
   FuncStmt* function;
   ClassStmt* class;
   WhileStmt* loop;
+  ArrayLiteralArrayExpr* array;
 } checker;
 
 static void init_statement(Stmt* statement);
@@ -1049,9 +1050,17 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
 {
   DataType data_type = DATA_TYPE(TYPE_ARRAY);
   DataType element_data_type = DATA_TYPE(TYPE_VOID);
+  bool initializer = false;
 
-  ArrayDataType void_data_types;
-  array_init(&void_data_types);
+  if (!checker.array)
+  {
+    checker.array = ALLOC(ArrayLiteralArrayExpr);
+    initializer = true;
+
+    array_init(checker.array);
+  }
+
+  array_add(checker.array, expression);
 
   for (unsigned int i = 0; i < expression->values.size; i++)
   {
@@ -1059,11 +1068,6 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
     Token token = expression->tokens.elems[i];
 
     DataType value_data_type = check_expression(value);
-    if (value_data_type.type == TYPE_ARRAY && value_data_type.array.data_type->type == TYPE_VOID)
-    {
-      array_add(&void_data_types, value_data_type);
-    }
-
     if (equal_data_type(element_data_type, DATA_TYPE(TYPE_VOID)))
     {
       element_data_type = value_data_type;
@@ -1088,7 +1092,9 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
     if (!equal_data_type(element_data_type, value_data_type))
     {
       error_cannot_duduce_conflicting_type(token);
-      return DATA_TYPE(TYPE_VOID);
+      data_type = DATA_TYPE(TYPE_VOID);
+
+      goto finish;
     }
   }
 
@@ -1096,23 +1102,23 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
   {
     data_type.array.count = element_data_type.array.count + 1;
     data_type.array.data_type = element_data_type.array.data_type;
-
-    DataType void_data_type;
-    array_foreach(&void_data_types, void_data_type)
-    {
-      *void_data_type.array.ref_data_type = data_type.array.data_type;
-    }
+    data_type.array.list = checker.array;
   }
   else
   {
     data_type.array.count = 1;
     data_type.array.data_type = ALLOC(DataType);
     *data_type.array.data_type = element_data_type;
+    data_type.array.list = checker.array;
+  }
+
+finish:
+  if (initializer)
+  {
+    checker.array = NULL;
   }
 
   expression->data_type = data_type;
-  expression->data_type.array.ref_data_type = &expression->data_type.array.data_type;
-
   return expression->data_type;
 }
 
@@ -1308,8 +1314,15 @@ static void check_variable_declaration(VarStmt* statement)
     DataType initializer_data_type = check_expression(statement->initializer);
 
     if (initializer_data_type.type == TYPE_ARRAY &&
-        initializer_data_type.array.data_type->type == TYPE_VOID)
+        (initializer_data_type.array.data_type->type == TYPE_VOID ||
+         initializer_data_type.array.data_type->type == statement->data_type.array.data_type->type))
     {
+      LiteralArrayExpr* expression;
+      array_foreach(initializer_data_type.array.list, expression)
+      {
+        expression->data_type.array.data_type->type = statement->data_type.array.data_type->type;
+      }
+
       initializer_data_type.array.data_type->type = statement->data_type.array.data_type->type;
     }
 
@@ -1482,6 +1495,7 @@ void checker_init(ArrayStmt statements)
   checker.function = NULL;
   checker.class = NULL;
   checker.loop = NULL;
+  checker.array = NULL;
   checker.statements = statements;
 
   checker.environment = environment_init(NULL);

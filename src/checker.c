@@ -701,6 +701,12 @@ static DataType check_assignment_expression(AssignExpr* expression)
   }
   else if (target->type == EXPR_INDEX)
   {
+    if (equal_data_type(target->index.expr_data_type, DATA_TYPE(TYPE_STRING)))
+    {
+      error_not_assignable(expression->op);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     expression->variable = NULL;
     expression->data_type = value_data_type;
 

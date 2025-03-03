@@ -204,6 +204,29 @@ DataType array_data_type_element(DataType array_data_type)
   }
 }
 
+static void array_data_type_inference(DataType* source, DataType* target)
+{
+  if (source->type != TYPE_ARRAY || target->type != TYPE_ARRAY)
+  {
+    return;
+  }
+
+  if (source->array.data_type->type == TYPE_VOID ||
+      source->array.data_type->type == target->array.data_type->type)
+  {
+    if (source->array.list)
+    {
+      LiteralArrayExpr* expression;
+      array_foreach(source->array.list, expression)
+      {
+        expression->data_type.array.data_type->type = target->array.data_type->type;
+      }
+    }
+
+    source->array.data_type->type = target->array.data_type->type;
+  }
+}
+
 static DataType token_to_data_type(Token token, bool ignore_undeclared)
 {
   switch (token.type)
@@ -677,6 +700,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
+  array_data_type_inference(&value_data_type, &target_data_type);
+
   if (!equal_data_type(target_data_type, value_data_type))
   {
     error_type_mismatch(expression->op);
@@ -766,8 +791,12 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument),
-                           data_type_token_to_data_type(parameter->type, false)))
+      DataType argument_data_type = check_expression(argument);
+      DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+
+      array_data_type_inference(&argument_data_type, &parameter_data_type);
+
+      if (!equal_data_type(argument_data_type, parameter_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -796,8 +825,12 @@ static DataType check_call_expression(CallExpr* expression)
       Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      if (!equal_data_type(check_expression(argument),
-                           data_type_token_to_data_type(parameter->type, false)))
+      DataType argument_data_type = check_expression(argument);
+      DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+
+      array_data_type_inference(&argument_data_type, &parameter_data_type);
+
+      if (!equal_data_type(argument_data_type, parameter_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -839,9 +872,13 @@ static DataType check_call_expression(CallExpr* expression)
     for (int i = 0; i < number_of_arguments; i++)
     {
       Expr* argument = expression->arguments.elems[i];
-      DataType parameter = callee_data_type.function_internal.parameter_types.elems[i];
 
-      if (!equal_data_type(check_expression(argument), parameter))
+      DataType argument_data_type = check_expression(argument);
+      DataType parameter_data_type = callee_data_type.function_internal.parameter_types.elems[i];
+
+      array_data_type_inference(&argument_data_type, &parameter_data_type);
+
+      if (!equal_data_type(argument_data_type, parameter_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -895,8 +932,12 @@ static DataType check_call_expression(CallExpr* expression)
         Expr* argument = expression->arguments.elems[i];
         VarStmt* parameter = function->parameters.elems[i];
 
-        if (!equal_data_type(check_expression(argument),
-                             data_type_token_to_data_type(parameter->type, false)))
+        DataType argument_data_type = check_expression(argument);
+        DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+
+        array_data_type_inference(&argument_data_type, &parameter_data_type);
+
+        if (!equal_data_type(argument_data_type, parameter_data_type))
         {
           error_type_mismatch(expression->callee_token);
         }
@@ -1319,18 +1360,7 @@ static void check_variable_declaration(VarStmt* statement)
   {
     DataType initializer_data_type = check_expression(statement->initializer);
 
-    if (initializer_data_type.type == TYPE_ARRAY &&
-        (initializer_data_type.array.data_type->type == TYPE_VOID ||
-         initializer_data_type.array.data_type->type == statement->data_type.array.data_type->type))
-    {
-      LiteralArrayExpr* expression;
-      array_foreach(initializer_data_type.array.list, expression)
-      {
-        expression->data_type.array.data_type->type = statement->data_type.array.data_type->type;
-      }
-
-      initializer_data_type.array.data_type->type = statement->data_type.array.data_type->type;
-    }
+    array_data_type_inference(&initializer_data_type, &statement->data_type);
 
     if (!equal_data_type(statement->data_type, initializer_data_type))
     {

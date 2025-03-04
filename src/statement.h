@@ -78,6 +78,7 @@ typedef struct _VAR_STMT
 
 typedef struct _CLASS_STMT
 {
+  unsigned int id;
   Token keyword;
   Token name;
 

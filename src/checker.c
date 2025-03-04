@@ -182,7 +182,11 @@ unsigned int array_data_type_hash(DataType array_data_type)
   assert(array_data_type.type == TYPE_ARRAY);
   assert(array_data_type.array.count >= 1);
 
-  return (array_data_type.array.data_type->type << 16) | array_data_type.array.count;
+  unsigned int hash = array_data_type.array.data_type->type << 8 | array_data_type.array.count;
+  if (array_data_type.array.data_type->type == TYPE_OBJECT)
+    hash |= array_data_type.array.data_type->class->id << 16;
+
+  return hash;
 }
 
 DataType array_data_type_element(DataType array_data_type)

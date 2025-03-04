@@ -18,6 +18,7 @@ static struct
 {
   bool error;
   int current;
+  unsigned int classes;
   ArrayToken tokens;
 } parser;
 
@@ -621,6 +622,7 @@ static Stmt* class_declaration_statement(void)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_CLASS_DECL;
+  stmt->class.id = parser.classes++;
   stmt->class.declared = false;
   stmt->class.keyword = advance();
   stmt->class.name = consume(TOKEN_IDENTIFIER, "Expected class name.");

@@ -10,6 +10,7 @@
 typedef struct _STMT Stmt;
 array_def(struct _STMT*, Stmt);
 array_def(struct _VAR_STMT*, VarStmt);
+array_def(struct _CLASS_STMT*, ClassStmt);
 array_def(struct _FUNC_STMT*, FuncStmt);
 
 typedef struct _EXPR_STMT
@@ -90,6 +91,16 @@ typedef struct _CLASS_STMT
   uintptr_t ref;
 } ClassStmt;
 
+typedef struct _CLASS_TEMPLATE_STMT
+{
+  Token keyword;
+  Token name;
+
+  ArrayToken tokens;
+  ArrayDataTypeToken types;
+  ArrayClassStmt classes;
+} ClassTemplateStmt;
+
 typedef struct _IMPORT_STMT
 {
   Token keyword;
@@ -109,6 +120,7 @@ struct _STMT
     STMT_FUNCTION_DECL,
     STMT_VARIABLE_DECL,
     STMT_CLASS_DECL,
+    STMT_CLASS_TEMPLATE_DECL,
     STMT_IMPORT_DECL,
   } type;
 
@@ -122,6 +134,7 @@ struct _STMT
     BreakStmt brk;
     ContinueStmt cont;
     ClassStmt class;
+    ClassTemplateStmt class_template;
     ImportStmt import;
   };
 };

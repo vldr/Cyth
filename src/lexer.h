@@ -90,7 +90,14 @@ typedef struct
   const char* lexeme;
 } Token;
 
+typedef struct
+{
+  Token token;
+  int count;
+} DataTypeToken;
+
 array_def(Token, Token);
+array_def(DataTypeToken, DataTypeToken);
 
 void lexer_init(const char* source);
 void lexer_print(void);

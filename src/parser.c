@@ -143,6 +143,9 @@ static DataTypeToken consume_data_type(const char* message)
   if (!is_data_type(&offset, &count))
   {
     parser_error(peek(), message);
+
+    DataTypeToken token = { .token = { .type = TOKEN_NONE }, .count = 0 };
+    return token;
   }
 
   DataTypeToken token = { .token = peek(), .count = count };
@@ -350,6 +353,47 @@ static Expr* call(void)
   {
     Token end_token = previous();
 
+    ArrayDataTypeToken types;
+    array_init(&types);
+
+    if (check(TOKEN_LESS))
+    {
+      bool error = false;
+      int current = parser.current;
+
+      advance();
+
+      do
+      {
+        int offset;
+        int count;
+
+        if (is_data_type(&offset, &count))
+        {
+          DataTypeToken token = { .token = peek(), .count = count };
+          parser.current += offset;
+
+          array_add(&types, token);
+        }
+        else
+        {
+          error = true;
+        }
+
+      } while (match(TOKEN_COMMA));
+
+      if (!match(TOKEN_GREATER))
+      {
+        error = true;
+      }
+
+      if (error)
+      {
+        array_clear(&types);
+        parser.current = current;
+      }
+    }
+
     if (match(TOKEN_LEFT_PAREN))
     {
       ArrayExpr arguments;
@@ -368,6 +412,7 @@ static Expr* call(void)
       Expr* call = EXPR();
       call->type = EXPR_CALL;
       call->call.arguments = arguments;
+      call->call.types = types;
       call->call.callee = expr;
       call->call.callee_token = (Token){
         TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
@@ -618,14 +663,87 @@ static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool
   return stmt;
 }
 
+static Stmt* class_template_declaration_statement(Token keyword, Token name)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_CLASS_TEMPLATE_DECL;
+  stmt->class_template.keyword = keyword;
+  stmt->class_template.name = name;
+
+  array_init(&stmt->class_template.types);
+  array_init(&stmt->class_template.tokens);
+  array_init(&stmt->class_template.classes);
+
+  Token start_token = advance();
+
+  if (!check(TOKEN_GREATER))
+  {
+    do
+    {
+      array_add(&stmt->class_template.types, consume_data_type("Expected a type."));
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_GREATER, "Expected a '>'.");
+
+  Token end_token = previous();
+  Token types_token = (Token){
+    TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
+    end_token.end_line, end_token.end_column,   "",
+  };
+
+  if (!array_size(&stmt->class_template.types))
+  {
+    parser_error(types_token, "The types list cannot be empty.");
+  }
+
+  consume(TOKEN_NEWLINE, "Expected a newline.");
+
+  const int start = parser.current;
+
+  if (check(TOKEN_INDENT))
+  {
+    Stmt* body_statement;
+    ArrayStmt body_statements = statements();
+
+    array_foreach(&body_statements, body_statement)
+    {
+      if (body_statement->type != STMT_FUNCTION_DECL && body_statement->type != STMT_VARIABLE_DECL)
+      {
+        parser_error(stmt->class.keyword,
+                     "Only functions and variables can appear inside 'class' declarations.");
+      }
+    }
+  }
+
+  const int end = parser.current;
+
+  array_add(&stmt->class_template.tokens, keyword);
+  array_add(&stmt->class_template.tokens, name);
+  array_add(&stmt->class_template.tokens, (Token){ .type = TOKEN_NEWLINE });
+
+  for (int i = start; i < end; i++)
+  {
+    array_add(&stmt->class_template.tokens, parser.tokens.elems[i]);
+  }
+
+  return stmt;
+}
+
 static Stmt* class_declaration_statement(void)
 {
+  Token keyword = advance();
+  Token name = consume(TOKEN_IDENTIFIER, "Expected class name.");
+
+  if (check(TOKEN_LESS))
+    return class_template_declaration_statement(keyword, name);
+
   Stmt* stmt = STMT();
   stmt->type = STMT_CLASS_DECL;
   stmt->class.id = parser.classes++;
   stmt->class.declared = false;
-  stmt->class.keyword = advance();
-  stmt->class.name = consume(TOKEN_IDENTIFIER, "Expected class name.");
+  stmt->class.keyword = keyword;
+  stmt->class.name = name;
 
   array_init(&stmt->class.variables);
   array_init(&stmt->class.functions);
@@ -955,4 +1073,9 @@ ArrayStmt parser_parse(void)
   }
 
   return statements;
+}
+
+Stmt* parser_parse_statement(void)
+{
+  return statement();
 }

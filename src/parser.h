@@ -6,5 +6,6 @@
 
 void parser_init(ArrayToken tokens);
 ArrayStmt parser_parse(void);
+Stmt* parser_parse_statement(void);
 
 #endif

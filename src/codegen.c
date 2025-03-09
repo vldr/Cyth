@@ -1775,6 +1775,17 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
   return NULL;
 }
 
+static BinaryenExpressionRef generate_class_template_declaration(ClassTemplateStmt* statement)
+{
+  ClassStmt* class_declaration;
+  array_foreach(&statement->classes, class_declaration)
+  {
+    generate_class_declaration(class_declaration);
+  }
+
+  return NULL;
+}
+
 static BinaryenExpressionRef generate_import_declaration(ImportStmt* statement)
 {
   Stmt* body_statement;
@@ -1808,6 +1819,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_function_declaration(&statement->func);
   case STMT_CLASS_DECL:
     return generate_class_declaration(&statement->class);
+  case STMT_CLASS_TEMPLATE_DECL:
+    return generate_class_template_declaration(&statement->class_template);
   case STMT_IMPORT_DECL:
     return generate_import_declaration(&statement->import);
 

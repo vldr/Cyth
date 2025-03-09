@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "main.h"
 #include "memory.h"
+#include "parser.h"
 #include "statement.h"
 
 static struct
@@ -18,6 +19,7 @@ static struct
   FuncStmt* function;
   ClassStmt* class;
   WhileStmt* loop;
+
   ArrayLiteralArrayExpr* array;
 } checker;
 
@@ -255,22 +257,28 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+    {
+      if (!ignore_undeclared && !variable->data_type.class->declared)
+      {
+        error_cannot_find_type(token, token.lexeme);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      DataType object = DATA_TYPE(TYPE_OBJECT);
+      object.class = variable->data_type.class;
+
+      return object;
+    }
+    else if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+    {
+      return *variable->data_type.alias;
+    }
+    else
     {
       error_not_a_type(token, token.lexeme);
       return DATA_TYPE(TYPE_VOID);
     }
-
-    if (!ignore_undeclared && !variable->data_type.class->declared)
-    {
-      error_cannot_find_type(token, token.lexeme);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    DataType object = DATA_TYPE(TYPE_OBJECT);
-    object.class = variable->data_type.class;
-
-    return object;
   }
   default:
     UNREACHABLE("Unhandled data type");
@@ -383,6 +391,12 @@ static void init_function_declaration(FuncStmt* statement)
     statement->parameters = parameters;
   }
 
+  VarStmt* parameter;
+  array_foreach(&statement->parameters, parameter)
+  {
+    parameter->data_type = data_type_token_to_data_type(parameter->type, true);
+  }
+
   statement->data_type = data_type_token_to_data_type(statement->type, true);
 
   VarStmt* variable = ALLOC(VarStmt);
@@ -401,6 +415,26 @@ static void init_function_declaration(FuncStmt* statement)
     variable->data_type = DATA_TYPE(TYPE_FUNCTION);
     variable->data_type.function = statement;
   }
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
+static void init_class_template_declaration(ClassTemplateStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = (DataTypeToken){ .token = statement->name, .count = 0 };
+  variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE);
+  variable->data_type.class_template = statement;
 
   environment_set_variable(checker.environment, name, variable);
 }
@@ -445,6 +479,9 @@ static void init_statement(Stmt* statement)
     break;
   case STMT_CLASS_DECL:
     init_class_declaration(&statement->class);
+    break;
+  case STMT_CLASS_TEMPLATE_DECL:
+    init_class_template_declaration(&statement->class_template);
     break;
   case STMT_IMPORT_DECL:
     init_import_declaration(&statement->import);
@@ -751,6 +788,64 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
+  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+  {
+    parser_init(callee_data_type.class_template->tokens);
+    Stmt* statement = parser_parse_statement();
+
+    ClassStmt* class_statement = &statement->class;
+    array_add(&callee_data_type.class_template->classes, class_statement);
+
+    for (unsigned int i = 0; i < callee_data_type.class_template->types.size; i++)
+    {
+      DataTypeToken actual_data_type_token = expression->types.elems[i];
+      class_statement->name.lexeme =
+        memory_sprintf("%s.%s", class_statement->name.lexeme, actual_data_type_token.token.lexeme);
+    }
+
+    ClassStmt* previous_class = checker.class;
+    FuncStmt* previous_function = checker.function;
+    WhileStmt* previous_loop = checker.loop;
+    Environment* previous_environment = checker.environment;
+
+    checker.class = NULL;
+    checker.function = NULL;
+    checker.loop = NULL;
+    checker.environment = checker.global_environment;
+
+    init_statement(statement);
+
+    checker.environment = environment_init(previous_environment);
+
+    for (unsigned int i = 0; i < callee_data_type.class_template->types.size; i++)
+    {
+      DataTypeToken expected_data_type_token = callee_data_type.class_template->types.elems[i];
+      DataTypeToken actual_data_type_token = expression->types.elems[i];
+
+      VarStmt* variable = ALLOC(VarStmt);
+      variable->name = expected_data_type_token.token;
+      variable->type = expected_data_type_token;
+      variable->initializer = NULL;
+      variable->scope = SCOPE_GLOBAL;
+      variable->index = -1;
+      variable->data_type.type = TYPE_ALIAS;
+      variable->data_type.alias = ALLOC(DataType);
+      *variable->data_type.alias = data_type_token_to_data_type(actual_data_type_token, false);
+
+      environment_set_variable(checker.environment, variable->name.lexeme, variable);
+    }
+
+    check_statement(statement);
+
+    checker.class = previous_class;
+    checker.function = previous_function;
+    checker.loop = previous_loop;
+    checker.environment = previous_environment;
+
+    callee_data_type.type = TYPE_PROTOTYPE;
+    callee_data_type.class = class_statement;
+  }
+
   if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
   {
     FuncStmt* function = callee_data_type.function_member.function;
@@ -796,7 +891,7 @@ static DataType check_call_expression(CallExpr* expression)
       VarStmt* parameter = function->parameters.elems[i];
 
       DataType argument_data_type = check_expression(argument);
-      DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+      DataType parameter_data_type = parameter->data_type;
 
       array_data_type_inference(&argument_data_type, &parameter_data_type);
 
@@ -830,7 +925,7 @@ static DataType check_call_expression(CallExpr* expression)
       VarStmt* parameter = function->parameters.elems[i];
 
       DataType argument_data_type = check_expression(argument);
-      DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+      DataType parameter_data_type = parameter->data_type;
 
       array_data_type_inference(&argument_data_type, &parameter_data_type);
 
@@ -937,7 +1032,7 @@ static DataType check_call_expression(CallExpr* expression)
         VarStmt* parameter = function->parameters.elems[i];
 
         DataType argument_data_type = check_expression(argument);
-        DataType parameter_data_type = data_type_token_to_data_type(parameter->type, false);
+        DataType parameter_data_type = parameter->data_type;
 
         array_data_type_inference(&argument_data_type, &parameter_data_type);
 
@@ -1413,7 +1508,6 @@ static void check_function_declaration(FuncStmt* statement)
 
     parameter->scope = SCOPE_LOCAL;
     parameter->index = index++;
-    parameter->data_type = data_type_token_to_data_type(parameter->type, false);
 
     environment_set_variable(checker.environment, name, parameter);
   }
@@ -1522,6 +1616,9 @@ static void check_statement(Stmt* statement)
     break;
   case STMT_IMPORT_DECL:
     check_import_declaration(&statement->import);
+    break;
+
+  case STMT_CLASS_TEMPLATE_DECL:
     break;
 
   default:

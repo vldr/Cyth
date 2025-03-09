@@ -31,6 +31,7 @@
 typedef struct _EXPR Expr;
 typedef struct _LITERAL_ARRAY_EXPR LiteralArrayExpr;
 typedef struct _VAR_STMT VarStmt;
+
 array_def(Expr*, Expr);
 array_def(LiteralArrayExpr*, LiteralArrayExpr);
 array_def(struct _DATA_TYPE, DataType);
@@ -52,17 +53,21 @@ typedef struct _DATA_TYPE
     TYPE_INTEGER,
     TYPE_FLOAT,
     TYPE_STRING,
+    TYPE_ALIAS,
     TYPE_FUNCTION,
     TYPE_FUNCTION_MEMBER,
     TYPE_FUNCTION_INTERNAL,
     TYPE_PROTOTYPE,
+    TYPE_PROTOTYPE_TEMPLATE,
     TYPE_OBJECT,
     TYPE_ARRAY,
   } type;
 
   union {
     struct _CLASS_STMT* class;
+    struct _CLASS_TEMPLATE_STMT* class_template;
     struct _FUNC_STMT* function;
+    struct _DATA_TYPE* alias;
 
     struct
     {
@@ -88,12 +93,6 @@ typedef struct _DATA_TYPE
     } array;
   };
 } DataType;
-
-typedef struct
-{
-  Token token;
-  int count;
-} DataTypeToken;
 
 typedef struct _LITERAL_EXPR
 {
@@ -167,6 +166,8 @@ typedef struct _CALL_EXPR
   Expr* callee;
   Token callee_token;
   ArrayExpr arguments;
+
+  ArrayDataTypeToken types;
 } CallExpr;
 
 typedef struct _CAST_EXPR

@@ -1117,8 +1117,12 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
 {
   BinaryenExpressionRef value = generate_expression(expression->expr);
 
-  if (expression->to_data_type.type == TYPE_FLOAT &&
-      expression->from_data_type.type == TYPE_INTEGER)
+  if (expression->from_data_type.type == expression->to_data_type.type)
+  {
+    return value;
+  }
+  else if (expression->to_data_type.type == TYPE_FLOAT &&
+           expression->from_data_type.type == TYPE_INTEGER)
   {
     return BinaryenUnary(codegen.module, BinaryenConvertSInt32ToFloat32(), value);
   }
@@ -1317,6 +1321,8 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
       UNREACHABLE("Unhandled function internal");
 
     break;
+  case TYPE_ALIAS:
+    return generate_default_initialization(*callee_data_type.alias);
   default:
     UNREACHABLE("Unhandled data type");
   }

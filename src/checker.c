@@ -507,6 +507,7 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_CHAR:
       switch (expression->to_data_type.type)
       {
+      case TYPE_CHAR:
       case TYPE_INTEGER:
       case TYPE_STRING:
         valid = true;
@@ -519,6 +520,7 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_INTEGER:
       switch (expression->to_data_type.type)
       {
+      case TYPE_INTEGER:
       case TYPE_BOOL:
       case TYPE_FLOAT:
       case TYPE_STRING:
@@ -533,6 +535,7 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_FLOAT:
       switch (expression->to_data_type.type)
       {
+      case TYPE_FLOAT:
       case TYPE_BOOL:
       case TYPE_INTEGER:
       case TYPE_STRING:
@@ -546,6 +549,7 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_BOOL:
       switch (expression->to_data_type.type)
       {
+      case TYPE_BOOL:
       case TYPE_FLOAT:
       case TYPE_INTEGER:
       case TYPE_STRING:
@@ -1054,6 +1058,20 @@ static DataType check_call_expression(CallExpr* expression)
 
     expression->callee_data_type = callee_data_type;
     expression->return_data_type = token_to_data_type(class->name, false);
+
+    return expression->return_data_type;
+  }
+  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_ALIAS)))
+  {
+    int number_of_arguments = array_size(&expression->arguments);
+    if (number_of_arguments > 1)
+    {
+      error_invalid_arity(expression->callee_token, 0, number_of_arguments);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->callee_data_type = callee_data_type;
+    expression->return_data_type = *callee_data_type.alias;
 
     return expression->return_data_type;
   }

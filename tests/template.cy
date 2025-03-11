@@ -1,24 +1,51 @@
 import "env"
-    void log(float n)
+    void log(string n)
 
-class Node
-    int value = 12
+class Hashmap<K, V>
+    K[] keys
+    V[] values
 
-class A<T>
-    T b
+    void __init__()
+        for int i = 0; i < 100; i = i + 1
+            this.keys.push(K())
+
+        for int i = 0; i < 100; i = i + 1
+            this.values.push(V())
+
+    int hash(K key)
+        return (int)key % this.keys.length
+
+    V set(K key, V value)
+        int index = hash(key)
+
+        while this.keys[index] != K()
+            if this.keys[index] == key
+                this.values[index] = value
+                return V()
     
-    void __init__(T value)
-        b = value
+            index = (index + 1) % this.keys.length
+    
+        this.keys[index] = key
+        this.values[index] = value
 
-    T set(T value)
-        b = value
-        return b
+        return get(key)
 
-    T get()
-        return b
+    bool contains(K key)
+        return get(key) != V()
 
-log(
-    A<float>(12.2).set(14.0)
-)
+    V get(K key)
+        int index = hash(key)
 
-# 14
+        while this.keys[index] != K()
+            if this.keys[index] == key
+                return this.values[index]
+
+            index = (index + 1) % this.keys.length
+
+        return V()
+
+log(Hashmap<int, string>().set(10, "hello"))
+log(Hashmap<char, string>().set('a', "world"))
+
+# hello
+# world

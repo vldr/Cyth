@@ -794,8 +794,9 @@ static DataType check_call_expression(CallExpr* expression)
 
   if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
   {
-    parser_init(callee_data_type.class_template->tokens);
-    Stmt* statement = parser_parse_statement();
+    Stmt* statement = parser_parse_class_declaration_statement(
+      callee_data_type.class_template->offset, callee_data_type.class_template->keyword,
+      callee_data_type.class_template->name);
 
     ClassStmt* class_statement = &statement->class;
     array_add(&callee_data_type.class_template->classes, class_statement);
@@ -823,12 +824,12 @@ static DataType check_call_expression(CallExpr* expression)
 
     for (unsigned int i = 0; i < callee_data_type.class_template->types.size; i++)
     {
-      DataTypeToken expected_data_type_token = callee_data_type.class_template->types.elems[i];
+      Token name = callee_data_type.class_template->types.elems[i];
       DataTypeToken actual_data_type_token = expression->types.elems[i];
 
       VarStmt* variable = ALLOC(VarStmt);
-      variable->name = expected_data_type_token.token;
-      variable->type = expected_data_type_token;
+      variable->name = name;
+      variable->type = (DataTypeToken){ .token = name, .count = 0 };
       variable->initializer = NULL;
       variable->scope = SCOPE_GLOBAL;
       variable->index = -1;

@@ -96,8 +96,8 @@ typedef struct _CLASS_TEMPLATE_STMT
   Token keyword;
   Token name;
 
-  ArrayToken tokens;
-  ArrayDataTypeToken types;
+  int offset;
+  ArrayToken types;
   ArrayClassStmt classes;
 } ClassTemplateStmt;
 

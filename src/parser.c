@@ -671,7 +671,6 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
   stmt->class_template.name = name;
 
   array_init(&stmt->class_template.types);
-  array_init(&stmt->class_template.tokens);
   array_init(&stmt->class_template.classes);
 
   Token start_token = advance();
@@ -680,11 +679,13 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
   {
     do
     {
-      array_add(&stmt->class_template.types, consume_data_type("Expected a type."));
+      array_add(&stmt->class_template.types, consume(TOKEN_IDENTIFIER, "Expected an identifier."));
     } while (match(TOKEN_COMMA));
   }
 
   consume(TOKEN_GREATER, "Expected a '>'.");
+
+  stmt->class_template.offset = parser.current;
 
   Token end_token = previous();
   Token types_token = (Token){
@@ -698,8 +699,6 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
   }
 
   consume(TOKEN_NEWLINE, "Expected a newline.");
-
-  const int start = parser.current;
 
   if (check(TOKEN_INDENT))
   {
@@ -716,28 +715,11 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
     }
   }
 
-  const int end = parser.current;
-
-  array_add(&stmt->class_template.tokens, keyword);
-  array_add(&stmt->class_template.tokens, name);
-  array_add(&stmt->class_template.tokens, (Token){ .type = TOKEN_NEWLINE });
-
-  for (int i = start; i < end; i++)
-  {
-    array_add(&stmt->class_template.tokens, parser.tokens.elems[i]);
-  }
-
   return stmt;
 }
 
-static Stmt* class_declaration_statement(void)
+static Stmt* class_declaration_statement(Token keyword, Token name)
 {
-  Token keyword = advance();
-  Token name = consume(TOKEN_IDENTIFIER, "Expected class name.");
-
-  if (check(TOKEN_LESS))
-    return class_template_declaration_statement(keyword, name);
-
   Stmt* stmt = STMT();
   stmt->type = STMT_CLASS_DECL;
   stmt->class.id = parser.classes++;
@@ -1014,10 +996,17 @@ static Stmt* statement(void)
       return while_statement();
     case TOKEN_FOR:
       return for_statement();
-    case TOKEN_CLASS:
-      return class_declaration_statement();
     case TOKEN_IMPORT:
       return import_declaration_statement();
+    case TOKEN_CLASS: {
+      Token keyword = advance();
+      Token name = consume(TOKEN_IDENTIFIER, "Expected class name.");
+
+      if (check(TOKEN_LESS))
+        return class_template_declaration_statement(keyword, name);
+      else
+        return class_declaration_statement(keyword, name);
+    }
     default:
       return expression_statement(true);
     }
@@ -1075,7 +1064,9 @@ ArrayStmt parser_parse(void)
   return statements;
 }
 
-Stmt* parser_parse_statement(void)
+Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token name)
 {
-  return statement();
+  parser.current = offset;
+
+  return class_declaration_statement(keyword, name);
 }

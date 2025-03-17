@@ -86,7 +86,7 @@ static Token consume(TokenType type, const char* message)
   return advance();
 }
 
-static bool is_data_type(int* offset, int* count)
+static bool is_data_type(int* offset, int* count, ArrayDataTypeToken* types)
 {
   switch (peek().type)
   {
@@ -102,8 +102,48 @@ static bool is_data_type(int* offset, int* count)
     return false;
   }
 
-  *offset = 1;
+  *offset += 1;
   *count = 0;
+
+  if (peek_offset(*offset).type == TOKEN_LESS)
+  {
+    do
+    {
+      *offset += 1;
+
+      int sub_offset = *offset;
+      int sub_count = 0;
+      ArrayDataTypeToken* sub_types = NULL;
+
+      if (types)
+      {
+        sub_types = ALLOC(ArrayDataTypeToken);
+        array_init(sub_types);
+      }
+
+      if (!is_data_type(offset, &sub_count, sub_types))
+      {
+        return false;
+      }
+
+      if (types)
+      {
+        DataTypeToken token = { .token = peek_offset(sub_offset),
+                                .types = sub_types,
+                                .count = sub_count };
+
+        array_add(types, token);
+      }
+
+    } while (peek_offset(*offset).type == TOKEN_COMMA);
+
+    if (peek_offset(*offset).type != TOKEN_GREATER)
+    {
+      return false;
+    }
+
+    *offset += 1;
+  }
 
   while (peek_offset(*offset).type == TOKEN_LEFT_BRACKET)
   {
@@ -121,34 +161,37 @@ static bool is_data_type(int* offset, int* count)
 
 static bool is_data_type_and_identifier(void)
 {
-  int offset;
-  int count;
+  int offset = 0;
+  int count = 0;
+  ArrayDataTypeToken* types = NULL;
 
-  return is_data_type(&offset, &count) && peek_offset(offset).type == TOKEN_IDENTIFIER;
+  return is_data_type(&offset, &count, types) && peek_offset(offset).type == TOKEN_IDENTIFIER;
 }
 
 static bool is_data_type_and_right_paren(void)
 {
-  int offset;
-  int count;
+  int offset = 0;
+  int count = 0;
+  ArrayDataTypeToken* types = NULL;
 
-  return is_data_type(&offset, &count) && peek_offset(offset).type == TOKEN_RIGHT_PAREN;
+  return is_data_type(&offset, &count, types) && peek_offset(offset).type == TOKEN_RIGHT_PAREN;
 }
 
 static DataTypeToken consume_data_type(const char* message)
 {
-  int offset;
-  int count;
+  int offset = 0;
+  int count = 0;
+  ArrayDataTypeToken* types = ALLOC(ArrayDataTypeToken);
+  array_init(types);
 
-  if (!is_data_type(&offset, &count))
+  if (!is_data_type(&offset, &count, types))
   {
     parser_error(peek(), message);
 
-    DataTypeToken token = { .token = { .type = TOKEN_NONE }, .count = 0 };
-    return token;
+    return (DataTypeToken){ 0 };
   }
 
-  DataTypeToken token = { .token = peek(), .count = count };
+  DataTypeToken token = { .token = peek(), .count = count, .types = types };
   parser.current += offset;
 
   return token;
@@ -365,12 +408,14 @@ static Expr* call(void)
 
       do
       {
-        int offset;
-        int count;
+        int offset = 0;
+        int count = 0;
+        ArrayDataTypeToken* sub_types = ALLOC(ArrayDataTypeToken);
+        array_init(sub_types);
 
-        if (is_data_type(&offset, &count))
+        if (is_data_type(&offset, &count, sub_types))
         {
-          DataTypeToken token = { .token = peek(), .count = count };
+          DataTypeToken token = { .token = peek(), .count = count, .types = sub_types };
           parser.current += offset;
 
           array_add(&types, token);

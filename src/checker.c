@@ -4,6 +4,7 @@
 #include "expression.h"
 #include "lexer.h"
 #include "main.h"
+#include "map.h"
 #include "memory.h"
 #include "parser.h"
 #include "statement.h"
@@ -26,6 +27,9 @@ static struct
 static void init_statement(Stmt* statement);
 static void check_statement(Stmt* statement);
 static DataType check_expression(Expr* expression);
+
+static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
+static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared);
 
 static void checker_error(Token token, const char* message)
 {
@@ -71,9 +75,20 @@ static void error_cannot_find_type(Token token, const char* name)
   checker_error(token, memory_sprintf("Undeclared type '%s'.", name));
 }
 
+static void error_not_a_template_type(Token token, const char* name)
+{
+  checker_error(token, memory_sprintf("'%s' is not a template type.", name));
+}
+
 static void error_not_a_type(Token token, const char* name)
 {
   checker_error(token, memory_sprintf("The name '%s' is not a type.", name));
+}
+
+static void error_invalid_template_arity(Token token, int expected, int got)
+{
+  checker_error(token,
+                memory_sprintf("Expected %d template argument(s) but got %d.", expected, got));
 }
 
 static void error_not_a_function(Token token)
@@ -285,14 +300,164 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
   }
 }
 
+static ClassStmt* template_to_data_type(DataType template, DataTypeToken template_type)
+{
+  const char* name = data_type_token_to_string(template_type, NULL);
+
+  VarStmt* variable = environment_get_variable(checker.environment, name);
+  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+  {
+    return variable->data_type.class;
+  }
+
+  Stmt* statement = parser_parse_class_declaration_statement(template.class_template->offset,
+                                                             template.class_template->keyword,
+                                                             template.class_template->name);
+
+  ClassStmt* class_statement = &statement->class;
+  class_statement->name.lexeme = name;
+
+  ClassStmt* previous_class = checker.class;
+  FuncStmt* previous_function = checker.function;
+  WhileStmt* previous_loop = checker.loop;
+  Environment* previous_environment = checker.environment;
+
+  checker.class = NULL;
+  checker.function = NULL;
+  checker.loop = NULL;
+  checker.environment = checker.global_environment;
+
+  init_statement(statement);
+
+  checker.environment = environment_init(previous_environment);
+
+  for (unsigned int i = 0; i < template.class_template->types.size; i++)
+  {
+    Token name = template.class_template->types.elems[i];
+    DataTypeToken actual_data_type_token = array_at(template_type.types, i);
+
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = name;
+    variable->type = (DataTypeToken){ .token = name, .count = 0 };
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type.type = TYPE_ALIAS;
+    variable->data_type.alias = ALLOC(DataType);
+    *variable->data_type.alias = data_type_token_to_data_type(actual_data_type_token, false);
+
+    environment_set_variable(checker.environment, variable->name.lexeme, variable);
+  }
+
+  check_statement(statement);
+
+  checker.class = previous_class;
+  checker.function = previous_function;
+  checker.loop = previous_loop;
+  checker.environment = previous_environment;
+
+  array_add(&template.class_template->classes, class_statement);
+
+  return class_statement;
+}
+
+static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string)
+{
+  if (string == NULL)
+  {
+    ArrayChar string;
+    array_init(&string);
+    data_type_token_to_string(type, &string);
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  else
+  {
+    const char* c = type.token.lexeme;
+    while (*c)
+      array_add(string, *c++);
+
+    if (array_size(type.types))
+    {
+      array_add(string, '<');
+
+      for (unsigned int i = 0; i < array_size(type.types); i++)
+      {
+        data_type_token_to_string(array_at(type.types, i), string);
+
+        if (i != array_size(type.types) - 1)
+        {
+          array_add(string, ',');
+          array_add(string, ' ');
+        }
+      }
+
+      array_add(string, '>');
+    }
+
+    for (int i = 0; i < type.count; i++)
+    {
+      array_add(string, '[');
+      array_add(string, ']');
+    }
+
+    return string->elems;
+  }
+}
+
 static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared)
 {
+  if (type.types && array_size(type.types))
+  {
+    if (type.token.type != TOKEN_IDENTIFIER)
+    {
+      error_not_a_template_type(type.token, type.token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    VarStmt* variable = environment_get_variable(checker.environment, type.token.lexeme);
+    if (!variable)
+    {
+      error_cannot_find_type(type.token, type.token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+    {
+      error_not_a_template_type(type.token, type.token.lexeme);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    int expected = array_size(&variable->data_type.class_template->types);
+    int got = array_size(type.types);
+
+    if (expected != got)
+    {
+      error_invalid_template_arity(type.token, expected, got);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    type.token.lexeme = template_to_data_type(variable->data_type, type)->name.lexeme;
+  }
+
   if (type.count > 0)
   {
+    DataType element_data_type = token_to_data_type(type.token, ignore_undeclared);
+
     DataType data_type = DATA_TYPE(TYPE_ARRAY);
-    data_type.array.count = type.count;
     data_type.array.data_type = ALLOC(DataType);
-    *data_type.array.data_type = token_to_data_type(type.token, ignore_undeclared);
+    data_type.array.count = type.count;
+
+    if (equal_data_type(element_data_type, DATA_TYPE(TYPE_ARRAY)))
+    {
+      data_type.array.count += element_data_type.array.count;
+      *data_type.array.data_type = *element_data_type.array.data_type;
+    }
+    else
+    {
+      *data_type.array.data_type = element_data_type;
+    }
 
     return data_type;
   }
@@ -425,6 +590,18 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
   if (environment_check_variable(checker.environment, name))
   {
     error_name_already_exists(statement->name, name);
+  }
+
+  MapSInt type_set;
+  map_init_sint(&type_set, 0, 0);
+
+  Token type;
+  array_foreach(&statement->types, type)
+  {
+    if (map_get_sint(&type_set, type.lexeme))
+      error_name_already_exists(type, type.lexeme);
+    else
+      map_put_sint(&type_set, type.lexeme, 1);
   }
 
   VarStmt* variable = ALLOC(VarStmt);
@@ -794,59 +971,22 @@ static DataType check_call_expression(CallExpr* expression)
 
   if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
   {
-    Stmt* statement = parser_parse_class_declaration_statement(
-      callee_data_type.class_template->offset, callee_data_type.class_template->keyword,
-      callee_data_type.class_template->name);
+    int expected = array_size(&callee_data_type.class_template->types);
+    int got = array_size(&expression->types);
 
-    ClassStmt* class_statement = &statement->class;
-    array_add(&callee_data_type.class_template->classes, class_statement);
-
-    for (unsigned int i = 0; i < callee_data_type.class_template->types.size; i++)
+    if (expected != got)
     {
-      DataTypeToken actual_data_type_token = expression->types.elems[i];
-      class_statement->name.lexeme =
-        memory_sprintf("%s.%s", class_statement->name.lexeme, actual_data_type_token.token.lexeme);
+      error_invalid_template_arity(expression->callee_token, expected, got);
+      return DATA_TYPE(TYPE_VOID);
     }
 
-    ClassStmt* previous_class = checker.class;
-    FuncStmt* previous_function = checker.function;
-    WhileStmt* previous_loop = checker.loop;
-    Environment* previous_environment = checker.environment;
+    DataTypeToken class_type = {
+      .token = callee_data_type.class_template->name,
+      .types = &expression->types,
+      .count = 0,
+    };
 
-    checker.class = NULL;
-    checker.function = NULL;
-    checker.loop = NULL;
-    checker.environment = checker.global_environment;
-
-    init_statement(statement);
-
-    checker.environment = environment_init(previous_environment);
-
-    for (unsigned int i = 0; i < callee_data_type.class_template->types.size; i++)
-    {
-      Token name = callee_data_type.class_template->types.elems[i];
-      DataTypeToken actual_data_type_token = expression->types.elems[i];
-
-      VarStmt* variable = ALLOC(VarStmt);
-      variable->name = name;
-      variable->type = (DataTypeToken){ .token = name, .count = 0 };
-      variable->initializer = NULL;
-      variable->scope = SCOPE_GLOBAL;
-      variable->index = -1;
-      variable->data_type.type = TYPE_ALIAS;
-      variable->data_type.alias = ALLOC(DataType);
-      *variable->data_type.alias = data_type_token_to_data_type(actual_data_type_token, false);
-
-      environment_set_variable(checker.environment, variable->name.lexeme, variable);
-    }
-
-    check_statement(statement);
-
-    checker.class = previous_class;
-    checker.function = previous_function;
-    checker.loop = previous_loop;
-    checker.environment = previous_environment;
-
+    ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
     callee_data_type.type = TYPE_PROTOTYPE;
     callee_data_type.class = class_statement;
   }

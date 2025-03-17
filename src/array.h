@@ -11,7 +11,7 @@
 #define sizeof_ptr(a) (/* NOLINTBEGIN */ sizeof(*a) /* NOLINTEND */)
 
 #define array_def(T, name)                                                                         \
-  typedef struct                                                                                   \
+  typedef struct Array##name                                                                       \
   {                                                                                                \
     bool oom;                                                                                      \
     unsigned int cap;                                                                              \
@@ -112,6 +112,7 @@ array_def(uint32_t, 32);
 array_def(uint64_t, 64);
 array_def(double, Double);
 array_def(const char*, Str);
+array_def(char, Char);
 array_def(bool, Bool);
 array_def(void*, Ptr);
 

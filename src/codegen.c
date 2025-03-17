@@ -669,6 +669,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
   case TYPE_PROTOTYPE:
+  case TYPE_PROTOTYPE_TEMPLATE:
     return BinaryenTypeNone();
   case TYPE_BOOL:
   case TYPE_CHAR:

@@ -90,10 +90,11 @@ typedef struct
   const char* lexeme;
 } Token;
 
-typedef struct
+typedef struct _DATA_TYPE_TOKEN
 {
   Token token;
   int count;
+  struct ArrayDataTypeToken* types;
 } DataTypeToken;
 
 array_def(Token, Token);

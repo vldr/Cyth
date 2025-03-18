@@ -38,6 +38,7 @@ static struct
   BinaryenType class;
   ArrayStmt statements;
 
+  ArrayBinaryenType global_local_types;
   MapBinaryenHeapType heap_types;
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
@@ -1207,9 +1208,11 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
     return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
   }
 
-  switch (expression->variable->scope)
+  Scope scope = expression->variable->scope;
+  switch (scope)
   {
   case SCOPE_LOCAL:
+  case SCOPE_GLOBAL_LOCAL:
     return BinaryenLocalGet(codegen.module, expression->variable->index, type);
   case SCOPE_GLOBAL:
     return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
@@ -1232,6 +1235,7 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
     switch (variable->scope)
     {
     case SCOPE_LOCAL:
+    case SCOPE_GLOBAL_LOCAL:
       return BinaryenLocalTee(codegen.module, variable->index, value, type);
 
     case SCOPE_GLOBAL: {
@@ -1584,8 +1588,14 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
       return NULL;
     }
   }
-  else if (statement->scope == SCOPE_LOCAL)
+  else if (statement->scope == SCOPE_LOCAL || statement->scope == SCOPE_GLOBAL_LOCAL)
   {
+    if (statement->scope == SCOPE_GLOBAL_LOCAL)
+    {
+      BinaryenType type = data_type_to_binaryen_type(statement->data_type);
+      array_add(&codegen.global_local_types, type);
+    }
+
     if (statement->initializer)
     {
       initializer = generate_expression(statement->initializer);
@@ -1865,6 +1875,8 @@ void codegen_init(ArrayStmt statements)
   codegen.loops = -1;
   codegen.strings = 0;
 
+  array_init(&codegen.global_local_types);
+
   TypeBuilderRef type_builder = TypeBuilderCreate(1);
   TypeBuilderSetArrayType(type_builder, 0, BinaryenTypeInt32(), BinaryenPackedTypeInt8(), true);
   TypeBuilderBuildAndDispose(type_builder, &codegen.string_heap_type, 0, 0);
@@ -1885,9 +1897,10 @@ void codegen_init(ArrayStmt statements)
 Codegen codegen_generate(void)
 {
   Codegen result = { 0 };
+  BinaryenExpressionRef body = generate_statements(&codegen.statements);
 
-  BinaryenAddFunction(codegen.module, "~start", BinaryenTypeNone(), BinaryenTypeNone(), NULL, 0,
-                      generate_statements(&codegen.statements));
+  BinaryenAddFunction(codegen.module, "~start", BinaryenTypeNone(), BinaryenTypeNone(),
+                      codegen.global_local_types.elems, codegen.global_local_types.size, body);
   BinaryenAddFunctionExport(codegen.module, "~start", "~start");
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC() |
                                               BinaryenFeatureNontrappingFPToInt());

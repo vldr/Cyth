@@ -58,7 +58,7 @@ for int i = 0; i < a.length; i = i + 1
 
 log("-------------------------")
 
-for i = 0; i < b.length; i = i + 1
+for int i = 0; i < b.length; i = i + 1
     log((string)b[i])
 
 # 1

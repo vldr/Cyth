@@ -66,7 +66,7 @@ for int i = items; i >= 0; i = i - 1
 
     log(pq.peek().value)
 
-for i = 0; i <= items; i = i + 1
+for int i = 0; i <= items; i = i + 1
     log(pq.dequeue().value)
 
 # 10

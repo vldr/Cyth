@@ -754,7 +754,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
     {
       if (body_statement->type != STMT_FUNCTION_DECL && body_statement->type != STMT_VARIABLE_DECL)
       {
-        parser_error(stmt->class.keyword,
+        parser_error(keyword,
                      "Only functions and variables can appear inside 'class' declarations.");
       }
     }
@@ -794,7 +794,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
       }
       else
       {
-        parser_error(stmt->class.keyword,
+        parser_error(keyword,
                      "Only functions and variables can appear inside 'class' declarations.");
       }
     }

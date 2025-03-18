@@ -22,12 +22,11 @@ log("" + false)
 log("" + 2147483647)
 log("" + -2147483648)
 
-for i = -100; i <= 100; i = i + 1
+for int i = -100; i <= 100; i = i + 1
     log("" + i)
 
-
 f = 360.0
-for i = 0; i < 10; i = i + 1
+for int i = 0; i < 10; i = i + 1
     f = f / 3.14
 
     log((string)f)
@@ -47,7 +46,7 @@ log((string)false)
 log((string)2147483647)
 log((string)-2147483648)
 
-for i = -100; i <= 100; i = i + 1
+for int i = -100; i <= 100; i = i + 1
     log((string)i)
 
 # 114.649681

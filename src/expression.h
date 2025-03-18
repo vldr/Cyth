@@ -40,6 +40,7 @@ typedef enum _SCOPE
 {
   SCOPE_LOCAL,
   SCOPE_GLOBAL,
+  SCOPE_GLOBAL_LOCAL,
   SCOPE_CLASS
 } Scope;
 

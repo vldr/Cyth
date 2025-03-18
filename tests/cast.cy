@@ -27,6 +27,8 @@ float l = (float)test()
 bool m = (bool)test()
 bool n = (bool)Test().data
 
+string o = (string)"test"
+
 log("" + a)
 log("" + b)
 log("" + c)
@@ -41,6 +43,7 @@ log("" + k)
 log("" + l)
 log("" + m)
 log("" + n)
+log("" + o)
 
 # 10
 # true
@@ -61,3 +64,4 @@ log("" + n)
 
 # true
 # true
+# test

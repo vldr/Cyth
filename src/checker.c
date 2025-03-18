@@ -14,8 +14,9 @@ static struct
   bool error;
   ArrayStmt statements;
 
-  Environment* global_environment;
   Environment* environment;
+  Environment* global_environment;
+  int global_locals;
 
   FuncStmt* function;
   ClassStmt* class;
@@ -737,6 +738,17 @@ static DataType check_cast_expression(CastExpr* expression)
       }
 
       break;
+    case TYPE_STRING:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_STRING:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
     default:
       break;
     }
@@ -940,6 +952,12 @@ static DataType check_assignment_expression(AssignExpr* expression)
   }
   else if (target->type == EXPR_ACCESS)
   {
+    if (!target->access.variable)
+    {
+      error_not_assignable(expression->op);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     VarStmt* variable = target->access.variable;
     expression->variable = variable;
     expression->data_type = variable->data_type;
@@ -1595,9 +1613,15 @@ static void check_variable_declaration(VarStmt* statement)
   }
   else
   {
-    environment = checker.global_environment;
-
-    statement->scope = SCOPE_GLOBAL;
+    if (environment == checker.global_environment)
+    {
+      statement->scope = SCOPE_GLOBAL;
+    }
+    else
+    {
+      statement->scope = SCOPE_GLOBAL_LOCAL;
+      statement->index = checker.global_locals++;
+    }
   }
 
   if (environment_check_variable(environment, name))
@@ -1796,6 +1820,7 @@ void checker_init(ArrayStmt statements)
 
   checker.environment = environment_init(NULL);
   checker.global_environment = checker.environment;
+  checker.global_locals = 0;
 }
 
 void checker_validate(void)

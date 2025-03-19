@@ -7,6 +7,9 @@ typedef struct
 {
   size_t size;
   void* data;
+
+  size_t source_map_size;
+  char* source_map;
 } Codegen;
 
 void codegen_init(ArrayStmt statements);

@@ -12,7 +12,8 @@
 
 typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
                                  const char* message);
-typedef void (*result_callback_t)(size_t size, void* data);
+typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_size,
+                                  void* source_map);
 
 static struct
 {
@@ -67,7 +68,7 @@ void run(const char* source, bool codegen)
     codegen_init(statements);
     Codegen codegen = codegen_generate();
 
-    cyth.result_callback(codegen.size, codegen.data);
+    cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
   }
 
 clean_up:
@@ -109,8 +110,10 @@ static void handle_error(int start_line, int start_column, int end_line, int end
           end_line, end_column, message);
 }
 
-static void handle_result(size_t size, void* data)
+static void handle_result(size_t size, void* data, size_t source_map_size, void* source_map)
 {
+  (void)source_map_size;
+
   if (!cyth.output_path)
   {
     goto clean_up;
@@ -135,6 +138,7 @@ clean_up_fd:
 
 clean_up:
   free(data);
+  free(source_map);
 }
 
 int main(int argc, char* argv[])

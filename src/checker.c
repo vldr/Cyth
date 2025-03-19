@@ -303,6 +303,8 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
 
 static ClassStmt* template_to_data_type(DataType template, DataTypeToken template_type)
 {
+  template_type.count = 0;
+
   const char* name = data_type_token_to_string(template_type, NULL);
 
   VarStmt* variable = environment_get_variable(checker.environment, name);

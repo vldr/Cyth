@@ -17,11 +17,19 @@ typedef struct
   unsigned int index;
 } HashIndex;
 
+typedef struct
+{
+  const char* function;
+  Token token;
+  BinaryenExpressionRef expression;
+} DebugInfo;
+
 array_def(BinaryenExpressionRef, BinaryenExpressionRef);
 array_def(BinaryenPackedType, BinaryenPackedType);
 array_def(BinaryenHeapType, BinaryenHeapType);
 array_def(BinaryenType, BinaryenType);
 array_def(HashIndex, HashIndex);
+array_def(DebugInfo, DebugInfo);
 
 static BinaryenExpressionRef generate_expression(Expr* expression);
 static BinaryenExpressionRef generate_statement(Stmt* statement);
@@ -43,10 +51,18 @@ static struct
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
   MapSInt string_constants;
+  ArrayDebugInfo debug_info;
 
+  const char* function;
   int strings;
   int loops;
 } codegen;
+
+static void generate_debug_info(Token token, BinaryenExpressionRef expression)
+{
+  DebugInfo debug_info = { .expression = expression, .token = token, .function = codegen.function };
+  array_add(&codegen.debug_info, debug_info);
+}
 
 static void generate_string_export_functions(void)
 {
@@ -1085,7 +1101,10 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     UNREACHABLE("Unhandled binary operation");
   }
 
-  return BinaryenBinary(codegen.module, op, left, right);
+  BinaryenExpressionRef binary = BinaryenBinary(codegen.module, op, left, right);
+  generate_debug_info(expression->op, binary);
+
+  return binary;
 }
 
 static BinaryenExpressionRef generate_unary_expression(UnaryExpr* expression)
@@ -1279,9 +1298,10 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
       BinaryenExpressionRef length = BinaryenStructGet(
         codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
+      BinaryenExpressionRef unreachable = BinaryenUnreachable(codegen.module);
       BinaryenExpressionRef check = BinaryenIf(
         codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
-        BinaryenUnreachable(codegen.module), NULL);
+        unreachable, NULL);
 
       BinaryenExpressionRef list[] = {
         check,
@@ -1290,6 +1310,9 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
         BinaryenArrayGet(codegen.module, BinaryenExpressionCopy(array, codegen.module),
                          BinaryenExpressionCopy(index, codegen.module), BinaryenTypeAuto(), false),
       };
+
+      generate_debug_info(expression->target->index.index_token, unreachable);
+      generate_debug_info(expression->target->index.index_token, list[1]);
 
       return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                            BinaryenTypeAuto());
@@ -1343,7 +1366,11 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
     array_add(&arguments, generate_expression(argument));
   }
 
-  return BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
+  BinaryenExpressionRef call =
+    BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
+  generate_debug_info(expression->callee_token, call);
+
+  return call;
 }
 
 static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
@@ -1399,15 +1426,19 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
     BinaryenExpressionRef length = BinaryenStructGet(
       codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
+    BinaryenExpressionRef unreachable = BinaryenUnreachable(codegen.module);
     BinaryenExpressionRef check =
       BinaryenIf(codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
-                 BinaryenUnreachable(codegen.module), NULL);
+                 unreachable, NULL);
 
     BinaryenExpressionRef list[] = {
       check,
       BinaryenArrayGet(codegen.module, array, BinaryenExpressionCopy(index, codegen.module),
                        BinaryenTypeAuto(), false),
     };
+
+    generate_debug_info(expression->index_token, unreachable);
+    generate_debug_info(expression->index_token, list[1]);
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                          BinaryenTypeAuto());
@@ -1636,6 +1667,9 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   }
 
   const char* name = statement->name.lexeme;
+  const char* previous_function = codegen.function;
+  codegen.function = name;
+
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
   BinaryenType results = data_type_to_binaryen_type(statement->data_type);
 
@@ -1655,6 +1689,7 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
     BinaryenAddFunctionExport(codegen.module, name, name);
   }
 
+  codegen.function = previous_function;
   return NULL;
 }
 
@@ -1874,7 +1909,9 @@ void codegen_init(ArrayStmt statements)
   codegen.statements = statements;
   codegen.loops = -1;
   codegen.strings = 0;
+  codegen.function = "<start>";
 
+  array_init(&codegen.debug_info);
   array_init(&codegen.global_local_types);
 
   TypeBuilderRef type_builder = TypeBuilderCreate(1);
@@ -1897,26 +1934,38 @@ void codegen_init(ArrayStmt statements)
 Codegen codegen_generate(void)
 {
   Codegen result = { 0 };
-  BinaryenExpressionRef body = generate_statements(&codegen.statements);
 
-  BinaryenAddFunction(codegen.module, "~start", BinaryenTypeNone(), BinaryenTypeNone(),
+  BinaryenExpressionRef body = generate_statements(&codegen.statements);
+  BinaryenAddFunction(codegen.module, codegen.function, BinaryenTypeNone(), BinaryenTypeNone(),
                       codegen.global_local_types.elems, codegen.global_local_types.size, body);
-  BinaryenAddFunctionExport(codegen.module, "~start", "~start");
+  BinaryenAddFunctionExport(codegen.module, codegen.function, codegen.function);
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC() |
                                               BinaryenFeatureNontrappingFPToInt());
+
+  DebugInfo info;
+  BinaryenIndex file = BinaryenModuleAddDebugInfoFileName(codegen.module, "");
+  array_foreach(&codegen.debug_info, info)
+  {
+    BinaryenFunctionSetDebugLocation(BinaryenGetFunction(codegen.module, info.function),
+                                     info.expression, file, info.token.start_line,
+                                     info.token.start_column);
+  }
 
   if (BinaryenModuleValidate(codegen.module))
   {
     BinaryenModuleOptimize(codegen.module);
 
     BinaryenModuleAllocateAndWriteResult binaryen_result =
-      BinaryenModuleAllocateAndWrite(codegen.module, NULL);
+      BinaryenModuleAllocateAndWrite(codegen.module, "");
 
     result.data = binaryen_result.binary;
     result.size = binaryen_result.binaryBytes;
+    result.source_map = binaryen_result.sourceMap;
+    result.source_map_size = strlen(binaryen_result.sourceMap);
   }
 
   BinaryenModulePrint(codegen.module);
   BinaryenModuleDispose(codegen.module);
+
   return result;
 }

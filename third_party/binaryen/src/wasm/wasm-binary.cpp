@@ -1236,6 +1236,16 @@ void WasmBinaryWriter::writeSourceMapProlog() {
     *sourceMap << "\"" << wasm->debugInfoSymbolNames[i] << "\"";
   }
 
+  *sourceMap << "],\"functions\":[";
+
+  for (size_t i = 0; i < wasm->functions.size(); i++) {
+    if (i > 0) {
+      *sourceMap << ",";
+    }
+    // TODO respect JSON string encoding, e.g. quotes and control chars.
+    *sourceMap << "\"" << wasm->functions[i]->name.str << "\"";
+  }
+
   *sourceMap << "],\"mappings\":\"";
 }
 
@@ -1251,9 +1261,10 @@ static void writeBase64VLQ(std::ostream& out, int32_t n) {
     }
     // more VLG digit will follow -- add continuation bit (0x20),
     // base64 codes 'g'..'z', '0'..'9', '+', '/'
-    out << char(digit < 20
-                  ? 'g' + digit
-                  : digit < 30 ? '0' + digit - 20 : digit == 30 ? '+' : '/');
+    out << char(digit < 20    ? 'g' + digit
+                : digit < 30  ? '0' + digit - 20
+                : digit == 30 ? '+'
+                              : '/');
   }
 }
 

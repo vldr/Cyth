@@ -43,6 +43,10 @@ class EditorConsole {
     this.executionTime = 0;
     this.executionTimer = setInterval(() => this.onTimer(), 100);
 
+    if (this.worker) {
+      this.worker.terminate();
+    }
+
     this.worker = new Worker("worker.js");
     this.worker.onerror = () => this.onWorkerError();
     this.worker.onmessageerror = () => this.onWorkerError();
@@ -80,20 +84,12 @@ class EditorConsole {
       throw new Error("interpreter is already running");
     }
 
-    if (this.worker) {
-      throw new Error("worker is not undefined");
-    }
-
     Module._run(this.editor.getText(), true);
   }
 
-  stop() {
+  stop(terminate) {
     if (!this.running) {
       throw new Error("interpreter is already stopped");
-    }
-
-    if (!this.worker) {
-      throw new Error("worker is undefined");
     }
 
     this.running = false;
@@ -102,8 +98,10 @@ class EditorConsole {
     this.consoleButtonStopIcon.style.display = "none";
     this.consoleButtonStartIcon.style.display = "";
 
-    // this.worker.terminate();
-    this.worker = undefined;
+    if (terminate) {
+      this.worker.terminate();
+      this.worker = undefined;
+    }
 
     clearInterval(this.executionTimer);
     this.executionTimer = undefined;
@@ -142,7 +140,7 @@ class EditorConsole {
     if (!this.running) {
       this.start();
     } else {
-      this.stop();
+      this.stop(true);
       this.print("Program was terminated.\n");
     }
   }

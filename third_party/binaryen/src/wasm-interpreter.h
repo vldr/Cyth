@@ -230,6 +230,7 @@ public:
     depth++;
     if (maxDepth != NO_LIMIT && depth > maxDepth) {
       hostLimit("interpreter recursion limit");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto ret = OverriddenVisitor<SubType, Flow>::visit(curr);
     if (!ret.breaking()) {
@@ -681,22 +682,26 @@ public:
       case DivSInt32: {
         if (right.getInteger() == 0) {
           trap("i32.div_s by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         if (left.getInteger() == std::numeric_limits<int32_t>::min() &&
             right.getInteger() == -1) {
           trap("i32.div_s overflow"); // signed division overflow
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.divS(right);
       }
       case DivUInt32: {
         if (right.getInteger() == 0) {
           trap("i32.div_u by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.divU(right);
       }
       case RemSInt32: {
         if (right.getInteger() == 0) {
           trap("i32.rem_s by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         if (left.getInteger() == std::numeric_limits<int32_t>::min() &&
             right.getInteger() == -1) {
@@ -707,27 +712,32 @@ public:
       case RemUInt32: {
         if (right.getInteger() == 0) {
           trap("i32.rem_u by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.remU(right);
       }
       case DivSInt64: {
         if (right.getInteger() == 0) {
           trap("i64.div_s by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         if (left.getInteger() == LLONG_MIN && right.getInteger() == -1LL) {
           trap("i64.div_s overflow"); // signed division overflow
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.divS(right);
       }
       case DivUInt64: {
         if (right.getInteger() == 0) {
           trap("i64.div_u by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.divU(right);
       }
       case RemSInt64: {
         if (right.getInteger() == 0) {
           trap("i64.rem_s by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         if (left.getInteger() == LLONG_MIN && right.getInteger() == -1LL) {
           return Literal(int64_t(0));
@@ -737,6 +747,7 @@ public:
       case RemUInt64: {
         if (right.getInteger() == 0) {
           trap("i64.rem_u by 0");
+          return Flow(NONCONSTANT_FLOW);
         }
         return left.remU(right);
       }
@@ -1313,25 +1324,26 @@ public:
   }
   Flow visitUnreachable(Unreachable* curr) {
     NOTE_ENTER("Unreachable");
-    //trap("unreachable");
-    //WASM_UNREACHABLE("unreachable");
-
+    trap("unreachable");
     return Flow(NONCONSTANT_FLOW);
   }
 
-  Literal truncSFloat(Unary* curr, Literal value) {
+  Flow truncSFloat(Unary* curr, Literal value) {
     double val = value.getFloat();
     if (std::isnan(val)) {
       trap("truncSFloat of nan");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (curr->type == Type::i32) {
       if (value.type == Type::f32) {
         if (!isInRangeI32TruncS(value.reinterpreti32())) {
           trap("i32.truncSFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       } else {
         if (!isInRangeI32TruncS(value.reinterpreti64())) {
           trap("i32.truncSFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       }
       return Literal(int32_t(val));
@@ -1339,29 +1351,34 @@ public:
       if (value.type == Type::f32) {
         if (!isInRangeI64TruncS(value.reinterpreti32())) {
           trap("i64.truncSFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       } else {
         if (!isInRangeI64TruncS(value.reinterpreti64())) {
           trap("i64.truncSFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       }
       return Literal(int64_t(val));
     }
   }
 
-  Literal truncUFloat(Unary* curr, Literal value) {
+  Flow truncUFloat(Unary* curr, Literal value) {
     double val = value.getFloat();
     if (std::isnan(val)) {
       trap("truncUFloat of nan");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (curr->type == Type::i32) {
       if (value.type == Type::f32) {
         if (!isInRangeI32TruncU(value.reinterpreti32())) {
           trap("i32.truncUFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       } else {
         if (!isInRangeI32TruncU(value.reinterpreti64())) {
           trap("i32.truncUFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       }
       return Literal(uint32_t(val));
@@ -1369,10 +1386,12 @@ public:
       if (value.type == Type::f32) {
         if (!isInRangeI64TruncU(value.reinterpreti32())) {
           trap("i64.truncUFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       } else {
         if (!isInRangeI64TruncU(value.reinterpreti64())) {
           trap("i64.truncUFloat overflow");
+          return Flow(NONCONSTANT_FLOW);
         }
       }
       return Literal(uint64_t(val));
@@ -1485,7 +1504,8 @@ public:
     }
     NOTE_EVAL1(curr->tag);
     throwException(WasmException{makeExnData(curr->tag, arguments)});
-    WASM_UNREACHABLE("throw");
+
+    return Flow(NONCONSTANT_FLOW);
   }
   Flow visitRethrow(Rethrow* curr) { WASM_UNREACHABLE("unimp"); }
   Flow visitThrowRef(ThrowRef* curr) {
@@ -1498,10 +1518,12 @@ public:
     NOTE_EVAL1(exnref);
     if (exnref.isNull()) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     assert(exnref.isExn());
     throwException(WasmException{exnref});
-    WASM_UNREACHABLE("throw");
+
+    return Flow(NONCONSTANT_FLOW);
   }
   Flow visitRefI31(RefI31* curr) {
     NOTE_ENTER("RefI31");
@@ -1524,6 +1546,7 @@ public:
     NOTE_EVAL1(value);
     if (value.isNull()) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     return Literal(value.geti31(curr->signed_));
   }
@@ -1592,7 +1615,7 @@ public:
     }
     assert(cast.getFailure());
     trap("cast error");
-    WASM_UNREACHABLE("unreachable");
+    return Flow(NONCONSTANT_FLOW);
   }
   Flow visitBrOn(BrOn* curr) {
     NOTE_ENTER("BrOn");
@@ -1679,6 +1702,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
     return extendForPacking(data->values[curr->index], field, curr->signed_);
@@ -1696,6 +1720,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
     data->values[curr->index] =
@@ -1734,6 +1759,7 @@ public:
     Index num = size.getSingleValue().geti32();
     if (num >= DataLimit) {
       hostLimit("allocation failure");
+      return Flow(NONCONSTANT_FLOW);
     }
     Literals data(num);
     if (curr->isWithDefault()) {
@@ -1757,6 +1783,7 @@ public:
     Index num = curr->values.size();
     if (num >= DataLimit) {
       hostLimit("allocation failure");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (curr->type == Type::unreachable) {
       // We cannot proceed to compute the heap type, as there isn't one. Just
@@ -1794,10 +1821,12 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     Index i = index.getSingleValue().geti32();
     if (i >= data->values.size()) {
       trap("array oob");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
     return extendForPacking(data->values[i], field, curr->signed_);
@@ -1819,10 +1848,12 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     Index i = index.getSingleValue().geti32();
     if (i >= data->values.size()) {
       trap("array oob");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
     data->values[i] = truncateForPacking(value.getSingleValue(), field);
@@ -1837,6 +1868,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     return Literal(int32_t(data->values.size()));
   }
@@ -1865,19 +1897,23 @@ public:
     auto destData = destRef.getSingleValue().getGCData();
     if (!destData) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto srcData = srcRef.getSingleValue().getGCData();
     if (!srcData) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     size_t destVal = destIndex.getSingleValue().getUnsigned();
     size_t srcVal = srcIndex.getSingleValue().getUnsigned();
     size_t lengthVal = length.getSingleValue().getUnsigned();
     if (destVal + lengthVal > destData->values.size()) {
       trap("oob");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (srcVal + lengthVal > srcData->values.size()) {
       trap("oob");
+      return Flow(NONCONSTANT_FLOW);
     }
     std::vector<Literal> copied;
     copied.resize(lengthVal);
@@ -1910,6 +1946,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     size_t indexVal = index.getSingleValue().getUnsigned();
     Literal fillVal = value.getSingleValue();
@@ -1922,6 +1959,7 @@ public:
     if (indexVal > arraySize || sizeVal > arraySize ||
         indexVal + sizeVal > arraySize || indexVal + sizeVal < indexVal) {
       trap("out of bounds array access in array.fill");
+      return Flow(NONCONSTANT_FLOW);
     }
     for (size_t i = 0; i < sizeVal; ++i) {
       data->values[indexVal + i] = fillVal;
@@ -1942,6 +1980,7 @@ public:
       case RefAsNonNull:
         if (value.isNull()) {
           trap("null ref");
+          return Flow(NONCONSTANT_FLOW);
         }
         return value;
       case AnyConvertExtern:
@@ -1969,6 +2008,7 @@ public:
         auto ptrData = ptr.getSingleValue().getGCData();
         if (!ptrData) {
           trap("null ref");
+          return Flow(NONCONSTANT_FLOW);
         }
         const auto& ptrDataValues = ptrData->values;
         size_t startVal = start.getSingleValue().getUnsigned();
@@ -1976,6 +2016,7 @@ public:
         if (startVal > ptrDataValues.size() || endVal > ptrDataValues.size() ||
             endVal < startVal) {
           trap("array oob");
+          return Flow(NONCONSTANT_FLOW);
         }
         Literals contents;
         if (endVal > startVal) {
@@ -1990,6 +2031,7 @@ public:
         uint32_t codePoint = ptr.getSingleValue().getUnsigned();
         if (codePoint > 0x10FFFF) {
           trap("invalid code point");
+          return Flow(NONCONSTANT_FLOW);
         }
         std::stringstream wtf16;
         String::writeWTF16CodePoint(wtf16, codePoint);
@@ -2017,6 +2059,7 @@ public:
     auto data = value.getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     return Literal(int32_t(data->values.size()));
@@ -2038,11 +2081,13 @@ public:
     auto rightData = right.getGCData();
     if (!leftData || !rightData) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     auto totalSize = leftData->values.size() + rightData->values.size();
     if (totalSize >= DataLimit) {
       hostLimit("allocation failure");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     Literals contents;
@@ -2079,6 +2124,7 @@ public:
     auto arrayData = array.getSingleValue().getGCData();
     if (!strData || !arrayData) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto startVal = start.getSingleValue().getUnsigned();
     auto& strValues = strData->values;
@@ -2087,6 +2133,7 @@ public:
     if (std::ckd_add<size_t>(&end, startVal, strValues.size()) ||
         end > arrayValues.size()) {
       trap("oob");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     for (Index i = 0; i < strValues.size(); i++) {
@@ -2122,6 +2169,7 @@ public:
       case StringEqCompare: {
         if (!leftData || !rightData) {
           trap("null ref");
+          return Flow(NONCONSTANT_FLOW);
         }
         auto& leftValues = leftData->values;
         auto& rightValues = rightData->values;
@@ -2175,11 +2223,13 @@ public:
     auto data = refValue.getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto& values = data->values;
     Index i = pos.getSingleValue().geti32();
     if (i >= values.size()) {
       trap("string oob");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     return Literal(values[i].geti32());
@@ -2201,6 +2251,7 @@ public:
     auto refData = ref.getSingleValue().getGCData();
     if (!refData) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto& refValues = refData->values;
     auto startVal = start.getSingleValue().getUnsigned();
@@ -2558,13 +2609,9 @@ public:
   Flow visitResume(Resume* curr) { WASM_UNREACHABLE("unimplemented"); }
   Flow visitSuspend(Suspend* curr) { WASM_UNREACHABLE("unimplemented"); }
 
-  void trap(const char* why) override { throw NonconstantException(); }
-
-  void hostLimit(const char* why) override { throw NonconstantException(); }
-
-  virtual void throwException(const WasmException& exn) override {
-    throw NonconstantException();
-  }
+  void trap(const char* why) override {}
+  void hostLimit(const char* why) override {}
+  virtual void throwException(const WasmException& exn) override {}
 };
 
 using GlobalValueSet = std::map<Name, Literals>;
@@ -3152,6 +3199,7 @@ public:
       auto funcref = info.interface()->tableLoad(info.name, index);
       if (!Type::isSubType(funcref.type, Type(curr->heapType, NonNullable))) {
         trap("cast failure in call_indirect");
+        return Flow(NONCONSTANT_FLOW);
       }
       arguments.push_back(funcref);
       return Flow(RETURN_CALL_FLOW, std::move(arguments));
@@ -3179,6 +3227,7 @@ public:
     auto targetRef = target.getSingleValue();
     if (targetRef.isNull()) {
       trap("null target in call_ref");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     if (curr->isReturn) {
@@ -3286,6 +3335,7 @@ public:
     auto tableSize = info.interface()->tableSize(info.name);
     if (dest + size > tableSize) {
       trap("out of bounds table access");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     for (uint64_t i = 0; i < size; i++) {
@@ -3325,6 +3375,7 @@ public:
         sourceVal + sizeVal < sourceVal || sourceVal + sizeVal < sizeVal ||
         destVal + sizeVal < destVal || destVal + sizeVal < sizeVal) {
       trap("out of bounds segment access in table.copy");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     int64_t start = 0;
@@ -3372,14 +3423,17 @@ public:
     if (offsetVal + sizeVal > 0 &&
         droppedElementSegments.count(curr->segment)) {
       trap("out of bounds segment access in table.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (offsetVal + sizeVal > segment->data.size()) {
       trap("out of bounds segment access in table.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto info = getTableInstanceInfo(curr->table);
     auto tableSize = info.interface()->tableSize(info.name);
     if (destVal + sizeVal > tableSize) {
       trap("out of bounds table access in table.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     for (size_t i = 0; i < sizeVal; ++i) {
       // FIXME: We should not call visit() here more than once at runtime. The
@@ -3587,6 +3641,7 @@ public:
     //       timeout value we allow here for now is 0.
     if (timeout.getSingleValue().getInteger() != 0) {
       hostLimit("threads support");
+      return Flow(NONCONSTANT_FLOW);
     }
     return Literal(int32_t(2)); // Timed out
   }
@@ -3890,14 +3945,17 @@ public:
 
     if (offsetVal + sizeVal > 0 && droppedDataSegments.count(curr->segment)) {
       trap("out of bounds segment access in memory.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (offsetVal + sizeVal > segment->data.size()) {
       trap("out of bounds segment access in memory.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     auto info = getMemoryInstanceInfo(curr->memory);
     auto memorySize = info.instance->getMemorySize(info.name);
     if (destVal + sizeVal > memorySize * Memory::kPageSize) {
       trap("out of bounds memory access in memory.init");
+      return Flow(NONCONSTANT_FLOW);
     }
     for (size_t i = 0; i < sizeVal; ++i) {
       Literal addr(destVal + i);
@@ -3944,6 +4002,7 @@ public:
         sourceVal + sizeVal < sourceVal || sourceVal + sizeVal < sizeVal ||
         destVal + sizeVal < destVal || destVal + sizeVal < sizeVal) {
       trap("out of bounds segment access in memory.copy");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     int64_t start = 0;
@@ -3994,6 +4053,7 @@ public:
         sizeVal > memorySize * Memory::kPageSize ||
         destVal + sizeVal > memorySize * Memory::kPageSize) {
       trap("out of bounds memory access in memory.fill");
+      return Flow(NONCONSTANT_FLOW);
     }
     uint8_t val(value.getSingleValue().geti32());
     for (size_t i = 0; i < sizeVal; ++i) {
@@ -4031,9 +4091,11 @@ public:
     uint64_t end;
     if (std::ckd_add(&end, offset, size * elemBytes) || end > seg.data.size()) {
       trap("out of bounds segment access in array.new_data");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (droppedDataSegments.count(curr->segment) && end > 0) {
       trap("dropped segment access in array.new_data");
+      return Flow(NONCONSTANT_FLOW);
     }
     contents.reserve(size);
     for (Index i = offset; i < end; i += elemBytes) {
@@ -4065,9 +4127,11 @@ public:
     auto end = offset + size;
     if (end > seg.data.size()) {
       trap("out of bounds segment access in array.new_elem");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (end > 0 && droppedElementSegments.count(curr->segment)) {
       trap("out of bounds segment access in array.new_elem");
+      return Flow(NONCONSTANT_FLOW);
     }
     contents.reserve(size);
     for (Index i = offset; i < end; ++i) {
@@ -4097,6 +4161,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     size_t indexVal = index.getSingleValue().getUnsigned();
     size_t offsetVal = offset.getSingleValue().getUnsigned();
@@ -4105,6 +4170,7 @@ public:
     size_t arraySize = data->values.size();
     if ((uint64_t)indexVal + sizeVal > arraySize) {
       trap("out of bounds array access in array.init");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     Module& wasm = *self()->getModule();
@@ -4115,9 +4181,11 @@ public:
     uint64_t readSize = (uint64_t)sizeVal * elemSize;
     if (offsetVal + readSize > seg->data.size()) {
       trap("out of bounds segment access in array.init_data");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (offsetVal + sizeVal > 0 && droppedDataSegments.count(curr->segment)) {
       trap("out of bounds segment access in array.init_data");
+      return Flow(NONCONSTANT_FLOW);
     }
     for (size_t i = 0; i < sizeVal; i++) {
       void* addr = (void*)&seg->data[offsetVal + i * elemSize];
@@ -4146,6 +4214,7 @@ public:
     auto data = ref.getSingleValue().getGCData();
     if (!data) {
       trap("null ref");
+      return Flow(NONCONSTANT_FLOW);
     }
     size_t indexVal = index.getSingleValue().getUnsigned();
     size_t offsetVal = offset.getSingleValue().getUnsigned();
@@ -4154,6 +4223,7 @@ public:
     size_t arraySize = data->values.size();
     if ((uint64_t)indexVal + sizeVal > arraySize) {
       trap("out of bounds array access in array.init");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     Module& wasm = *self()->getModule();
@@ -4162,9 +4232,11 @@ public:
     auto max = (uint64_t)offsetVal + sizeVal;
     if (max > seg->data.size()) {
       trap("out of bounds segment access in array.init_elem");
+      return Flow(NONCONSTANT_FLOW);
     }
     if (max > 0 && droppedElementSegments.count(curr->segment)) {
       trap("out of bounds segment access in array.init_elem");
+      return Flow(NONCONSTANT_FLOW);
     }
     for (size_t i = 0; i < sizeVal; i++) {
       // TODO: This is not correct because it does not preserve the identity
@@ -4254,6 +4326,8 @@ public:
     for (int i = exceptionStack.size() - 1; i >= 0; i--) {
       if (exceptionStack[i].second == curr->target) {
         throwException(exceptionStack[i].first);
+
+        return Flow(NONCONSTANT_FLOW);
       }
     }
     WASM_UNREACHABLE("rethrow");
@@ -4319,9 +4393,10 @@ public:
     return value;
   }
 
-  Literals callFunction(Name name, Literals arguments) {
+  Flow callFunction(Name name, Literals arguments) {
     if (callDepth > maxDepth) {
       hostLimit("stack limit");
+      return Flow(NONCONSTANT_FLOW);
     }
 
     Flow flow;

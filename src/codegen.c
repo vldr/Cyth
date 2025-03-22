@@ -877,6 +877,115 @@ static const char* generate_array_pop_function(DataType callee_data_type)
 #undef CONSTANT
 }
 
+static const char* generate_int_hash_function(void)
+{
+  const char* name = "int.hash";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType params_list[] = { BinaryenTypeInt32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(
+      codegen.module, name, params, results, NULL, 0,
+      BinaryenReturn(codegen.module, BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32())));
+  }
+
+  return name;
+}
+
+static const char* generate_float_hash_function(void)
+{
+  const char* name = "float.hash";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType params_list[] = { BinaryenTypeFloat32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0,
+                        BinaryenUnary(codegen.module, BinaryenReinterpretFloat32(),
+                                      BinaryenLocalGet(codegen.module, 0, BinaryenTypeFloat32())));
+  }
+
+  return name;
+}
+
+static const char* generate_string_hash_function(void)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define HASH() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define SIZE() (BinaryenArrayLen(codegen.module, THIS()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.hash";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef loop_body_list[] = {
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGeSInt32(), COUNTER(), SIZE()),
+                 BinaryenBreak(codegen.module, "string.hash.block", NULL, NULL), NULL),
+      BinaryenLocalSet(codegen.module, 2,
+                       BinaryenBinary(codegen.module, BinaryenXorInt32(), HASH(),
+                                      BinaryenArrayGet(codegen.module, THIS(), COUNTER(),
+                                                       codegen.string_type, false))),
+      BinaryenLocalSet(
+        codegen.module, 2,
+        BinaryenBinary(codegen.module, BinaryenMulInt32(), HASH(), CONSTANT(0x01000193))),
+
+      BinaryenLocalSet(codegen.module, 1,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
+
+      BinaryenBreak(codegen.module, "string.hash.loop", NULL, NULL)
+    };
+    BinaryenExpressionRef loop_body =
+      BinaryenBlock(codegen.module, "string.hash.block", loop_body_list,
+                    sizeof(loop_body_list) / sizeof_ptr(loop_body_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenLocalSet(codegen.module, 2, CONSTANT(0x811C9DC5)),
+      BinaryenLoop(codegen.module, "string.hash.loop", loop_body),
+      BinaryenReturn(codegen.module, HASH()),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, "NULL", body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    BinaryenType params_list[] = { codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32() };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef THIS
+#undef COUNTER
+#undef HASH
+#undef SIZE
+#undef CONSTANT
+}
+
 static BinaryenExpressionRef generate_group_expression(GroupExpr* expression)
 {
   return generate_expression(expression->expr);
@@ -1345,6 +1454,12 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
       name = generate_array_push_function(callee_data_type);
     else if (strcmp(name, "array.pop") == 0)
       name = generate_array_pop_function(callee_data_type);
+    else if (strcmp(name, "int.hash") == 0)
+      name = generate_int_hash_function();
+    else if (strcmp(name, "float.hash") == 0)
+      name = generate_float_hash_function();
+    else if (strcmp(name, "string.hash") == 0)
+      name = generate_string_hash_function();
     else
       UNREACHABLE("Unhandled function internal");
 

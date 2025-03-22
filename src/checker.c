@@ -1331,6 +1331,65 @@ static DataType check_access_expression(AccessExpr* expression)
 
       return expression->data_type;
     }
+    else if (strcmp("hash", name) == 0)
+    {
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = "string.hash";
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      expression->data_type.function_internal.return_type->type = TYPE_INTEGER;
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
+
+    error_cannot_find_member_name(expression->name, name, "string");
+    return DATA_TYPE(TYPE_VOID);
+  }
+  else if (equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) ||
+           equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)) ||
+           equal_data_type(data_type, DATA_TYPE(TYPE_CHAR)) ||
+           equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+  {
+    const char* name = expression->name.lexeme;
+
+    if (strcmp("hash", name) == 0)
+    {
+      const char* function_name;
+      switch (data_type.type)
+      {
+
+      case TYPE_BOOL:
+      case TYPE_CHAR:
+      case TYPE_INTEGER:
+        function_name = "int.hash";
+        break;
+      case TYPE_FLOAT:
+        function_name = "float.hash";
+        break;
+      default:
+        UNREACHABLE("Unknown data type hash");
+      }
+
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = function_name;
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      expression->data_type.function_internal.return_type->type = TYPE_INTEGER;
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
 
     error_cannot_find_member_name(expression->name, name, "string");
     return DATA_TYPE(TYPE_VOID);

@@ -288,7 +288,7 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
     }
     else if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
     {
-      return *variable->data_type.alias;
+      return *variable->data_type.alias.data_type;
     }
     else
     {
@@ -346,8 +346,10 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
     variable->data_type.type = TYPE_ALIAS;
-    variable->data_type.alias = ALLOC(DataType);
-    *variable->data_type.alias = data_type_token_to_data_type(actual_data_type_token, false);
+    variable->data_type.alias.token = actual_data_type_token.token;
+    variable->data_type.alias.data_type = ALLOC(DataType);
+    *variable->data_type.alias.data_type =
+      data_type_token_to_data_type(actual_data_type_token, false);
 
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
@@ -439,6 +441,17 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
     {
       error_invalid_template_arity(type.token, expected, got);
       return DATA_TYPE(TYPE_VOID);
+    }
+
+    for (unsigned int i = 0; i < type.types->size; i++)
+    {
+      VarStmt* variable =
+        environment_get_variable(checker.environment, type.types->elems[i].token.lexeme);
+
+      if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+      {
+        type.types->elems[i].token = variable->data_type.alias.token;
+      }
     }
 
     type.token.lexeme = template_to_data_type(variable->data_type, type)->name.lexeme;
@@ -1000,6 +1013,17 @@ static DataType check_call_expression(CallExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
+    for (unsigned int i = 0; i < expression->types.size; i++)
+    {
+      VarStmt* variable =
+        environment_get_variable(checker.environment, expression->types.elems[i].token.lexeme);
+
+      if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+      {
+        expression->types.elems[i].token = variable->data_type.alias.token;
+      }
+    }
+
     DataTypeToken class_type = {
       .token = callee_data_type.class_template->name,
       .types = &expression->types,
@@ -1232,7 +1256,7 @@ static DataType check_call_expression(CallExpr* expression)
     }
 
     expression->callee_data_type = callee_data_type;
-    expression->return_data_type = *callee_data_type.alias;
+    expression->return_data_type = *callee_data_type.alias.data_type;
 
     return expression->return_data_type;
   }

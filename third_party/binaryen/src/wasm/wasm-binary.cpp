@@ -1238,11 +1238,29 @@ void WasmBinaryWriter::writeSourceMapProlog() {
 
   *sourceMap << "],\"functions\":[";
 
+  int count = 0;
+
   for (size_t i = 0; i < wasm->functions.size(); i++) {
-    if (i > 0) {
+    if (!wasm->functions[i]->imported())
+      continue;
+
+    if (count > 0) {
       *sourceMap << ",";
     }
-    // TODO respect JSON string encoding, e.g. quotes and control chars.
+
+    count++;
+    *sourceMap << "\"" << wasm->functions[i]->name.str << "\"";
+  }
+
+  for (size_t i = 0; i < wasm->functions.size(); i++) {
+    if (wasm->functions[i]->imported())
+      continue;
+
+    if (count > 0) {
+      *sourceMap << ",";
+    }
+
+    count++;
     *sourceMap << "\"" << wasm->functions[i]->name.str << "\"";
   }
 

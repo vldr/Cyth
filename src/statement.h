@@ -89,6 +89,7 @@ typedef struct _CLASS_STMT
   ArrayFuncStmt functions;
 
   uintptr_t ref;
+  void* initializer_function;
 } ClassStmt;
 
 typedef struct _CLASS_TEMPLATE_STMT

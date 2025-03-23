@@ -68,7 +68,12 @@ typedef struct _DATA_TYPE
     struct _CLASS_STMT* class;
     struct _CLASS_TEMPLATE_STMT* class_template;
     struct _FUNC_STMT* function;
-    struct _DATA_TYPE* alias;
+
+    struct
+    {
+      Token token;
+      struct _DATA_TYPE* data_type;
+    } alias;
 
     struct
     {

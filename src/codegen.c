@@ -58,9 +58,9 @@ static struct
   int loops;
 } codegen;
 
-static void generate_debug_info(Token token, BinaryenExpressionRef expression)
+static void generate_debug_info(Token token, BinaryenExpressionRef expression, const char* function)
 {
-  DebugInfo debug_info = { .expression = expression, .token = token, .function = codegen.function };
+  DebugInfo debug_info = { .expression = expression, .token = token, .function = function };
   array_add(&codegen.debug_info, debug_info);
 }
 
@@ -1211,7 +1211,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
   }
 
   BinaryenExpressionRef binary = BinaryenBinary(codegen.module, op, left, right);
-  generate_debug_info(expression->op, binary);
+  generate_debug_info(expression->op, binary, codegen.function);
 
   return binary;
 }
@@ -1344,9 +1344,14 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
     return BinaryenLocalGet(codegen.module, expression->variable->index, type);
   case SCOPE_GLOBAL:
     return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
-  case SCOPE_CLASS:
-    return BinaryenStructGet(codegen.module, expression->variable->index,
-                             BinaryenLocalGet(codegen.module, 0, codegen.class), type, false);
+  case SCOPE_CLASS: {
+    BinaryenExpressionRef get =
+      BinaryenStructGet(codegen.module, expression->variable->index,
+                        BinaryenLocalGet(codegen.module, 0, codegen.class), type, false);
+    generate_debug_info(expression->name, get, codegen.function);
+
+    return get;
+  }
   default:
     UNREACHABLE("Unhandled scope type");
   }
@@ -1388,6 +1393,8 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
                           BinaryenExpressionCopy(ref, codegen.module), codegen.class, false),
       };
 
+      generate_debug_info(expression->op, list[0], codegen.function);
+
       return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
     }
 
@@ -1420,8 +1427,8 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
                          BinaryenExpressionCopy(index, codegen.module), BinaryenTypeAuto(), false),
       };
 
-      generate_debug_info(expression->target->index.index_token, unreachable);
-      generate_debug_info(expression->target->index.index_token, list[1]);
+      generate_debug_info(expression->target->index.index_token, unreachable, codegen.function);
+      generate_debug_info(expression->target->index.index_token, list[1], codegen.function);
 
       return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                            BinaryenTypeAuto());
@@ -1440,6 +1447,11 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
   {
   case TYPE_PROTOTYPE:
     name = callee_data_type.class->name.lexeme;
+
+    if (callee_data_type.class->initializer_function)
+      generate_debug_info(expression->callee_token, callee_data_type.class->initializer_function,
+                          name);
+
     break;
   case TYPE_FUNCTION:
     name = callee_data_type.function->name.lexeme;
@@ -1465,7 +1477,7 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 
     break;
   case TYPE_ALIAS:
-    return generate_default_initialization(*callee_data_type.alias);
+    return generate_default_initialization(*callee_data_type.alias.data_type);
   default:
     UNREACHABLE("Unhandled data type");
   }
@@ -1483,7 +1495,7 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 
   BinaryenExpressionRef call =
     BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
-  generate_debug_info(expression->callee_token, call);
+  generate_debug_info(expression->callee_token, call, codegen.function);
 
   return call;
 }
@@ -1518,7 +1530,11 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
   else
   {
     BinaryenType type = data_type_to_binaryen_type(expression->data_type);
-    return BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
+    BinaryenExpressionRef access =
+      BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
+    generate_debug_info(expression->expr_token, access, codegen.function);
+
+    return access;
   }
 }
 
@@ -1552,8 +1568,8 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
                        BinaryenTypeAuto(), false),
     };
 
-    generate_debug_info(expression->index_token, unreachable);
-    generate_debug_info(expression->index_token, list[1]);
+    generate_debug_info(expression->index_token, unreachable, codegen.function);
+    generate_debug_info(expression->index_token, list[1], codegen.function);
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                          BinaryenTypeAuto());
@@ -1924,9 +1940,10 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement)
       array_add(&parameter_types, parameter_type);
     }
 
-    array_add(&initializer_body,
-              BinaryenCall(codegen.module, initalizer_function_name, parameters.elems,
-                           parameters.size, BinaryenTypeNone()));
+    statement->initializer_function =
+      BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
+                   BinaryenTypeNone());
+    array_add(&initializer_body, statement->initializer_function);
   }
 
   array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, type));
@@ -1984,12 +2001,12 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_variable_declaration(&statement->var);
   case STMT_FUNCTION_DECL:
     return generate_function_declaration(&statement->func);
-  case STMT_CLASS_DECL:
-    return generate_class_declaration(&statement->class);
-  case STMT_CLASS_TEMPLATE_DECL:
-    return generate_class_template_declaration(&statement->class_template);
   case STMT_IMPORT_DECL:
     return generate_import_declaration(&statement->import);
+
+  case STMT_CLASS_DECL:
+  case STMT_CLASS_TEMPLATE_DECL:
+    return NULL;
 
   default:
     UNREACHABLE("Unhandled statement");
@@ -2004,11 +2021,21 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   Stmt* statement;
   array_foreach(statements, statement)
   {
+    if (statement->type == STMT_CLASS_DECL)
+      generate_class_declaration(&statement->class);
+  }
+
+  array_foreach(statements, statement)
+  {
+    if (statement->type == STMT_CLASS_TEMPLATE_DECL)
+      generate_class_template_declaration(&statement->class_template);
+  }
+
+  array_foreach(statements, statement)
+  {
     BinaryenExpressionRef ref = generate_statement(statement);
     if (ref)
-    {
       array_add(&list, ref);
-    }
   }
 
   BinaryenExpressionRef block =

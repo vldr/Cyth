@@ -100,18 +100,39 @@ class Map<K, V>
   int getSize()
     return size
 
-Map<string, string> a = Map<string, string>()
-a.insert("10.0", "100")
-a.insert("26.0", "200")
-a.insert("costarring", "200")
-a.insert("liquid", "100")
+class Test
+    int value
 
-log(a.get("10.0"))
-log(a.get("26.0"))
+    int hash()
+        return value
 
-log(a.get("liquid"))
-log(a.get("costarring"))
+Test t1 = Test()
+t1.value = 1
 
+Test t2 = Test()
+t2.value = 2
+
+Map<Test, string> a = Map<Test, string>()
+a.insert(t1, "hello")
+a.insert(t2, "world")
+
+log(a.get(t1))
+log(a.get(t2))
+
+Map<string, string> b = Map<string, string>()
+b.insert("10.0", "100")
+b.insert("26.0", "200")
+b.insert("costarring", "200")
+b.insert("liquid", "100")
+
+log(b.get("10.0"))
+log(b.get("26.0"))
+
+log(b.get("liquid"))
+log(b.get("costarring"))
+
+# hello
+# world
 # 100
 # 200
 # 100

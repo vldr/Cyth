@@ -35,7 +35,7 @@ class QuickSort<T>
 
         for int j = low; j < high; j = j + 1
             if array[j] <= pivot
-                i = i + 1
+                i += 1
                 
                 swap(array, i, j)
 
@@ -53,12 +53,12 @@ float[] b = [3.0, 5.0, 8.0, 1.0, 20.0, 1.0]
 QuickSort<int>().sort(a)
 QuickSort<float>().sort(b)
 
-for int i = 0; i < a.length; i = i + 1
+for int i = 0; i < a.length; i += 1
     log((string)a[i])
 
 log("-------------------------")
 
-for int i = 0; i < b.length; i = i + 1
+for int i = 0; i < b.length; i += 1
     log((string)b[i])
 
 # 1

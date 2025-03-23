@@ -6,10 +6,10 @@ class Hashmap
     char[] values
 
     void __init__()
-        for int i = 0; i < 100; i = i + 1
+        for int i = 0; i < 100; i += 1
             this.keys.push((char)0)
 
-        for int i = 0; i < 100; i = i + 1
+        for int i = 0; i < 100; i += 1
             this.values.push((char)0)
 
     int hash(char key)
@@ -49,7 +49,7 @@ bool isIsomorphic(string s, string t)
     Hashmap mapping_t = Hashmap()
     Hashmap mapping_s = Hashmap()
 
-    for int i = 0; i < s.length; i = i + 1
+    for int i = 0; i < s.length; i += 1
         char s_char = s[i]
         char t_char = t[i]
         

@@ -10,7 +10,7 @@ class Tree
         this.value = value
 
 void print(Tree[] list)
-    for int i = 0; i < list.length; i = i + 1
+    for int i = 0; i < list.length; i += 1
         log(list[i].value)
 
 void traverse(Tree[] list)

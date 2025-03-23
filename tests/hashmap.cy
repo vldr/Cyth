@@ -20,7 +20,7 @@ class Map<K, V>
     bucketCount = 16
     size = 0
 
-    for int i = 0; i < bucketCount; i = i + 1
+    for int i = 0; i < bucketCount; i += 1
       buckets.push(null)
 
   int hash(K key)
@@ -87,10 +87,10 @@ class Map<K, V>
     bucketCount = bucketCount * 2
     size = 0
 
-    for int i = 0; i < bucketCount; i = i + 1
+    for int i = 0; i < bucketCount; i += 1
       buckets.push(null)
 
-    for int i = 0; i < oldBuckets.length; i = i + 1
+    for int i = 0; i < oldBuckets.length; i += 1
       Entry<K, V> current = oldBuckets[i]
       while current != null
         Entry<K, V> nextEntry = current.next

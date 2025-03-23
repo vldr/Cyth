@@ -48,10 +48,10 @@ int split(LinkedList nums)
         int leftSum = 0
         int rightSum = 0
 
-        for int i = 0; i < n; i = i + 1
+        for int i = 0; i < n; i += 1
             rightSum = rightSum + nums.get(i).data
         
-        for int i = 0; i < n - 1; i = i + 1
+        for int i = 0; i < n - 1; i += 1
             leftSum = leftSum + nums.get(i).data
             rightSum = rightSum - nums.get(i).data
 

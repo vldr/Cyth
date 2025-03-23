@@ -46,7 +46,7 @@ int partition(int l, int h)
   
     for int j = l; j <= h - 1; j = j + 1
         if array[j] <= x
-            i = i + 1
+            i += 1
             swap(i, j)
          
      
@@ -88,7 +88,7 @@ void qsort(int l, int h)
 
 qsort(0, array.length - 1)
 
-for int i = 0; i < array.length; i = i + 1
+for int i = 0; i < array.length; i += 1
     log(array[i])
 
 # 1

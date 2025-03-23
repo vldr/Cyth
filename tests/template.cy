@@ -6,10 +6,10 @@ class Hashmap<K, V>
     V[] values
 
     void __init__()
-        for int i = 0; i < 100; i = i + 1
+        for int i = 0; i < 100; i += 1
             this.keys.push(K())
 
-        for int i = 0; i < 100; i = i + 1
+        for int i = 0; i < 100; i += 1
             this.values.push(V())
 
     int hash(K key)

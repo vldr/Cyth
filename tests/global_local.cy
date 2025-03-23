@@ -4,7 +4,7 @@ import "env"
 int i = 10
 log(i, i)
 
-for int i = 0; i < 3; i = i + 1
+for int i = 0; i < 3; i += 1
     for int j = 0; j < 3; j = j + 1
         log(i, j)
 

@@ -624,10 +624,37 @@ static Expr* assignment(void)
 {
   Expr* expr = logic_or();
 
-  if (match(TOKEN_EQUAL))
+  if (match(TOKEN_EQUAL) || match(TOKEN_PLUS_EQUAL) || match(TOKEN_MINUS_EQUAL) ||
+      match(TOKEN_STAR_EQUAL) || match(TOKEN_SLASH_EQUAL) || match(TOKEN_PERCENT_EQUAL))
   {
     Token op = previous();
     Expr* value = assignment();
+
+    switch (op.type)
+    {
+    case TOKEN_PLUS_EQUAL:
+      op.type = TOKEN_PLUS;
+      break;
+    case TOKEN_MINUS_EQUAL:
+      op.type = TOKEN_MINUS;
+      break;
+    case TOKEN_STAR_EQUAL:
+      op.type = TOKEN_STAR;
+      break;
+    case TOKEN_SLASH_EQUAL:
+      op.type = TOKEN_SLASH;
+      break;
+    case TOKEN_PERCENT_EQUAL:
+      op.type = TOKEN_PERCENT;
+      break;
+    default:
+      break;
+    }
+
+    if (op.type != TOKEN_EQUAL)
+    {
+      BINARY_EXPR(value, op, expr, value);
+    }
 
     Expr* var = EXPR();
     var->type = EXPR_ASSIGN;

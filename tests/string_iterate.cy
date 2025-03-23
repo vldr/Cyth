@@ -5,10 +5,10 @@ string a = "hello"
 string b = "world"
 string c = a + " " + b
 
-for int i = 0; i < c.length; i = i + 1
+for int i = 0; i < c.length; i += 1
     log("Index: " + i + ", Value: " + (int)c[i])
 
-for int i = 0; i < c.length; i = i + 1
+for int i = 0; i < c.length; i += 1
     log("Index: " + i + ", Value: " + c[i])
 
 log(c)

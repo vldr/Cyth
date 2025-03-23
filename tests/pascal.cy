@@ -12,7 +12,7 @@ int binomialCoeff(int n, int k)
         res = res * (n - i)
         res = res / (i + 1)
 
-        i = i + 1
+        i += 1
       
     return res
 

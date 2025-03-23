@@ -7,12 +7,12 @@ array.push(test)
 
 string[] stack = array[0]
 
-for int i = 0; i < 100; i = i + 1
+for int i = 0; i < 100; i += 1
     stack.push((string)i)
     log("Length: " + stack.length)
     log("Capacity: " + stack.capacity)
 
-for int i = 0; i < 100; i = i + 1
+for int i = 0; i < 100; i += 1
     log(stack[i])
     
     

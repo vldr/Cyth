@@ -67,7 +67,7 @@ Solution ts(int n, int p)
         
         while zz != 1 and i < (m - 1) 
             zz = zz * zz % p
-            i = i + 1
+            i += 1
         
         e = m - i - 1
         while e > 0 

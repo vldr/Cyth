@@ -11,7 +11,7 @@ int fib(int n)
         a = b
         b = c
         c = a + b
-        i = i + 1
+        i += 1
 
     return c
 

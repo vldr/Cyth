@@ -86,7 +86,7 @@ static Token consume(TokenType type, const char* message)
   return advance();
 }
 
-static bool is_data_type(int* offset, int* count, ArrayDataTypeToken* types)
+static bool is_data_type(int* offset, int* count, bool* right_shift, ArrayDataTypeToken* types)
 {
   switch (peek().type)
   {
@@ -121,7 +121,7 @@ static bool is_data_type(int* offset, int* count, ArrayDataTypeToken* types)
         array_init(sub_types);
       }
 
-      if (!is_data_type(offset, &sub_count, sub_types))
+      if (!is_data_type(offset, &sub_count, right_shift, sub_types))
       {
         return false;
       }
@@ -137,12 +137,27 @@ static bool is_data_type(int* offset, int* count, ArrayDataTypeToken* types)
 
     } while (peek_offset(*offset).type == TOKEN_COMMA);
 
-    if (peek_offset(*offset).type != TOKEN_GREATER)
+    if (peek_offset(*offset).type == TOKEN_GREATER)
+    {
+      *offset += 1;
+    }
+    else if (peek_offset(*offset).type == TOKEN_GREATER_GREATER)
+    {
+      if (*right_shift)
+      {
+        *offset += 1;
+        *right_shift = false;
+      }
+      else
+      {
+        *offset += 0;
+        *right_shift = true;
+      }
+    }
+    else
     {
       return false;
     }
-
-    *offset += 1;
   }
 
   while (peek_offset(*offset).type == TOKEN_LEFT_BRACKET)
@@ -163,28 +178,33 @@ static bool is_data_type_and_identifier(void)
 {
   int offset = 0;
   int count = 0;
+  bool right_shift = false;
   ArrayDataTypeToken* types = NULL;
 
-  return is_data_type(&offset, &count, types) && peek_offset(offset).type == TOKEN_IDENTIFIER;
+  return is_data_type(&offset, &count, &right_shift, types) &&
+         peek_offset(offset).type == TOKEN_IDENTIFIER;
 }
 
 static bool is_data_type_and_right_paren(void)
 {
   int offset = 0;
   int count = 0;
+  bool right_shift = false;
   ArrayDataTypeToken* types = NULL;
 
-  return is_data_type(&offset, &count, types) && peek_offset(offset).type == TOKEN_RIGHT_PAREN;
+  return is_data_type(&offset, &count, &right_shift, types) &&
+         peek_offset(offset).type == TOKEN_RIGHT_PAREN;
 }
 
 static DataTypeToken consume_data_type(const char* message)
 {
   int offset = 0;
   int count = 0;
+  bool right_shift = false;
   ArrayDataTypeToken* types = ALLOC(ArrayDataTypeToken);
   array_init(types);
 
-  if (!is_data_type(&offset, &count, types))
+  if (!is_data_type(&offset, &count, &right_shift, types))
   {
     parser_error(peek(), message);
 
@@ -402,8 +422,9 @@ static Expr* call(void)
     if (check(TOKEN_LESS))
     {
       bool error = false;
-      int current = parser.current;
+      bool right_shift = false;
 
+      int current = parser.current;
       advance();
 
       do
@@ -413,7 +434,7 @@ static Expr* call(void)
         ArrayDataTypeToken* sub_types = ALLOC(ArrayDataTypeToken);
         array_init(sub_types);
 
-        if (is_data_type(&offset, &count, sub_types))
+        if (is_data_type(&offset, &count, &right_shift, sub_types))
         {
           DataTypeToken token = { .token = peek(), .count = count, .types = sub_types };
           parser.current += offset;
@@ -427,7 +448,7 @@ static Expr* call(void)
 
       } while (match(TOKEN_COMMA));
 
-      if (!match(TOKEN_GREATER))
+      if (!match(TOKEN_GREATER) && !(right_shift && match(TOKEN_GREATER_GREATER)))
       {
         error = true;
       }
@@ -515,7 +536,7 @@ static Expr* call(void)
 
 static Expr* prefix_unary(void)
 {
-  if (match(TOKEN_BANG) || match(TOKEN_NOT) || match(TOKEN_MINUS))
+  if (match(TOKEN_BANG) || match(TOKEN_NOT) || match(TOKEN_TILDE) || match(TOKEN_MINUS))
   {
     Token op = previous();
     Expr* expr = prefix_unary();
@@ -559,15 +580,30 @@ static Expr* term(void)
   return expr;
 }
 
-static Expr* comparison(void)
+static Expr* bitwise_shift(void)
 {
   Expr* expr = term();
+
+  while (match(TOKEN_LESS_LESS) || match(TOKEN_GREATER_GREATER))
+  {
+    Token op = previous();
+    Expr* right = term();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
+static Expr* comparison(void)
+{
+  Expr* expr = bitwise_shift();
 
   while (match(TOKEN_GREATER) || match(TOKEN_GREATER_EQUAL) || match(TOKEN_LESS) ||
          match(TOKEN_LESS_EQUAL))
   {
     Token op = previous();
-    Expr* right = term();
+    Expr* right = bitwise_shift();
 
     BINARY_EXPR(expr, op, expr, right);
   }
@@ -590,14 +626,59 @@ static Expr* equality(void)
   return expr;
 }
 
-static Expr* logic_and(void)
+static Expr* bitwise_and(void)
 {
   Expr* expr = equality();
+
+  while (match(TOKEN_AMPERSAND))
+  {
+    Token op = previous();
+    Expr* right = equality();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
+static Expr* bitwise_xor(void)
+{
+  Expr* expr = bitwise_and();
+
+  while (match(TOKEN_CARET))
+  {
+    Token op = previous();
+    Expr* right = bitwise_and();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
+static Expr* bitwise_or(void)
+{
+  Expr* expr = bitwise_xor();
+
+  while (match(TOKEN_PIPE))
+  {
+    Token op = previous();
+    Expr* right = bitwise_xor();
+
+    BINARY_EXPR(expr, op, expr, right);
+  }
+
+  return expr;
+}
+
+static Expr* logic_and(void)
+{
+  Expr* expr = bitwise_or();
 
   while (match(TOKEN_AND))
   {
     Token op = previous();
-    Expr* right = equality();
+    Expr* right = bitwise_or();
 
     BINARY_EXPR(expr, op, expr, right);
   }
@@ -625,7 +706,9 @@ static Expr* assignment(void)
   Expr* expr = logic_or();
 
   if (match(TOKEN_EQUAL) || match(TOKEN_PLUS_EQUAL) || match(TOKEN_MINUS_EQUAL) ||
-      match(TOKEN_STAR_EQUAL) || match(TOKEN_SLASH_EQUAL) || match(TOKEN_PERCENT_EQUAL))
+      match(TOKEN_STAR_EQUAL) || match(TOKEN_SLASH_EQUAL) || match(TOKEN_PERCENT_EQUAL) ||
+      match(TOKEN_AMPERSAND_EQUAL) || match(TOKEN_PIPE_EQUAL) || match(TOKEN_CARET_EQUAL) ||
+      match(TOKEN_LESS_LESS_EQUAL) || match(TOKEN_GREATER_GREATER_EQUAL))
   {
     Token op = previous();
     Expr* value = assignment();
@@ -647,6 +730,23 @@ static Expr* assignment(void)
     case TOKEN_PERCENT_EQUAL:
       op.type = TOKEN_PERCENT;
       break;
+
+    case TOKEN_AMPERSAND_EQUAL:
+      op.type = TOKEN_AMPERSAND;
+      break;
+    case TOKEN_PIPE_EQUAL:
+      op.type = TOKEN_PIPE;
+      break;
+    case TOKEN_CARET_EQUAL:
+      op.type = TOKEN_CARET;
+      break;
+    case TOKEN_LESS_LESS_EQUAL:
+      op.type = TOKEN_LESS_LESS;
+      break;
+    case TOKEN_GREATER_GREATER_EQUAL:
+      op.type = TOKEN_GREATER_GREATER;
+      break;
+
     default:
       break;
     }

@@ -383,10 +383,33 @@ static void scan_token(void)
     add_token(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
     break;
   case '<':
-    add_token(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+    if (match('<'))
+      add_token(match('=') ? TOKEN_LESS_LESS_EQUAL : TOKEN_LESS_LESS);
+    else if (match('='))
+      add_token(TOKEN_LESS_EQUAL);
+    else
+      add_token(TOKEN_LESS);
     break;
   case '>':
-    add_token(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+    if (match('>'))
+      add_token(match('=') ? TOKEN_GREATER_GREATER_EQUAL : TOKEN_GREATER_GREATER);
+    else if (match('='))
+      add_token(TOKEN_GREATER_EQUAL);
+    else
+      add_token(TOKEN_GREATER);
+    break;
+
+  case '~':
+    add_token(TOKEN_TILDE);
+    break;
+  case '&':
+    add_token(match('=') ? TOKEN_AMPERSAND_EQUAL : TOKEN_AMPERSAND);
+    break;
+  case '|':
+    add_token(match('=') ? TOKEN_PIPE_EQUAL : TOKEN_PIPE);
+    break;
+  case '^':
+    add_token(match('=') ? TOKEN_CARET_EQUAL : TOKEN_CARET);
     break;
 
   case '#':

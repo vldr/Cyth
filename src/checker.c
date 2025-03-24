@@ -791,19 +791,28 @@ static DataType check_group_expression(GroupExpr* expression)
 
 static DataType check_unary_expression(UnaryExpr* expression)
 {
-  Token op = expression->op;
   DataType data_type = check_expression(expression->expr);
+  Token op = expression->op;
 
-  if (op.type == TOKEN_MINUS)
+  switch (op.type)
   {
+  case TOKEN_MINUS:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
       error_type_mismatch(op);
 
     expression->data_type = data_type;
-  }
-  else if (op.type == TOKEN_BANG || op.type == TOKEN_NOT)
-  {
+    break;
+
+  case TOKEN_TILDE:
+    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
+      error_type_mismatch(op);
+
+    expression->data_type = data_type;
+    break;
+
+  case TOKEN_NOT:
+  case TOKEN_BANG:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
     {
       Expr* cast_expression = cast_to_bool(expression->expr, data_type);
@@ -814,6 +823,10 @@ static DataType check_unary_expression(UnaryExpr* expression)
     }
 
     expression->data_type = DATA_TYPE(TYPE_BOOL);
+    break;
+
+  default:
+    UNREACHABLE("Unexpected unary operator");
   }
 
   return expression->data_type;
@@ -905,6 +918,11 @@ static DataType check_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_PERCENT:
+  case TOKEN_AMPERSAND:
+  case TOKEN_PIPE:
+  case TOKEN_CARET:
+  case TOKEN_LESS_LESS:
+  case TOKEN_GREATER_GREATER:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)))
       error_operation_not_defined(op, "'int'");
 

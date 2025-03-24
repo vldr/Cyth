@@ -19,7 +19,9 @@ class Test<K, V>
         log(node)
 
 Test<int, Node<float>>()
+Test<int, Node<Node<float>>>()
 
 # 10
 # 10
+# 0
 # 0

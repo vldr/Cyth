@@ -1092,10 +1092,37 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_PERCENT:
+  case TOKEN_AMPERSAND:
+  case TOKEN_PIPE:
+  case TOKEN_CARET:
+  case TOKEN_LESS_LESS:
+  case TOKEN_GREATER_GREATER:
     if (data_type.type == TYPE_INTEGER)
-      op = BinaryenRemSInt32();
+      switch (expression->op.type)
+      {
+      case TOKEN_PERCENT:
+        op = BinaryenRemSInt32();
+        break;
+      case TOKEN_AMPERSAND:
+        op = BinaryenAndInt32();
+        break;
+      case TOKEN_PIPE:
+        op = BinaryenOrInt32();
+        break;
+      case TOKEN_CARET:
+        op = BinaryenXorInt32();
+        break;
+      case TOKEN_LESS_LESS:
+        op = BinaryenShlInt32();
+        break;
+      case TOKEN_GREATER_GREATER:
+        op = BinaryenShrSInt32();
+        break;
+      default:
+        UNREACHABLE("Unknown operator");
+      }
     else
-      UNREACHABLE("Unsupported binary type for %");
+      UNREACHABLE("Unsupported binary type for %, &, |, ^, <<, >>");
 
     break;
 
@@ -1222,6 +1249,13 @@ static BinaryenExpressionRef generate_unary_expression(UnaryExpr* expression)
 
   switch (expression->op.type)
   {
+  case TOKEN_TILDE:
+    if (expression->data_type.type == TYPE_INTEGER)
+      return BinaryenBinary(codegen.module, BinaryenXorInt32(), value,
+                            BinaryenConst(codegen.module, BinaryenLiteralInt32(0xFFFFFFFF)));
+    else
+      UNREACHABLE("Unsupported unary type for ~");
+
   case TOKEN_MINUS:
     if (expression->data_type.type == TYPE_INTEGER)
       return BinaryenBinary(codegen.module, BinaryenSubInt32(),

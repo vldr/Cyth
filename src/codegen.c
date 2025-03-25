@@ -1566,7 +1566,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
     BinaryenType type = data_type_to_binaryen_type(expression->data_type);
     BinaryenExpressionRef access =
       BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
-    generate_debug_info(expression->expr_token, access, codegen.function);
+    generate_debug_info(expression->name, access, codegen.function);
 
     return access;
   }

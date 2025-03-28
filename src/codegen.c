@@ -1374,7 +1374,6 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
   switch (scope)
   {
   case SCOPE_LOCAL:
-  case SCOPE_GLOBAL_LOCAL:
     return BinaryenLocalGet(codegen.module, expression->variable->index, type);
   case SCOPE_GLOBAL:
     return BinaryenGlobalGet(codegen.module, expression->name.lexeme, type);
@@ -1402,7 +1401,6 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
     switch (variable->scope)
     {
     case SCOPE_LOCAL:
-    case SCOPE_GLOBAL_LOCAL:
       return BinaryenLocalTee(codegen.module, variable->index, value, type);
 
     case SCOPE_GLOBAL: {
@@ -1784,14 +1782,8 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
       return NULL;
     }
   }
-  else if (statement->scope == SCOPE_LOCAL || statement->scope == SCOPE_GLOBAL_LOCAL)
+  else if (statement->scope == SCOPE_LOCAL)
   {
-    if (statement->scope == SCOPE_GLOBAL_LOCAL)
-    {
-      BinaryenType type = data_type_to_binaryen_type(statement->data_type);
-      array_add(&codegen.global_local_types, type);
-    }
-
     if (statement->initializer)
     {
       initializer = generate_expression(statement->initializer);
@@ -2110,8 +2102,16 @@ void codegen_init(ArrayStmt statements)
 Codegen codegen_generate(void)
 {
   Codegen result = { 0 };
-
   BinaryenExpressionRef body = generate_statements(&codegen.statements);
+
+  VarStmt* statement;
+  ArrayVarStmt statements = global_locals();
+  array_foreach(&statements, statement)
+  {
+    BinaryenType type = data_type_to_binaryen_type(statement->data_type);
+    array_add(&codegen.global_local_types, type);
+  }
+
   BinaryenAddFunction(codegen.module, codegen.function, BinaryenTypeNone(), BinaryenTypeNone(),
                       codegen.global_local_types.elems, codegen.global_local_types.size, body);
   BinaryenAddFunctionExport(codegen.module, codegen.function, codegen.function);

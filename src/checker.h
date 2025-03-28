@@ -3,6 +3,7 @@
 
 #include "statement.h"
 
+ArrayVarStmt global_locals(void);
 bool equal_data_type(DataType left, DataType right);
 bool assignable_data_type(DataType left, DataType right);
 

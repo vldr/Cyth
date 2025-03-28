@@ -16,7 +16,7 @@ static struct
 
   Environment* environment;
   Environment* global_environment;
-  int global_locals;
+  ArrayVarStmt global_locals;
 
   FuncStmt* function;
   ClassStmt* class;
@@ -180,6 +180,11 @@ static void error_imported_functions_cannot_have_bodies(Token token)
 static void error_cannot_duduce_conflicting_type(Token token)
 {
   checker_error(token, "This type conflicts with the other deduced types.");
+}
+
+ArrayVarStmt global_locals(void)
+{
+  return checker.global_locals;
 }
 
 bool equal_data_type(DataType left, DataType right)
@@ -1722,8 +1727,9 @@ static void check_variable_declaration(VarStmt* statement)
     }
     else
     {
-      statement->scope = SCOPE_GLOBAL_LOCAL;
-      statement->index = checker.global_locals++;
+      statement->scope = SCOPE_LOCAL;
+      statement->index = array_size(&checker.global_locals);
+      array_add(&checker.global_locals, statement);
     }
   }
 
@@ -1923,7 +1929,8 @@ void checker_init(ArrayStmt statements)
 
   checker.environment = environment_init(NULL);
   checker.global_environment = checker.environment;
-  checker.global_locals = 0;
+
+  array_init(&checker.global_locals);
 }
 
 void checker_validate(void)

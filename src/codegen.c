@@ -1436,11 +1436,33 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
   }
   else
   {
-    if (expression->target->type == EXPR_INDEX)
+    if (expression->target->type != EXPR_INDEX)
     {
-      BinaryenExpressionRef ref = generate_expression(expression->target->index.expr);
-      BinaryenExpressionRef index = generate_expression(expression->target->index.index);
+      UNREACHABLE("Unhandled expression type");
+    }
 
+    BinaryenExpressionRef ref = generate_expression(expression->target->index.expr);
+    BinaryenExpressionRef index = generate_expression(expression->target->index.index);
+
+    if (expression->target->index.expr_data_type.type == TYPE_OBJECT)
+    {
+      BinaryenExpressionRef operands[] = { ref, index, value };
+
+      ClassStmt* class = expression->target->index.expr_data_type.class;
+      VarStmt* variable = map_get_var_stmt(&class->members, "__set__");
+      FuncStmt* function = variable->data_type.function_member.function;
+
+      BinaryenExpressionRef list[] = {
+        BinaryenCall(codegen.module, function->name.lexeme, operands,
+                     sizeof(operands) / sizeof_ptr(operands), BinaryenTypeNone()),
+        BinaryenExpressionCopy(value, codegen.module),
+      };
+
+      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
+                           BinaryenTypeAuto());
+    }
+    else
+    {
       BinaryenExpressionRef array =
         BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
       BinaryenExpressionRef length = BinaryenStructGet(
@@ -1465,8 +1487,6 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
       return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                            BinaryenTypeAuto());
     }
-
-    UNREACHABLE("Unhandled expression type");
   }
 }
 
@@ -1605,6 +1625,19 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
 
     return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
                          BinaryenTypeAuto());
+  }
+  case TYPE_OBJECT: {
+    BinaryenExpressionRef operands[] = {
+      ref,
+      index,
+    };
+
+    ClassStmt* class = expression->expr_data_type.class;
+    VarStmt* variable = map_get_var_stmt(&class->members, "__get__");
+    FuncStmt* function = variable->data_type.function_member.function;
+
+    return BinaryenCall(codegen.module, function->name.lexeme, operands,
+                        sizeof(operands) / sizeof_ptr(operands), type);
   }
   default:
     UNREACHABLE("Unhandled index type");

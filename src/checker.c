@@ -107,6 +107,16 @@ static void error_not_indexable(Token token)
   checker_error(token, "The expression cannot be indexed.");
 }
 
+static void error_not_indexable_missing_overload(Token token)
+{
+  checker_error(token, "The object cannot be indexed, missing '__get__' method.");
+}
+
+static void error_not_indexable_and_assignable_missing_overload(Token token)
+{
+  checker_error(token, "The object cannot be indexed and assigned to, missing '__set__' method.");
+}
+
 static void error_index_not_an_int(Token token)
 {
   checker_error(token, "The index must be of type 'int'.");
@@ -160,6 +170,33 @@ static void error_invalid_return_type(Token token)
 static void error_invalid_initializer_return_type(Token token)
 {
   checker_error(token, "The return type of '__init__' must be 'void'.");
+}
+
+static void error_invalid_set_return_type(Token token)
+{
+  checker_error(token, "The return type of '__set__' must be 'void'.");
+}
+
+static void error_invalid_get_set_function(Token token)
+{
+  checker_error(
+    token,
+    "The return type of '__get__' must match the type of the second parameter of '__set__'.");
+}
+static void error_invalid_get_set_first_parameter_function(Token token)
+{
+  checker_error(token,
+                "The '__get__' and  '__set__' methods must have the same first parameter type.");
+}
+
+static void error_invalid_get_arity(Token token)
+{
+  checker_error(token, "The '__get__' method must have one argument.");
+}
+
+static void error_invalid_set_arity(Token token)
+{
+  checker_error(token, "The '__set__' method must have two arguments.");
 }
 
 static void error_invalid_arity(Token token, int expected, int got)
@@ -1010,6 +1047,18 @@ static DataType check_assignment_expression(AssignExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
+    if (equal_data_type(target->index.expr_data_type, DATA_TYPE(TYPE_OBJECT)))
+    {
+      ClassStmt* class = target->index.expr_data_type.class;
+      VarStmt* variable = map_get_var_stmt(&class->members, "__set__");
+
+      if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+      {
+        error_not_indexable_and_assignable_missing_overload(expression->op);
+        return DATA_TYPE(TYPE_VOID);
+      }
+    }
+
     expression->variable = NULL;
     expression->data_type = value_data_type;
 
@@ -1451,15 +1500,16 @@ static DataType check_access_expression(AccessExpr* expression)
 static DataType check_index_expression(IndexExpr* expression)
 {
   DataType index_data_type = check_expression(expression->index);
-  if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
-  {
-    error_index_not_an_int(expression->expr_token);
-    return DATA_TYPE(TYPE_VOID);
-  }
-
   DataType expr_data_type = check_expression(expression->expr);
+
   if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
   {
+    if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
+    {
+      error_index_not_an_int(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     expression->data_type = DATA_TYPE(TYPE_CHAR);
     expression->expr_data_type = expr_data_type;
 
@@ -1467,7 +1517,36 @@ static DataType check_index_expression(IndexExpr* expression)
   }
   else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_ARRAY)))
   {
+    if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
+    {
+      error_index_not_an_int(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     expression->data_type = array_data_type_element(expr_data_type);
+    expression->expr_data_type = expr_data_type;
+
+    return expression->data_type;
+  }
+  else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_OBJECT)))
+  {
+    ClassStmt* class = expr_data_type.class;
+    VarStmt* variable = map_get_var_stmt(&class->members, "__get__");
+
+    if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    {
+      error_not_indexable_missing_overload(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    FuncStmt* function = variable->data_type.function_member.function;
+    if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
+    {
+      error_type_mismatch(expression->index_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->data_type = function->data_type;
     expression->expr_data_type = expr_data_type;
 
     return expression->data_type;
@@ -1814,6 +1893,76 @@ static void check_function_declaration(FuncStmt* statement)
   checker.environment = checker.environment->parent;
 }
 
+static void check_get_function_declaration(ClassStmt* statement)
+{
+  VarStmt* variable = map_get_var_stmt(&statement->members, "__get__");
+  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  {
+    FuncStmt* function = variable->data_type.function_member.function;
+    int got = array_size(&function->parameters);
+    int expected = 2;
+
+    if (expected != got)
+    {
+      error_invalid_get_arity(function->name);
+      return;
+    }
+  }
+}
+
+static void check_set_function_declaration(ClassStmt* statement)
+{
+  VarStmt* variable = map_get_var_stmt(&statement->members, "__set__");
+  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  {
+    FuncStmt* function = variable->data_type.function_member.function;
+    int got = array_size(&function->parameters);
+    int expected = 3;
+
+    if (expected != got)
+    {
+      error_invalid_set_arity(function->name);
+      return;
+    }
+
+    if (!equal_data_type(function->data_type, DATA_TYPE(TYPE_VOID)))
+    {
+      error_invalid_set_return_type(function->name);
+      return;
+    }
+  }
+}
+
+static void check_set_get_function_declarations(ClassStmt* statement)
+{
+  VarStmt* set_variable = map_get_var_stmt(&statement->members, "__set__");
+  VarStmt* get_variable = map_get_var_stmt(&statement->members, "__get__");
+
+  if (set_variable && get_variable &&
+      equal_data_type(set_variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)) &&
+      equal_data_type(get_variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  {
+    FuncStmt* set_function = set_variable->data_type.function_member.function;
+    FuncStmt* get_function = get_variable->data_type.function_member.function;
+
+    if (set_function->parameters.size != 3 || get_function->parameters.size != 2)
+      return;
+
+    if (!equal_data_type(get_function->data_type, set_function->parameters.elems[2]->data_type))
+    {
+      error_invalid_get_set_function(get_function->name);
+      return;
+    }
+
+    if (!equal_data_type(get_function->parameters.elems[1]->data_type,
+                         set_function->parameters.elems[1]->data_type))
+    {
+      error_invalid_get_set_first_parameter_function(set_function->parameters.elems[1]->type.token);
+      return;
+    }
+  }
+}
+
 static void check_class_declaration(ClassStmt* statement)
 {
   if (checker.function || checker.loop || checker.class)
@@ -1853,6 +2002,10 @@ static void check_class_declaration(ClassStmt* statement)
   {
     check_function_declaration(function_statement);
   }
+
+  check_get_function_declaration(statement);
+  check_set_function_declaration(statement);
+  check_set_get_function_declarations(statement);
 
   checker.class = NULL;
   checker.environment = checker.environment->parent;

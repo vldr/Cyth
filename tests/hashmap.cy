@@ -23,6 +23,12 @@ class Map<K, V>
     for int i = 0; i < bucketCount; i += 1
       buckets.push(null)
 
+  void __set__(K key, V value)
+    insert(key, value)
+
+  V __get__(K key)
+    return get(key)
+
   int hash(K key)
     int hash = key.hash() % buckets.length
 
@@ -131,6 +137,32 @@ log(b.get("26.0"))
 log(b.get("liquid"))
 log(b.get("costarring"))
 
+
+Map<Test, string> c = Map<Test, string>()
+c[t1] = "hello"
+c[t2] = "world"
+
+log(c[t1])
+log(c[t2])
+
+Map<string, string> d = Map<string, string>()
+d["10.0"] = "100"
+d["26.0"] = "200"
+d["costarring"] = "200"
+d["liquid"] = "100"
+
+log(d["10.0"])
+log(d["26.0"])
+
+log(d["liquid"])
+log(d["costarring"])
+
+# hello
+# world
+# 100
+# 200
+# 100
+# 200
 # hello
 # world
 # 100

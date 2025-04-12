@@ -55,7 +55,17 @@ for await (const path of glob.scan(".")) {
     const expectedLogs = text
       .split("\n")
       .filter((line) => line.includes("#"))
-      .map((line) => line.substring(line.indexOf("#") + 1).trimStart());
+      .map((line) =>
+        line
+          .substring(line.indexOf("#") + 1)
+          .replaceAll("\\0", "\0")
+          .replaceAll("\\t", "\t")
+          .replaceAll("\\b", "\b")
+          .replaceAll("\\n", "\n")
+          .replaceAll("\\r", "\r")
+          .replaceAll("\\f", "\f")
+          .trimStart()
+      );
 
     errors.length = 0;
     logs.length = 0;

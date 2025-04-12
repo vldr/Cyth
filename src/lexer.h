@@ -99,6 +99,7 @@ typedef struct
   int start_column;
   int end_line;
   int end_column;
+  int length;
   const char* lexeme;
 } Token;
 
@@ -112,7 +113,7 @@ typedef struct _DATA_TYPE_TOKEN
 array_def(Token, Token);
 array_def(DataTypeToken, DataTypeToken);
 
-void lexer_init(const char* source);
+void lexer_init(char* source);
 void lexer_print(void);
 ArrayToken lexer_scan(void);
 

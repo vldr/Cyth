@@ -41,7 +41,7 @@ void error(int start_line, int start_column, int end_line, int end_column, const
   cyth.error = true;
 }
 
-void run(const char* source, bool codegen)
+void run(char* source, bool codegen)
 {
   cyth.error = false;
 

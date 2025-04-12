@@ -1039,7 +1039,8 @@ static BinaryenExpressionRef generate_group_expression(GroupExpr* expression)
   return generate_expression(expression->expr);
 }
 
-static BinaryenExpressionRef generate_string_literal_expression(const char* literal)
+static BinaryenExpressionRef generate_string_literal_expression(const char* literal,
+                                                                unsigned int length)
 {
   int index = map_get_sint(&codegen.string_constants, literal);
   if (!index)
@@ -1050,7 +1051,6 @@ static BinaryenExpressionRef generate_string_literal_expression(const char* lite
     ArrayBinaryenExpressionRef values;
     array_init(&values);
 
-    size_t length = strlen(literal);
     for (size_t i = 0; i < length; i++)
       array_add(&values, BinaryenConst(codegen.module, BinaryenLiteralInt32(literal[i])));
 
@@ -1078,9 +1078,9 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
   case TYPE_OBJECT:
     return BinaryenRefNull(codegen.module, BinaryenTypeNullref());
   case TYPE_CHAR:
-    return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->string[0]));
+    return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->string.data[0]));
   case TYPE_STRING:
-    return generate_string_literal_expression(expression->string);
+    return generate_string_literal_expression(expression->string.data, expression->string.length);
   default:
     UNREACHABLE("Unhandled literal value");
   }

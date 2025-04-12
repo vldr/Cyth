@@ -299,11 +299,12 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_CHAR);
-    expr->literal.string = token.lexeme;
+    expr->literal.string.data = token.lexeme;
+    expr->literal.string.length = token.length;
 
-    if (strlen(expr->literal.string) > 1)
+    if (expr->literal.string.length > 1)
       parser_error(token, "Character constant cannot have multiple characters.");
-    else if (strlen(expr->literal.string) == 0)
+    else if (expr->literal.string.length == 0)
       parser_error(token, "Character constant cannot be empty.");
 
     break;
@@ -312,7 +313,8 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_STRING);
-    expr->literal.string = token.lexeme;
+    expr->literal.string.data = token.lexeme;
+    expr->literal.string.length = token.length;
 
     break;
   case TOKEN_LEFT_PAREN:
@@ -481,8 +483,13 @@ static Expr* call(void)
       call->call.types = types;
       call->call.callee = expr;
       call->call.callee_token = (Token){
-        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-        end_token.end_line, end_token.end_column,   "",
+        TOKEN_IDENTIFIER,
+        start_token.start_line,
+        start_token.start_column,
+        end_token.end_line,
+        end_token.end_column,
+        0,
+        "",
       };
 
       expr = call;
@@ -495,8 +502,13 @@ static Expr* call(void)
       access->access.variable = NULL;
       access->access.expr = expr;
       access->access.expr_token = (Token){
-        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-        end_token.end_line, end_token.end_column,   "",
+        TOKEN_IDENTIFIER,
+        start_token.start_line,
+        start_token.start_column,
+        end_token.end_line,
+        end_token.end_column,
+        0,
+        "",
       };
 
       expr = access;
@@ -513,14 +525,24 @@ static Expr* call(void)
       index->type = EXPR_INDEX;
       index->index.index = index_expr;
       index->index.index_token = (Token){
-        TOKEN_IDENTIFIER,         start_index_token.start_line, start_index_token.start_column,
-        end_index_token.end_line, end_index_token.end_column,   "",
+        TOKEN_IDENTIFIER,
+        start_index_token.start_line,
+        start_index_token.start_column,
+        end_index_token.end_line,
+        end_index_token.end_column,
+        0,
+        "",
       };
 
       index->index.expr = expr;
       index->index.expr_token = (Token){
-        TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-        end_token.end_line, end_token.end_column,   "",
+        TOKEN_IDENTIFIER,
+        start_token.start_line,
+        start_token.start_column,
+        end_token.end_line,
+        end_token.end_column,
+        0,
+        "",
       };
 
       expr = index;
@@ -861,8 +883,13 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
   Token end_token = previous();
   Token types_token = (Token){
-    TOKEN_IDENTIFIER,   start_token.start_line, start_token.start_column,
-    end_token.end_line, end_token.end_column,   "",
+    TOKEN_IDENTIFIER,
+    start_token.start_line,
+    start_token.start_column,
+    end_token.end_line,
+    end_token.end_column,
+    0,
+    "",
   };
 
   if (!array_size(&stmt->class_template.types))

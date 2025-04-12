@@ -107,7 +107,11 @@ typedef struct _LITERAL_EXPR
     bool boolean;
     unsigned int integer;
     float floating;
-    const char* string;
+    struct
+    {
+      const char* data;
+      unsigned int length;
+    } string;
   };
 } LiteralExpr;
 

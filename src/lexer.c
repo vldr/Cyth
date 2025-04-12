@@ -30,8 +30,8 @@ static struct
 
   int multi_line;
 
-  const char* start;
-  const char* current;
+  char* start;
+  char* current;
 
   enum
   {
@@ -51,6 +51,7 @@ static void add_custom_token(TokenType type, const char* lexeme, int length)
   token.start_column = lexer.start_column;
   token.end_line = lexer.current_line;
   token.end_column = lexer.current_column;
+  token.length = length;
   token.lexeme = memory_strldup(lexeme, length);
 
   array_add(&lexer.tokens, token);
@@ -102,9 +103,12 @@ static bool match(char c)
   return false;
 }
 
-static void string(void)
+static void text(TokenType token_type, char terminator)
 {
-  while (peek() != '"')
+  bool escaping = false;
+  int shifts = 0;
+
+  while (true)
   {
     if (peek() == '\n')
     {
@@ -116,40 +120,73 @@ static void string(void)
     if (peek() == '\0')
     {
       error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unterminated string.");
+            "Missing terminating character.");
       return;
+    }
+
+    if (escaping)
+    {
+      char character;
+
+      switch (peek())
+      {
+      case 'n':
+        character = '\n';
+        break;
+      case 'b':
+        character = '\b';
+        break;
+      case 't':
+        character = '\t';
+        break;
+      case 'r':
+        character = '\r';
+        break;
+      case 'f':
+        character = '\f';
+        break;
+      case '\'':
+        character = '\'';
+        break;
+      case '\"':
+        character = '\"';
+        break;
+      case '\\':
+        character = '\\';
+        break;
+      case '0':
+        character = '\0';
+        break;
+
+      default:
+        error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+              "Invalid escape character.");
+        return;
+      }
+
+      shifts++;
+      escaping = false;
+
+      *(lexer.current - shifts) = character;
+    }
+    else if (peek() == '\\')
+    {
+      escaping = true;
+    }
+    else if (peek() == terminator)
+    {
+      break;
+    }
+    else if (shifts)
+    {
+      *(lexer.current - shifts) = peek();
     }
 
     advance();
   }
 
   advance();
-  add_custom_token(TOKEN_STRING, lexer.start + 1, (int)(lexer.current - lexer.start - 2));
-}
-
-static void character(void)
-{
-  while (peek() != '\'')
-  {
-    if (peek() == '\n')
-    {
-      advance();
-      newline();
-      continue;
-    }
-
-    if (peek() == '\0')
-    {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unterminated character.");
-      return;
-    }
-
-    advance();
-  }
-
-  advance();
-  add_custom_token(TOKEN_CHAR, lexer.start + 1, (int)(lexer.current - lexer.start - 2));
+  add_custom_token(token_type, lexer.start + 1, (int)(lexer.current - lexer.start - shifts - 2));
 }
 
 static void number(void)
@@ -417,11 +454,11 @@ static void scan_token(void)
     break;
 
   case '"':
-    string();
+    text(TOKEN_STRING, c);
     break;
 
   case '\'':
-    character();
+    text(TOKEN_CHAR, c);
     break;
 
   case ' ':
@@ -526,7 +563,7 @@ static void scan_indentation(void)
   }
 }
 
-void lexer_init(const char* source)
+void lexer_init(char* source)
 {
   lexer.start = source;
   lexer.current = source;

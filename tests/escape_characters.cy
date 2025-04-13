@@ -2,17 +2,20 @@ import "env"
     void log(string n)
 
 log("\b\0\n\t\r\'\"\\")
-log("Char" + (string)'\n')
-log("Char" + (string)'\0')
-log("Char" + (string)'\b')
-log("Char" + (string)'\t')
-log("Char" + (string)'\r')
-log("Char" + (string)'\f')
-log("Char" + (string)'\'')
-log("Char" + (string)'\"')
-log("Char" + (string)'\\')
+log("\xe0\xAD\xb4")
+log("Char" + '\n')
+log("Char" + '\0')
+log("Char" + '\b')
+log("Char" + '\t')
+log("Char" + '\r')
+log("Char" + '\f')
+log("Char" + '\'')
+log("Char" + '\"')
+log("Char" + '\\')
+log("Char" + '\x2e')
 
 # \b\0\n\t\r'"\
+# ୴
 # Char\n
 # Char\0
 # Char\b
@@ -22,3 +25,4 @@ log("Char" + (string)'\\')
 # Char'
 # Char"
 # Char\
+# Char.

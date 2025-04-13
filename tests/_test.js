@@ -32,6 +32,7 @@ Module._set_error_callback(
 
 const glob = new Glob(import.meta.dir + "/*.cy");
 const encoder = new TextEncoder();
+const decoder = new TextDecoder("utf-8");
 
 let lastEncodedText;
 
@@ -80,11 +81,12 @@ for await (const path of glob.scan(".")) {
               const at = result.instance.exports["string.at"];
               const length = result.instance.exports["string.length"];
 
-              let text = "";
-              for (let i = 0; i < length(output); i++)
-                text += String.fromCharCode(at(output, i));
+              const array = new Uint8Array(length(output));
+              for (let i = 0; i < array.byteLength; i++) {
+                array[i] = at(output, i);
+              }
 
-              logs.push(text);
+              logs.push(decoder.decode(array));
             } else {
               logs.push(String(output));
             }

@@ -62,6 +62,18 @@ static void add_token(TokenType type)
   add_custom_token(type, lexer.start, (int)(lexer.current - lexer.start));
 }
 
+static int hex_char_to_int(char c)
+{
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  else if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  else if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  else
+    return -1;
+}
+
 static bool eof(void)
 {
   return *lexer.current == '\0';
@@ -157,7 +169,32 @@ static void text(TokenType token_type, char terminator)
       case '0':
         character = '\0';
         break;
+      case 'x':
+        advance();
 
+        int first = hex_char_to_int(peek());
+        if (first == -1)
+        {
+          error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+                "Expected hexadecimal digit after '\\x'.");
+          return;
+        }
+
+        int second = hex_char_to_int(peek_next());
+        if (second == -1)
+        {
+          character = (char)first;
+          shifts += 1;
+        }
+        else
+        {
+          advance();
+
+          character = (char)(first << 4 | second);
+          shifts += 2;
+        }
+
+        break;
       default:
         error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
               "Invalid escape character.");

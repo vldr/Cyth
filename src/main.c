@@ -1,5 +1,4 @@
 #include "main.h"
-#include "array.h"
 #include "checker.h"
 #include "codegen.h"
 #include "lexer.h"

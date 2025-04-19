@@ -479,7 +479,6 @@ static const char* generate_string_concat_function(void)
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
-
     BinaryenExpressionRef left = BinaryenLocalGet(codegen.module, 0, codegen.string_type);
     BinaryenExpressionRef right = BinaryenLocalGet(codegen.module, 1, codegen.string_type);
 

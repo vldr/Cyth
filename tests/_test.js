@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Glob } from "bun";
-import Module from "../output/cyth.js";
+import Module from "../editor/cyth.js";
 
 await new Promise((resolve) => (Module["onRuntimeInitialized"] = resolve));
 

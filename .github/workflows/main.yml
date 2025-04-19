@@ -27,21 +27,21 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Build (Windows)
-        run: |
-          export PATH=/home/ubuntu/msvc-wine/msvc/bin/x64:$PATH
-          msbuild
-
       - name: Build (Linux)
         run: |
+          cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build
+          cd build
           make -j8
 
       - name: Build (Web)
         run: |
-          make web -j8
+          emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
+          cd embuild
+          make -j8
 
       - name: Test
         run: |
+          cd embuild
           make test
 
       - name: Publish

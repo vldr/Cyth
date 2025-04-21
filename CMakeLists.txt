@@ -26,7 +26,7 @@ if (EMSCRIPTEN)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
-elseif(NOT MSVC)
+elseif (NOT MSVC)
     add_link_options(-pthread)
 endif()
 

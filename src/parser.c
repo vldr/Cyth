@@ -47,6 +47,11 @@ static Token previous(void)
   return array_at(&parser.tokens, parser.current - 1);
 }
 
+static void seek(int position)
+{
+  parser.current = position;
+}
+
 static bool check(TokenType type)
 {
   return peek().type == type;
@@ -458,7 +463,7 @@ static Expr* call(void)
       if (error)
       {
         array_clear(&types);
-        parser.current = current;
+        seek(current);
       }
     }
 
@@ -725,6 +730,7 @@ static Expr* logic_or(void)
 
 static Expr* assignment(void)
 {
+  int current = parser.current;
   Expr* expr = logic_or();
 
   if (match(TOKEN_EQUAL) || match(TOKEN_PLUS_EQUAL) || match(TOKEN_MINUS_EQUAL) ||
@@ -732,6 +738,10 @@ static Expr* assignment(void)
       match(TOKEN_AMPERSAND_EQUAL) || match(TOKEN_PIPE_EQUAL) || match(TOKEN_CARET_EQUAL) ||
       match(TOKEN_LESS_LESS_EQUAL) || match(TOKEN_GREATER_GREATER_EQUAL))
   {
+    seek(current);
+    Expr* expr_copy = logic_or();
+    advance();
+
     Token op = previous();
     Expr* value = assignment();
 
@@ -781,7 +791,7 @@ static Expr* assignment(void)
     Expr* var = EXPR();
     var->type = EXPR_ASSIGN;
     var->assign.op = op;
-    var->assign.target = expr;
+    var->assign.target = expr_copy;
     var->assign.value = value;
     var->assign.variable = NULL;
 
@@ -1240,8 +1250,8 @@ static ArrayStmt statements(void)
 void parser_init(ArrayToken tokens)
 {
   parser.error = false;
-  parser.current = 0;
   parser.tokens = tokens;
+  seek(0);
 }
 
 ArrayStmt parser_parse(void)
@@ -1266,7 +1276,7 @@ ArrayStmt parser_parse(void)
 
 Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token name)
 {
-  parser.current = offset;
+  seek(offset);
 
   return class_declaration_statement(keyword, name);
 }

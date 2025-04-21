@@ -51,6 +51,12 @@ static void error_operation_not_defined(Token token, const char* type)
   checker_error(token, memory_sprintf("Operator '%s' only defined for %s.", token.lexeme, type));
 }
 
+static void error_missing_operator_overload(Token token, const char* function_name)
+{
+  checker_error(token, memory_sprintf("Cannot use operator '%s', missing %s method.", token.lexeme,
+                                      function_name));
+}
+
 static void error_name_already_exists(Token token, const char* name)
 {
   checker_error(token, memory_sprintf("The name '%s' already exists.", name));
@@ -197,6 +203,11 @@ static void error_invalid_get_arity(Token token)
 static void error_invalid_set_arity(Token token)
 {
   checker_error(token, "The '__set__' method must have two arguments.");
+}
+
+static void error_invalid_binary_arity(Token token, const char* name)
+{
+  checker_error(token, memory_sprintf("The '%s' method must have one argument.", name));
 }
 
 static void error_invalid_arity(Token token, int expected, int got)
@@ -879,6 +890,94 @@ static DataType check_binary_expression(BinaryExpr* expression)
   Token op = expression->op;
   DataType left = check_expression(expression->left);
   DataType right = check_expression(expression->right);
+
+  if (equal_data_type(left, DATA_TYPE(TYPE_OBJECT)))
+  {
+    ClassStmt* class = left.class;
+    char* name;
+
+    switch (op.type)
+    {
+    case TOKEN_PLUS:
+      name = "__add__";
+      break;
+    case TOKEN_MINUS:
+      name = "__sub__";
+      break;
+    case TOKEN_SLASH:
+      name = "__div__";
+      break;
+    case TOKEN_STAR:
+      name = "__mul__";
+      break;
+
+    case TOKEN_PERCENT:
+      name = "__mod__";
+      break;
+    case TOKEN_AMPERSAND:
+      name = "__and__";
+      break;
+    case TOKEN_PIPE:
+      name = "__or__";
+      break;
+    case TOKEN_CARET:
+      name = "__xor__";
+      break;
+    case TOKEN_LESS_LESS:
+      name = "__lshift__";
+      break;
+    case TOKEN_GREATER_GREATER:
+      name = "__rshift__";
+      break;
+
+    case TOKEN_LESS:
+      name = "__lt__";
+      break;
+    case TOKEN_LESS_EQUAL:
+      name = "__le__";
+      break;
+    case TOKEN_GREATER:
+      name = "__gt__";
+      break;
+    case TOKEN_GREATER_EQUAL:
+      name = "__ge__";
+      break;
+    case TOKEN_EQUAL_EQUAL:
+      name = "__eq__";
+      break;
+    case TOKEN_BANG_EQUAL:
+      name = "__ne__";
+      break;
+    default:
+      goto skip;
+    }
+
+    VarStmt* variable = map_get_var_stmt(&class->members, name);
+    if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    {
+      if (op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL)
+      {
+        goto skip;
+      }
+
+      error_missing_operator_overload(op, name);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    FuncStmt* function = variable->data_type.function_member.function;
+    if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type))
+    {
+      error_type_mismatch(op);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    expression->return_data_type = function->data_type;
+    expression->operand_data_type = left;
+
+    return expression->return_data_type;
+  }
+
+skip:
 
   if (!equal_data_type(left, right))
   {
@@ -1963,6 +2062,23 @@ static void check_set_get_function_declarations(ClassStmt* statement)
   }
 }
 
+static void check_binary_function_declaration(ClassStmt* statement, const char* name)
+{
+  VarStmt* variable = map_get_var_stmt(&statement->members, name);
+  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  {
+    FuncStmt* function = variable->data_type.function_member.function;
+    int got = array_size(&function->parameters);
+    int expected = 2;
+
+    if (expected != got)
+    {
+      error_invalid_binary_arity(function->name, name);
+      return;
+    }
+  }
+}
+
 static void check_class_declaration(ClassStmt* statement)
 {
   if (checker.function || checker.loop || checker.class)
@@ -2006,6 +2122,24 @@ static void check_class_declaration(ClassStmt* statement)
   check_get_function_declaration(statement);
   check_set_function_declaration(statement);
   check_set_get_function_declarations(statement);
+  check_binary_function_declaration(statement, "__add__");
+  check_binary_function_declaration(statement, "__sub__");
+  check_binary_function_declaration(statement, "__div__");
+  check_binary_function_declaration(statement, "__mul__");
+
+  check_binary_function_declaration(statement, "__mod__");
+  check_binary_function_declaration(statement, "__and__");
+  check_binary_function_declaration(statement, "__or_");
+  check_binary_function_declaration(statement, "__xor__");
+  check_binary_function_declaration(statement, "__lshift__");
+  check_binary_function_declaration(statement, "__rshift__");
+
+  check_binary_function_declaration(statement, "__lt__");
+  check_binary_function_declaration(statement, "__le__");
+  check_binary_function_declaration(statement, "__gt__");
+  check_binary_function_declaration(statement, "__ge__");
+  check_binary_function_declaration(statement, "__eq__");
+  check_binary_function_declaration(statement, "__ne__");
 
   checker.class = NULL;
   checker.environment = checker.environment->parent;

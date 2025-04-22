@@ -18,7 +18,7 @@ endif()
 
 if (EMSCRIPTEN)
     add_link_options(--closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 
-                     -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString 
+                     -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString,HEAPU8
                      -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_run,_set_error_callback,_set_result_callback)
 
     add_custom_target(test

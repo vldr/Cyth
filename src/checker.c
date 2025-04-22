@@ -1945,6 +1945,57 @@ static void check_variable_declaration(VarStmt* statement)
   environment_set_variable(environment, name, statement);
 }
 
+static void check_get_function_declaration(FuncStmt* function)
+{
+  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__get__") == 0)
+  {
+    int got = array_size(&function->parameters);
+    int expected = 2;
+
+    if (expected != got)
+    {
+      error_invalid_get_arity(function->name);
+      return;
+    }
+  }
+}
+
+static void check_set_function_declaration(FuncStmt* function)
+{
+  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__set__") == 0)
+  {
+    int got = array_size(&function->parameters);
+    int expected = 3;
+
+    if (expected != got)
+    {
+      error_invalid_set_arity(function->name);
+      return;
+    }
+
+    if (!equal_data_type(function->data_type, DATA_TYPE(TYPE_VOID)))
+    {
+      error_invalid_set_return_type(function->name);
+      return;
+    }
+  }
+}
+
+static void check_binary_overload_function_declaration(FuncStmt* function, const char* name)
+{
+  if (strcmp(function->name.lexeme + checker.class->name.length + 1, name) == 0)
+  {
+    int got = array_size(&function->parameters);
+    int expected = 2;
+
+    if (expected != got)
+    {
+      error_invalid_binary_arity(function->name, name);
+      return;
+    }
+  }
+}
+
 static void check_function_declaration(FuncStmt* statement)
 {
   if (checker.function || checker.loop)
@@ -1988,48 +2039,33 @@ static void check_function_declaration(FuncStmt* statement)
     check_statement(body_statement);
   }
 
+  if (checker.class)
+  {
+    check_get_function_declaration(statement);
+    check_set_function_declaration(statement);
+
+    check_binary_overload_function_declaration(statement, "__add__");
+    check_binary_overload_function_declaration(statement, "__sub__");
+    check_binary_overload_function_declaration(statement, "__div__");
+    check_binary_overload_function_declaration(statement, "__mul__");
+
+    check_binary_overload_function_declaration(statement, "__mod__");
+    check_binary_overload_function_declaration(statement, "__and__");
+    check_binary_overload_function_declaration(statement, "__or_");
+    check_binary_overload_function_declaration(statement, "__xor__");
+    check_binary_overload_function_declaration(statement, "__lshift__");
+    check_binary_overload_function_declaration(statement, "__rshift__");
+
+    check_binary_overload_function_declaration(statement, "__lt__");
+    check_binary_overload_function_declaration(statement, "__le__");
+    check_binary_overload_function_declaration(statement, "__gt__");
+    check_binary_overload_function_declaration(statement, "__ge__");
+    check_binary_overload_function_declaration(statement, "__eq__");
+    check_binary_overload_function_declaration(statement, "__ne__");
+  }
+
   checker.function = previous_function;
   checker.environment = checker.environment->parent;
-}
-
-static void check_get_function_declaration(ClassStmt* statement)
-{
-  VarStmt* variable = map_get_var_stmt(&statement->members, "__get__");
-  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
-  {
-    FuncStmt* function = variable->data_type.function_member.function;
-    int got = array_size(&function->parameters);
-    int expected = 2;
-
-    if (expected != got)
-    {
-      error_invalid_get_arity(function->name);
-      return;
-    }
-  }
-}
-
-static void check_set_function_declaration(ClassStmt* statement)
-{
-  VarStmt* variable = map_get_var_stmt(&statement->members, "__set__");
-  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
-  {
-    FuncStmt* function = variable->data_type.function_member.function;
-    int got = array_size(&function->parameters);
-    int expected = 3;
-
-    if (expected != got)
-    {
-      error_invalid_set_arity(function->name);
-      return;
-    }
-
-    if (!equal_data_type(function->data_type, DATA_TYPE(TYPE_VOID)))
-    {
-      error_invalid_set_return_type(function->name);
-      return;
-    }
-  }
 }
 
 static void check_set_get_function_declarations(ClassStmt* statement)
@@ -2057,23 +2093,6 @@ static void check_set_get_function_declarations(ClassStmt* statement)
                          set_function->parameters.elems[1]->data_type))
     {
       error_invalid_get_set_first_parameter_function(set_function->parameters.elems[1]->type.token);
-      return;
-    }
-  }
-}
-
-static void check_binary_function_declaration(ClassStmt* statement, const char* name)
-{
-  VarStmt* variable = map_get_var_stmt(&statement->members, name);
-  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
-  {
-    FuncStmt* function = variable->data_type.function_member.function;
-    int got = array_size(&function->parameters);
-    int expected = 2;
-
-    if (expected != got)
-    {
-      error_invalid_binary_arity(function->name, name);
       return;
     }
   }
@@ -2119,27 +2138,7 @@ static void check_class_declaration(ClassStmt* statement)
     check_function_declaration(function_statement);
   }
 
-  check_get_function_declaration(statement);
-  check_set_function_declaration(statement);
   check_set_get_function_declarations(statement);
-  check_binary_function_declaration(statement, "__add__");
-  check_binary_function_declaration(statement, "__sub__");
-  check_binary_function_declaration(statement, "__div__");
-  check_binary_function_declaration(statement, "__mul__");
-
-  check_binary_function_declaration(statement, "__mod__");
-  check_binary_function_declaration(statement, "__and__");
-  check_binary_function_declaration(statement, "__or_");
-  check_binary_function_declaration(statement, "__xor__");
-  check_binary_function_declaration(statement, "__lshift__");
-  check_binary_function_declaration(statement, "__rshift__");
-
-  check_binary_function_declaration(statement, "__lt__");
-  check_binary_function_declaration(statement, "__le__");
-  check_binary_function_declaration(statement, "__gt__");
-  check_binary_function_declaration(statement, "__ge__");
-  check_binary_function_declaration(statement, "__eq__");
-  check_binary_function_declaration(statement, "__ne__");
 
   checker.class = NULL;
   checker.environment = checker.environment->parent;

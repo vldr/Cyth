@@ -357,19 +357,26 @@ uint32_t murmurhash(const char* key)
   {
   case 7:
     h ^= (uint64_t)p[6] << 48ul;
+    // fall through
   case 6:
     h ^= (uint64_t)p[5] << 40ul;
+    // fall through
   case 5:
     h ^= (uint64_t)p[4] << 32ul;
+    // fall through
   case 4:
     h ^= (uint64_t)p[3] << 24ul;
+    // fall through
   case 3:
     h ^= (uint64_t)p[2] << 16ul;
+    // fall through
   case 2:
     h ^= (uint64_t)p[1] << 8ul;
+    // fall through
   case 1:
     h ^= (uint64_t)p[0];
     h *= m;
+    // fall through
   default:
     break;
   }

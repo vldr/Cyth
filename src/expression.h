@@ -70,7 +70,7 @@ typedef struct _DATA_TYPE
 
     struct
     {
-      Token token;
+      DataTypeToken token;
       struct _DATA_TYPE* data_type;
     } alias;
 

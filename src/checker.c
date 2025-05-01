@@ -26,7 +26,7 @@ static struct
 } checker;
 
 static void init_statement(Stmt* statement);
-static void check_statement(Stmt* statement);
+static void check_statement(Stmt* statement, bool synchronize);
 static DataType check_expression(Expr* expression);
 
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
@@ -96,6 +96,11 @@ static void error_invalid_template_arity(Token token, int expected, int got)
 {
   checker_error(token,
                 memory_sprintf("Expected %d template argument(s) but got %d.", expected, got));
+}
+
+static void error_recursive_template_type(Token token)
+{
+  checker_error(token, "Cannot instiantiate template, recursion limit reached.");
 }
 
 static void error_not_a_function(Token token)
@@ -359,12 +364,20 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   template_type.count = 0;
 
   const char* name = data_type_token_to_string(template_type, NULL);
-
   VarStmt* variable = environment_get_variable(checker.environment, name);
+
   if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
   {
     return variable->data_type.class;
   }
+
+  static const int LIMIT = 100;
+  if (template.class_template->count >= LIMIT)
+  {
+    return NULL;
+  }
+
+  template.class_template->count++;
 
   Stmt* statement = parser_parse_class_declaration_statement(template.class_template->offset,
                                                              template.class_template->keyword,
@@ -399,7 +412,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
     variable->data_type.type = TYPE_ALIAS;
-    variable->data_type.alias.token = actual_data_type_token.token;
+    variable->data_type.alias.token = actual_data_type_token;
     variable->data_type.alias.data_type = ALLOC(DataType);
     *variable->data_type.alias.data_type =
       data_type_token_to_data_type(actual_data_type_token, false);
@@ -407,7 +420,9 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
 
-  check_statement(statement);
+  check_statement(statement, false);
+
+  template.class_template->count--;
 
   checker.class = previous_class;
   checker.function = previous_function;
@@ -464,6 +479,22 @@ static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* stri
   }
 }
 
+static void data_type_token_unalias(ArrayDataTypeToken* types)
+{
+  for (unsigned int i = 0; i < types->size; i++)
+  {
+    VarStmt* variable =
+      environment_get_variable(checker.environment, array_at(types, i).token.lexeme);
+
+    if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+    {
+      array_at(types, i) = variable->data_type.alias.token;
+    }
+
+    data_type_token_unalias(array_at(types, i).types);
+  }
+}
+
 static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared)
 {
   if (type.types && array_size(type.types))
@@ -496,18 +527,16 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
       return DATA_TYPE(TYPE_VOID);
     }
 
-    for (unsigned int i = 0; i < type.types->size; i++)
-    {
-      VarStmt* variable =
-        environment_get_variable(checker.environment, type.types->elems[i].token.lexeme);
+    data_type_token_unalias(type.types);
 
-      if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
-      {
-        type.types->elems[i].token = variable->data_type.alias.token;
-      }
+    ClassStmt* class_statement = template_to_data_type(variable->data_type, type);
+    if (!class_statement)
+    {
+      error_recursive_template_type(type.token);
+      return DATA_TYPE(TYPE_VOID);
     }
 
-    type.token.lexeme = template_to_data_type(variable->data_type, type)->name.lexeme;
+    type.token.lexeme = class_statement->name.lexeme;
   }
 
   if (type.count > 0)
@@ -1184,16 +1213,7 @@ static DataType check_call_expression(CallExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    for (unsigned int i = 0; i < expression->types.size; i++)
-    {
-      VarStmt* variable =
-        environment_get_variable(checker.environment, expression->types.elems[i].token.lexeme);
-
-      if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
-      {
-        expression->types.elems[i].token = variable->data_type.alias.token;
-      }
-    }
+    data_type_token_unalias(&expression->types);
 
     DataTypeToken class_type = {
       .token = callee_data_type.class_template->name,
@@ -1202,6 +1222,12 @@ static DataType check_call_expression(CallExpr* expression)
     };
 
     ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
+    if (!class_statement)
+    {
+      error_recursive_template_type(expression->callee_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     callee_data_type.type = TYPE_PROTOTYPE;
     callee_data_type.class = class_statement;
   }
@@ -1823,7 +1849,7 @@ static void check_if_statement(IfStmt* statement)
   Stmt* body_statement;
   array_foreach(&statement->then_branch, body_statement)
   {
-    check_statement(body_statement);
+    check_statement(body_statement, true);
   }
 
   checker.environment = checker.environment->parent;
@@ -1835,7 +1861,7 @@ static void check_if_statement(IfStmt* statement)
     Stmt* body_statement;
     array_foreach(&statement->else_branch, body_statement)
     {
-      check_statement(body_statement);
+      check_statement(body_statement, true);
     }
 
     checker.environment = checker.environment->parent;
@@ -1848,7 +1874,7 @@ static void check_while_statement(WhileStmt* statement)
 
   if (statement->initializer)
   {
-    check_statement(statement->initializer);
+    check_statement(statement->initializer, true);
   }
 
   DataType data_type = check_expression(statement->condition);
@@ -1868,7 +1894,7 @@ static void check_while_statement(WhileStmt* statement)
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
-    check_statement(body_statement);
+    check_statement(body_statement, true);
   }
 
   checker.loop = previous_loop;
@@ -1876,7 +1902,7 @@ static void check_while_statement(WhileStmt* statement)
 
   if (statement->incrementer)
   {
-    check_statement(statement->incrementer);
+    check_statement(statement->incrementer, true);
   }
 
   checker.environment = checker.environment->parent;
@@ -2036,7 +2062,7 @@ static void check_function_declaration(FuncStmt* statement)
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
-    check_statement(body_statement);
+    check_statement(body_statement, true);
   }
 
   if (checker.class)
@@ -2155,13 +2181,14 @@ static void check_import_declaration(ImportStmt* statement)
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
-    check_statement(body_statement);
+    check_statement(body_statement, true);
   }
 }
 
-static void check_statement(Stmt* statement)
+static void check_statement(Stmt* statement, bool synchronize)
 {
-  checker.error = false;
+  if (synchronize)
+    checker.error = false;
 
   switch (statement->type)
   {
@@ -2229,6 +2256,6 @@ void checker_validate(void)
 
   array_foreach(&checker.statements, statement)
   {
-    check_statement(statement);
+    check_statement(statement, true);
   }
 }

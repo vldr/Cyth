@@ -889,6 +889,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
   consume(TOKEN_GREATER, "Expected a '>'.");
 
+  stmt->class_template.count = 0;
   stmt->class_template.offset = parser.current;
 
   Token end_token = previous();
@@ -936,6 +937,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->class.declared = false;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
+  stmt->class.ref = 0;
 
   array_init(&stmt->class.variables);
   array_init(&stmt->class.functions);

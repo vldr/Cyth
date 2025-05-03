@@ -1802,12 +1802,14 @@ static void check_return_statement(ReturnStmt* statement)
     return;
   }
 
-  DataType data_type;
+  DataType data_type = DATA_TYPE(TYPE_VOID);
 
   if (statement->expr)
+  {
     data_type = check_expression(statement->expr);
-  else
-    data_type = DATA_TYPE(TYPE_VOID);
+
+    array_data_type_inference(&data_type, &checker.function->data_type);
+  }
 
   if (!equal_data_type(checker.function->data_type, data_type))
   {

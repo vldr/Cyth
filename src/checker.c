@@ -27,10 +27,11 @@ static struct
 
 static void init_statement(Stmt* statement);
 static void check_statement(Stmt* statement, bool synchronize);
+static void check_class_declaration(ClassStmt* statement);
 static DataType check_expression(Expr* expression);
 
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
-static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared);
+static DataType data_type_token_to_data_type(DataTypeToken type);
 
 static void checker_error(Token token, const char* message)
 {
@@ -235,6 +236,22 @@ static void error_cannot_duduce_conflicting_type(Token token)
   checker_error(token, "This type conflicts with the other deduced types.");
 }
 
+static void error_incomplete_type(Token token)
+{
+  checker_error(token, "This type is incomplete.");
+}
+
+VarStmt* get_class_member(ClassStmt* class, Token token, const char* key, bool ignore_undeclared)
+{
+  if (!ignore_undeclared && !class->declared)
+  {
+    error_incomplete_type(token);
+    return NULL;
+  }
+
+  return map_get_var_stmt(class->members, key);
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -307,7 +324,7 @@ static void array_data_type_inference(DataType* source, DataType* target)
   }
 }
 
-static DataType token_to_data_type(Token token, bool ignore_undeclared)
+static DataType token_to_data_type(Token token)
 {
   switch (token.type)
   {
@@ -333,10 +350,9 @@ static DataType token_to_data_type(Token token, bool ignore_undeclared)
 
     if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
     {
-      if (!ignore_undeclared && !variable->data_type.class->declared)
+      if (!variable->data_type.class->declared)
       {
-        error_cannot_find_type(token, token.lexeme);
-        return DATA_TYPE(TYPE_VOID);
+        check_class_declaration(variable->data_type.class);
       }
 
       DataType object = DATA_TYPE(TYPE_OBJECT);
@@ -371,7 +387,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     return variable->data_type.class;
   }
 
-  static const int LIMIT = 100;
+  static const int LIMIT = 64;
   if (template.class_template->count >= LIMIT)
   {
     return NULL;
@@ -414,8 +430,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     variable->data_type.type = TYPE_ALIAS;
     variable->data_type.alias.token = actual_data_type_token;
     variable->data_type.alias.data_type = ALLOC(DataType);
-    *variable->data_type.alias.data_type =
-      data_type_token_to_data_type(actual_data_type_token, false);
+    *variable->data_type.alias.data_type = data_type_token_to_data_type(actual_data_type_token);
 
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
@@ -495,7 +510,7 @@ static void data_type_token_unalias(ArrayDataTypeToken* types)
   }
 }
 
-static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_undeclared)
+static DataType data_type_token_to_data_type(DataTypeToken type)
 {
   if (type.types && array_size(type.types))
   {
@@ -541,7 +556,7 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
 
   if (type.count > 0)
   {
-    DataType element_data_type = token_to_data_type(type.token, ignore_undeclared);
+    DataType element_data_type = token_to_data_type(type.token);
 
     DataType data_type = DATA_TYPE(TYPE_ARRAY);
     data_type.array.data_type = ALLOC(DataType);
@@ -561,7 +576,7 @@ static DataType data_type_token_to_data_type(DataTypeToken type, bool ignore_und
   }
   else
   {
-    return token_to_data_type(type.token, ignore_undeclared);
+    return token_to_data_type(type.token);
   }
 }
 
@@ -657,10 +672,10 @@ static void init_function_declaration(FuncStmt* statement)
   VarStmt* parameter;
   array_foreach(&statement->parameters, parameter)
   {
-    parameter->data_type = data_type_token_to_data_type(parameter->type, true);
+    parameter->data_type = data_type_token_to_data_type(parameter->type);
   }
 
-  statement->data_type = data_type_token_to_data_type(statement->type, true);
+  statement->data_type = data_type_token_to_data_type(statement->type);
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
@@ -773,7 +788,7 @@ static DataType check_cast_expression(CastExpr* expression)
       equal_data_type(expression->to_data_type, DATA_TYPE(TYPE_VOID)))
   {
     expression->from_data_type = check_expression(expression->expr);
-    expression->to_data_type = data_type_token_to_data_type(expression->type, false);
+    expression->to_data_type = data_type_token_to_data_type(expression->type);
 
     bool valid = false;
 
@@ -981,7 +996,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
       goto skip;
     }
 
-    VarStmt* variable = map_get_var_stmt(&class->members, name);
+    VarStmt* variable = get_class_member(class, op, name, false);
     if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
     {
       if (op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL)
@@ -1178,7 +1193,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
     if (equal_data_type(target->index.expr_data_type, DATA_TYPE(TYPE_OBJECT)))
     {
       ClassStmt* class = target->index.expr_data_type.class;
-      VarStmt* variable = map_get_var_stmt(&class->members, "__set__");
+      VarStmt* variable = get_class_member(class, target->index.expr_token, "__set__", false);
 
       if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
       {
@@ -1377,7 +1392,7 @@ static DataType check_call_expression(CallExpr* expression)
   else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE)))
   {
     ClassStmt* class = callee_data_type.class;
-    VarStmt* variable = map_get_var_stmt(&class->members, "__init__");
+    VarStmt* variable = get_class_member(class, expression->callee_token, "__init__", true);
 
     Expr* argument = EXPR();
     argument->type = EXPR_LITERAL;
@@ -1439,7 +1454,7 @@ static DataType check_call_expression(CallExpr* expression)
     }
 
     expression->callee_data_type = callee_data_type;
-    expression->return_data_type = token_to_data_type(class->name, false);
+    expression->return_data_type = token_to_data_type(class->name);
 
     return expression->return_data_type;
   }
@@ -1473,7 +1488,7 @@ static DataType check_access_expression(AccessExpr* expression)
     const char* name = expression->name.lexeme;
 
     ClassStmt* class = data_type.class;
-    VarStmt* variable = map_get_var_stmt(&class->members, name);
+    VarStmt* variable = get_class_member(class, expression->name, name, false);
 
     if (!variable)
     {
@@ -1656,7 +1671,7 @@ static DataType check_index_expression(IndexExpr* expression)
   else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_OBJECT)))
   {
     ClassStmt* class = expr_data_type.class;
-    VarStmt* variable = map_get_var_stmt(&class->members, "__get__");
+    VarStmt* variable = get_class_member(class, expression->expr_token, "__get__", false);
 
     if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
     {
@@ -1945,7 +1960,7 @@ static void check_variable_declaration(VarStmt* statement)
     return;
   }
 
-  statement->data_type = data_type_token_to_data_type(statement->type, false);
+  statement->data_type = data_type_token_to_data_type(statement->type);
 
   if (equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)))
   {
@@ -2098,8 +2113,8 @@ static void check_function_declaration(FuncStmt* statement)
 
 static void check_set_get_function_declarations(ClassStmt* statement)
 {
-  VarStmt* set_variable = map_get_var_stmt(&statement->members, "__set__");
-  VarStmt* get_variable = map_get_var_stmt(&statement->members, "__get__");
+  VarStmt* set_variable = map_get_var_stmt(statement->members, "__set__");
+  VarStmt* get_variable = map_get_var_stmt(statement->members, "__get__");
 
   if (set_variable && get_variable &&
       equal_data_type(set_variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)) &&
@@ -2128,15 +2143,23 @@ static void check_set_get_function_declarations(ClassStmt* statement)
 
 static void check_class_declaration(ClassStmt* statement)
 {
-  if (checker.function || checker.loop || checker.class)
+  if (checker.function || checker.loop)
   {
     error_unexpected_class(statement->name);
     return;
   }
 
+  if (statement->initializing)
+  {
+    return;
+  }
+
+  statement->initializing = true;
+
+  ClassStmt* previous_class = checker.class;
   checker.environment = environment_init(checker.environment);
   checker.class = statement;
-  checker.class->declared = true;
+  checker.class->members = &checker.environment->variables;
 
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
@@ -2146,7 +2169,7 @@ static void check_class_declaration(ClassStmt* statement)
     const char* class_name = statement->name.lexeme;
     const char* function_name = function_statement->name.lexeme;
 
-    function_statement->data_type = data_type_token_to_data_type(function_statement->type, false);
+    function_statement->data_type = data_type_token_to_data_type(function_statement->type);
     function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
   }
 
@@ -2159,7 +2182,7 @@ static void check_class_declaration(ClassStmt* statement)
     check_variable_declaration(variable_statement);
   }
 
-  checker.class->members = checker.environment->variables;
+  statement->declared = true;
 
   array_foreach(&statement->functions, function_statement)
   {
@@ -2168,7 +2191,7 @@ static void check_class_declaration(ClassStmt* statement)
 
   check_set_get_function_declarations(statement);
 
-  checker.class = NULL;
+  checker.class = previous_class;
   checker.environment = checker.environment->parent;
 }
 

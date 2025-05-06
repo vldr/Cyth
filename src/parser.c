@@ -935,6 +935,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->class.id = parser.classes++;
   stmt->class.initializer_function = NULL;
   stmt->class.declared = false;
+  stmt->class.initializing = false;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
   stmt->class.ref = 0;

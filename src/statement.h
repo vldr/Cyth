@@ -84,7 +84,8 @@ typedef struct _CLASS_STMT
   Token name;
 
   bool declared;
-  MapVarStmt members;
+  bool initializing;
+  MapVarStmt* members;
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
 

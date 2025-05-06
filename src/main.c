@@ -67,6 +67,8 @@ void run(char* source, bool codegen)
     codegen_init(statements);
     Codegen codegen = codegen_generate();
 
+    printf("Build date: %s %s\n", __DATE__, __TIME__);
+
     cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
   }
 

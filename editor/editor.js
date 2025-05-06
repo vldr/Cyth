@@ -67,13 +67,13 @@ class EditorConsole {
       for (const error of this.editor.errors) {
         this.print(
           this.editorTabs.getTabName() +
-            ".cy:" +
-            error.startLineNumber +
-            ":" +
-            error.startColumn +
-            ": <span style='color:red'>error: </span>" +
-            error.message +
-            "\n"
+          ".cy:" +
+          error.startLineNumber +
+          ":" +
+          error.startColumn +
+          ": <span style='color:red'>error: </span>" +
+          error.message +
+          "\n"
         );
       }
 
@@ -125,8 +125,8 @@ class EditorConsole {
   print(text) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
-        this.consoleOutput.clientHeight -
-        this.consoleOutput.scrollHeight >=
+      this.consoleOutput.clientHeight -
+      this.consoleOutput.scrollHeight >=
       -5;
 
     this.consoleOutput.innerHTML += text;
@@ -350,16 +350,21 @@ class EditorTabs {
 }
 
 class Editor {
-  constructor() {
-    Module._set_error_callback(
-      Module.addFunction(this.onError.bind(this), "viiiii")
-    );
 
+
+  constructor() {
     require.config({
       paths: {
         vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.21.2/min/vs",
       },
     });
+  }
+
+  init() {
+    Module._set_error_callback(
+      Module.addFunction(this.onError.bind(this), "viiiii")
+    );
+
     require(["vs/editor/editor.main"], () => {
       monaco.languages.register({ id: "cyth" });
       monaco.languages.setLanguageConfiguration("cyth", {
@@ -543,7 +548,7 @@ class Editor {
       this.editor.layout();
       this.editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-        () => {}
+        () => { }
       );
       this.editor.onDidChangeModelContent(() => this.onInput());
 
@@ -591,9 +596,11 @@ class Editor {
   }
 }
 
+const editor = new Editor();
+
 var Module = {
   preRun: [],
   onRuntimeInitialized: function () {
-    new Editor();
+    editor.init();
   },
 };

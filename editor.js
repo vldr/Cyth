@@ -391,6 +391,7 @@ class Editor {
           "import",
           "string",
           "int",
+          "any",
           "float",
           "bool",
           "char",

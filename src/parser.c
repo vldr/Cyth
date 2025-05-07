@@ -97,6 +97,7 @@ static bool is_data_type(int* offset, int* count, bool* right_shift, ArrayDataTy
   {
   case TOKEN_IDENTIFIER:
   case TOKEN_IDENTIFIER_VOID:
+  case TOKEN_IDENTIFIER_ANY:
   case TOKEN_IDENTIFIER_CHAR:
   case TOKEN_IDENTIFIER_INT:
   case TOKEN_IDENTIFIER_FLOAT:

@@ -270,6 +270,14 @@ bool equal_data_type(DataType left, DataType right)
   return left.type == right.type;
 }
 
+bool assignable_data_type(DataType destination, DataType source)
+{
+  if (destination.type == TYPE_ANY)
+    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY;
+
+  return false;
+}
+
 unsigned int array_data_type_hash(DataType array_data_type)
 {
   assert(array_data_type.type == TYPE_ARRAY);
@@ -332,6 +340,8 @@ static DataType token_to_data_type(Token token)
     return DATA_TYPE(TYPE_BOOL);
   case TOKEN_IDENTIFIER_VOID:
     return DATA_TYPE(TYPE_VOID);
+  case TOKEN_IDENTIFIER_ANY:
+    return DATA_TYPE(TYPE_ANY);
   case TOKEN_IDENTIFIER_INT:
     return DATA_TYPE(TYPE_INTEGER);
   case TOKEN_IDENTIFIER_FLOAT:
@@ -854,6 +864,45 @@ static DataType check_cast_expression(CastExpr* expression)
       switch (expression->to_data_type.type)
       {
       case TYPE_STRING:
+      case TYPE_ANY:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_ARRAY:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_ARRAY:
+      case TYPE_ANY:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_OBJECT:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_OBJECT:
+      case TYPE_ANY:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_ANY:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_ANY:
+      case TYPE_STRING:
+      case TYPE_ARRAY:
+      case TYPE_OBJECT:
         valid = true;
 
       default:
@@ -1154,7 +1203,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
   array_data_type_inference(&value_data_type, &target_data_type);
 
-  if (!equal_data_type(target_data_type, value_data_type))
+  if (!equal_data_type(target_data_type, value_data_type) &&
+      !assignable_data_type(target_data_type, value_data_type))
   {
     error_type_mismatch(expression->op);
     return DATA_TYPE(TYPE_VOID);
@@ -1296,7 +1346,8 @@ static DataType check_call_expression(CallExpr* expression)
 
       array_data_type_inference(&argument_data_type, &parameter_data_type);
 
-      if (!equal_data_type(argument_data_type, parameter_data_type))
+      if (!equal_data_type(argument_data_type, parameter_data_type) &&
+          !assignable_data_type(parameter_data_type, argument_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -1330,7 +1381,8 @@ static DataType check_call_expression(CallExpr* expression)
 
       array_data_type_inference(&argument_data_type, &parameter_data_type);
 
-      if (!equal_data_type(argument_data_type, parameter_data_type))
+      if (!equal_data_type(argument_data_type, parameter_data_type) &&
+          !assignable_data_type(parameter_data_type, argument_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -1378,7 +1430,8 @@ static DataType check_call_expression(CallExpr* expression)
 
       array_data_type_inference(&argument_data_type, &parameter_data_type);
 
-      if (!equal_data_type(argument_data_type, parameter_data_type))
+      if (!equal_data_type(argument_data_type, parameter_data_type) &&
+          !assignable_data_type(parameter_data_type, argument_data_type))
       {
         error_type_mismatch(expression->callee_token);
       }
@@ -1437,7 +1490,8 @@ static DataType check_call_expression(CallExpr* expression)
 
         array_data_type_inference(&argument_data_type, &parameter_data_type);
 
-        if (!equal_data_type(argument_data_type, parameter_data_type))
+        if (!equal_data_type(argument_data_type, parameter_data_type) &&
+            !assignable_data_type(parameter_data_type, argument_data_type))
         {
           error_type_mismatch(expression->callee_token);
         }
@@ -1826,7 +1880,8 @@ static void check_return_statement(ReturnStmt* statement)
     array_data_type_inference(&data_type, &checker.function->data_type);
   }
 
-  if (!equal_data_type(checker.function->data_type, data_type))
+  if (!equal_data_type(checker.function->data_type, data_type) &&
+      !assignable_data_type(checker.function->data_type, data_type))
   {
     error_invalid_return_type(statement->keyword);
     return;
@@ -1974,7 +2029,8 @@ static void check_variable_declaration(VarStmt* statement)
 
     array_data_type_inference(&initializer_data_type, &statement->data_type);
 
-    if (!equal_data_type(statement->data_type, initializer_data_type))
+    if (!equal_data_type(statement->data_type, initializer_data_type) &&
+        !assignable_data_type(statement->data_type, initializer_data_type))
     {
       error_type_mismatch(statement->name);
     }

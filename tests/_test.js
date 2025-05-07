@@ -50,6 +50,8 @@ function encodeText(text) {
 }
 
 for await (const path of glob.scan(".")) {
+  const kv = {};
+
   test(path, async () => {
     const file = Bun.file(path);
     const text = await file.text();
@@ -91,6 +93,8 @@ for await (const path of glob.scan(".")) {
               logs.push(String(output));
             }
           },
+          set: (key, value) => { kv[key] = value; },
+          get: (key) => { return kv[key]; },
         },
       });
 

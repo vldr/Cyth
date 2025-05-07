@@ -760,6 +760,8 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_PROTOTYPE:
   case TYPE_PROTOTYPE_TEMPLATE:
     return BinaryenTypeNone();
+  case TYPE_ANY:
+    return BinaryenTypeAnyref();
   case TYPE_BOOL:
   case TYPE_CHAR:
   case TYPE_INTEGER:
@@ -819,6 +821,8 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
   case TYPE_OBJECT:
     return BinaryenRefNull(codegen.module, data_type.class->ref);
+  case TYPE_ANY:
+    return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
   case TYPE_STRING:
     return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, NULL, 0);
   case TYPE_ARRAY:
@@ -1486,6 +1490,13 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
                           codegen.string_type);
     case TYPE_CHAR:
       return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, &value, 1);
+    case TYPE_ANY:
+      return BinaryenIf(codegen.module, BinaryenRefTest(codegen.module, value, codegen.string_type),
+                        BinaryenRefCast(codegen.module,
+                                        BinaryenExpressionCopy(value, codegen.module),
+                                        codegen.string_type),
+                        generate_default_initialization(expression->to_data_type));
+
     default:
       break;
     }
@@ -1538,6 +1549,50 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_OBJECT:
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
                            BinaryenRefIsNull(codegen.module, value));
+    default:
+      break;
+    }
+  }
+  else if (expression->to_data_type.type == TYPE_ANY)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_ARRAY:
+    case TYPE_STRING:
+    case TYPE_OBJECT:
+      return value;
+    default:
+      break;
+    }
+  }
+  else if (expression->to_data_type.type == TYPE_ARRAY)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_ANY:
+      return BinaryenIf(codegen.module,
+                        BinaryenRefTest(codegen.module, value,
+                                        data_type_to_binaryen_type(expression->to_data_type)),
+                        BinaryenRefCast(codegen.module,
+                                        BinaryenExpressionCopy(value, codegen.module),
+                                        data_type_to_binaryen_type(expression->to_data_type)),
+                        generate_default_initialization(expression->to_data_type));
+
+    default:
+      break;
+    }
+  }
+  else if (expression->to_data_type.type == TYPE_OBJECT)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_ANY:
+      return BinaryenIf(
+        codegen.module, BinaryenRefTest(codegen.module, value, expression->to_data_type.class->ref),
+        BinaryenRefCast(codegen.module, BinaryenExpressionCopy(value, codegen.module),
+                        expression->to_data_type.class->ref),
+        BinaryenRefNull(codegen.module, expression->to_data_type.class->ref));
+
     default:
       break;
     }

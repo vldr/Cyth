@@ -48,6 +48,7 @@ typedef struct _DATA_TYPE
   enum
   {
     TYPE_VOID,
+    TYPE_ANY,
     TYPE_BOOL,
     TYPE_CHAR,
     TYPE_INTEGER,

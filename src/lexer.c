@@ -258,6 +258,7 @@ static void literal(void)
   default:
     KEYWORD_GROUP('a')
     KEYWORD("and", TOKEN_AND)
+    KEYWORD("any", TOKEN_IDENTIFIER_ANY)
 
     KEYWORD_GROUP('b')
     switch (lexer.start[1])

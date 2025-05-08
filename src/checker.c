@@ -30,6 +30,7 @@ static void check_statement(Stmt* statement, bool synchronize);
 static void check_class_declaration(ClassStmt* statement);
 static DataType check_expression(Expr* expression);
 
+static const char* data_type_to_string(DataType data_type);
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
 static DataType data_type_token_to_data_type(DataTypeToken type);
 
@@ -42,9 +43,10 @@ static void checker_error(Token token, const char* message)
   checker.error = true;
 }
 
-static void error_type_mismatch(Token token)
+static void error_type_mismatch(Token token, DataType expected, DataType got)
 {
-  checker_error(token, "Type mismatch.");
+  checker_error(token, memory_sprintf("Mismatched types '%s' and '%s'",
+                                      data_type_to_string(expected), data_type_to_string(got)));
 }
 
 static void error_operation_not_defined(Token token, const char* type)
@@ -172,11 +174,6 @@ static void error_unexpected_break(Token token)
 static void error_condition_is_not_bool(Token token)
 {
   checker_error(token, "The condition expression must evaluate to a boolean.");
-}
-
-static void error_invalid_return_type(Token token)
-{
-  checker_error(token, "Type mismatch with return.");
 }
 
 static void error_invalid_initializer_return_type(Token token)
@@ -457,6 +454,119 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   array_add(&template.class_template->classes, class_statement);
 
   return class_statement;
+}
+
+static const char* data_type_to_string(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_VOID:
+    return "void";
+  case TYPE_ANY:
+    return "any";
+  case TYPE_BOOL:
+    return "bool";
+  case TYPE_CHAR:
+    return "char";
+  case TYPE_INTEGER:
+    return "int";
+  case TYPE_FLOAT:
+    return "float";
+  case TYPE_STRING:
+    return "string";
+  case TYPE_ALIAS:
+    return data_type_to_string(*data_type.alias.data_type);
+  case TYPE_FUNCTION_INTERNAL:
+    return data_type.function_internal.name;
+  case TYPE_OBJECT:
+    return data_type.class->name.lexeme;
+  case TYPE_PROTOTYPE:
+    return memory_sprintf("class %s", data_type.class->name.lexeme);
+  case TYPE_PROTOTYPE_TEMPLATE: {
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = "class ";
+    while (*c)
+      array_add(&string, *c++);
+
+    c = data_type.class_template->name.lexeme;
+    while (*c)
+      array_add(&string, *c++);
+
+    array_add(&string, '<');
+
+    for (unsigned i = 0; i < data_type.class_template->types.size; i++)
+    {
+      const char* c = data_type.class_template->types.elems[i].lexeme;
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i < data_type.class_template->types.size - 1)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
+    }
+
+    array_add(&string, '>');
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER: {
+    FuncStmt* function =
+      data_type.type == TYPE_FUNCTION ? data_type.function : data_type.function_member.function;
+
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = data_type_to_string(function->data_type);
+    while (*c)
+      array_add(&string, *c++);
+
+    array_add(&string, '(');
+
+    for (unsigned int i = 0; i < function->parameters.size; i++)
+    {
+      const char* c = data_type_to_string(function->parameters.elems[i]->data_type);
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i < function->parameters.size - 1)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
+    }
+
+    array_add(&string, ')');
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  case TYPE_ARRAY: {
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = data_type_to_string(*data_type.array.data_type);
+    while (*c)
+      array_add(&string, *c++);
+
+    for (int i = 0; i < data_type.array.count; i++)
+    {
+      array_add(&string, '[');
+      array_add(&string, ']');
+    }
+
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  default:
+    UNREACHABLE("Unexpected data type to string");
+  }
 }
 
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string)
@@ -943,16 +1053,17 @@ static DataType check_unary_expression(UnaryExpr* expression)
   switch (op.type)
   {
   case TOKEN_MINUS:
-    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
-      error_type_mismatch(op);
+    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
+      error_type_mismatch(op, DATA_TYPE(TYPE_INTEGER), data_type);
+    else if (!equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
+      error_type_mismatch(op, DATA_TYPE(TYPE_FLOAT), data_type);
 
     expression->data_type = data_type;
     break;
 
   case TOKEN_TILDE:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
-      error_type_mismatch(op);
+      error_type_mismatch(op, DATA_TYPE(TYPE_INTEGER), data_type);
 
     expression->data_type = data_type;
     break;
@@ -965,7 +1076,7 @@ static DataType check_unary_expression(UnaryExpr* expression)
       if (cast_expression)
         expression->expr = cast_expression;
       else
-        error_type_mismatch(op);
+        error_type_mismatch(op, DATA_TYPE(TYPE_BOOL), data_type);
     }
 
     expression->data_type = DATA_TYPE(TYPE_BOOL);
@@ -1060,7 +1171,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     FuncStmt* function = variable->data_type.function_member.function;
     if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type))
     {
-      error_type_mismatch(op);
+      error_type_mismatch(op, array_at(&function->parameters, 1)->data_type, right);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -1082,7 +1193,7 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_BOOL)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)))
     {
-      error_type_mismatch(expression->op);
+      error_type_mismatch(expression->op, left, right);
     }
   }
 
@@ -1206,7 +1317,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
   if (!equal_data_type(target_data_type, value_data_type) &&
       !assignable_data_type(target_data_type, value_data_type))
   {
-    error_type_mismatch(expression->op);
+    error_type_mismatch(expression->op, target_data_type, value_data_type);
     return DATA_TYPE(TYPE_VOID);
   }
 
@@ -1349,7 +1460,7 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token);
+        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
       }
     }
 
@@ -1384,7 +1495,7 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token);
+        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
       }
     }
 
@@ -1433,7 +1544,7 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token);
+        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
       }
     }
 
@@ -1493,7 +1604,7 @@ static DataType check_call_expression(CallExpr* expression)
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
             !assignable_data_type(parameter_data_type, argument_data_type))
         {
-          error_type_mismatch(expression->callee_token);
+          error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
         }
       }
     }
@@ -1736,7 +1847,8 @@ static DataType check_index_expression(IndexExpr* expression)
     FuncStmt* function = variable->data_type.function_member.function;
     if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
     {
-      error_type_mismatch(expression->index_token);
+      error_type_mismatch(expression->index_token, index_data_type,
+                          array_at(&function->parameters, 1)->data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -1883,7 +1995,7 @@ static void check_return_statement(ReturnStmt* statement)
   if (!equal_data_type(checker.function->data_type, data_type) &&
       !assignable_data_type(checker.function->data_type, data_type))
   {
-    error_invalid_return_type(statement->keyword);
+    error_type_mismatch(statement->keyword, checker.function->data_type, data_type);
     return;
   }
 }
@@ -2032,7 +2144,7 @@ static void check_variable_declaration(VarStmt* statement)
     if (!equal_data_type(statement->data_type, initializer_data_type) &&
         !assignable_data_type(statement->data_type, initializer_data_type))
     {
-      error_type_mismatch(statement->name);
+      error_type_mismatch(statement->name, statement->data_type, initializer_data_type);
     }
   }
 

@@ -470,6 +470,9 @@ static Expr* call(void)
 
     if (match(TOKEN_LEFT_PAREN))
     {
+      ArrayToken argument_tokens;
+      array_init(&argument_tokens);
+
       ArrayExpr arguments;
       array_init(&arguments);
 
@@ -477,7 +480,21 @@ static Expr* call(void)
       {
         do
         {
+          Token start_token = peek();
+
           array_add(&arguments, expression());
+
+          Token end_token = previous();
+          Token argument_token = (Token){ TOKEN_IDENTIFIER,
+                                          start_token.start_line,
+                                          start_token.start_column,
+                                          end_token.end_line,
+                                          end_token.end_column,
+                                          0,
+                                          "" };
+
+          array_add(&argument_tokens, argument_token);
+
         } while (match(TOKEN_COMMA));
       }
 
@@ -485,8 +502,9 @@ static Expr* call(void)
 
       Expr* call = EXPR();
       call->type = EXPR_CALL;
-      call->call.arguments = arguments;
       call->call.types = types;
+      call->call.arguments = arguments;
+      call->call.argument_tokens = argument_tokens;
       call->call.callee = expr;
       call->call.callee_token = (Token){
         TOKEN_IDENTIFIER,

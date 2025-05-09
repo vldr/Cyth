@@ -1459,7 +1459,8 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
+        error_type_mismatch(expression->argument_tokens.elems[i - 1], argument_data_type,
+                            parameter_data_type);
       }
     }
 
@@ -1494,7 +1495,8 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
+        error_type_mismatch(expression->argument_tokens.elems[i], argument_data_type,
+                            parameter_data_type);
       }
     }
 
@@ -1543,7 +1545,14 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
+        Token argument_token;
+
+        if (callee_data_type.function_internal.this)
+          argument_token = expression->argument_tokens.elems[i - 1];
+        else
+          argument_token = expression->argument_tokens.elems[i];
+
+        error_type_mismatch(argument_token, argument_data_type, parameter_data_type);
       }
     }
 
@@ -1603,7 +1612,8 @@ static DataType check_call_expression(CallExpr* expression)
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
             !assignable_data_type(parameter_data_type, argument_data_type))
         {
-          error_type_mismatch(expression->callee_token, argument_data_type, parameter_data_type);
+          error_type_mismatch(expression->argument_tokens.elems[i - 1], argument_data_type,
+                              parameter_data_type);
         }
       }
     }

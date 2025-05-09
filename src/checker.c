@@ -51,7 +51,7 @@ static void error_type_mismatch(Token token, DataType expected, DataType got)
 
 static void error_operation_not_defined(Token token, const char* type)
 {
-  checker_error(token, memory_sprintf("Operator '%s' only defined for %s.", token.lexeme, type));
+  checker_error(token, memory_sprintf("Operator '%s' is only defined for %s.", token.lexeme, type));
 }
 
 static void error_missing_operator_overload(Token token, const char* function_name)
@@ -1053,17 +1053,16 @@ static DataType check_unary_expression(UnaryExpr* expression)
   switch (op.type)
   {
   case TOKEN_MINUS:
-    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
-      error_type_mismatch(op, DATA_TYPE(TYPE_INTEGER), data_type);
-    else if (!equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
-      error_type_mismatch(op, DATA_TYPE(TYPE_FLOAT), data_type);
+    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
+        !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
+      error_operation_not_defined(op, "'int' and 'float'");
 
     expression->data_type = data_type;
     break;
 
   case TOKEN_TILDE:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
-      error_type_mismatch(op, DATA_TYPE(TYPE_INTEGER), data_type);
+      error_operation_not_defined(op, "'int'");
 
     expression->data_type = data_type;
     break;
@@ -1231,7 +1230,7 @@ skip:
         !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_CHAR)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
-      error_operation_not_defined(op, "'int', 'float', 'bool', 'class', 'char'");
+      error_operation_not_defined(op, "'int', 'float', 'bool', 'object', 'char' and 'string'");
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -1242,7 +1241,7 @@ skip:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
-      error_operation_not_defined(op, "'int', 'float', 'bool'");
+      error_operation_not_defined(op, "'int', 'float' and 'bool'");
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -2144,7 +2143,7 @@ static void check_variable_declaration(VarStmt* statement)
     if (!equal_data_type(statement->data_type, initializer_data_type) &&
         !assignable_data_type(statement->data_type, initializer_data_type))
     {
-      error_type_mismatch(statement->name, statement->data_type, initializer_data_type);
+      error_type_mismatch(statement->equals, statement->data_type, initializer_data_type);
     }
   }
 

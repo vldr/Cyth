@@ -74,6 +74,7 @@ typedef struct _VAR_STMT
   Scope scope;
 
   Token name;
+  Token equals;
   Expr* initializer;
 } VarStmt;
 

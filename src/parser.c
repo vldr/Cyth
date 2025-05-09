@@ -854,11 +854,18 @@ static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool
   stmt->type = STMT_VARIABLE_DECL;
   stmt->var.type = type;
   stmt->var.name = name;
+  stmt->var.equals = peek();
 
-  if (match(TOKEN_EQUAL))
+  if (stmt->var.equals.type == TOKEN_EQUAL)
+  {
+    advance();
+
     stmt->var.initializer = expression();
+  }
   else
+  {
     stmt->var.initializer = NULL;
+  }
 
   if (newline)
     consume(TOKEN_NEWLINE, "Expected a newline after variable declaration.");

@@ -2352,10 +2352,14 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_function_declaration(&statement->func);
   case STMT_IMPORT_DECL:
     return generate_import_declaration(&statement->import);
-
-  case STMT_CLASS_DECL:
   case STMT_CLASS_TEMPLATE_DECL:
-    return NULL;
+    return generate_class_template_declaration(&statement->class_template);
+  case STMT_CLASS_DECL: {
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    return generate_class_declaration(&statement->class, NULL, &subtypes);
+  }
 
   default:
     UNREACHABLE("Unhandled statement");
@@ -2368,21 +2372,6 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   array_init(&list);
 
   Stmt* statement;
-  array_foreach(statements, statement)
-  {
-    ArrayTypeBuilderSubtype subtypes;
-    array_init(&subtypes);
-
-    if (statement->type == STMT_CLASS_DECL)
-      generate_class_declaration(&statement->class, NULL, &subtypes);
-  }
-
-  array_foreach(statements, statement)
-  {
-    if (statement->type == STMT_CLASS_TEMPLATE_DECL)
-      generate_class_template_declaration(&statement->class_template);
-  }
-
   array_foreach(statements, statement)
   {
     BinaryenExpressionRef ref = generate_statement(statement);

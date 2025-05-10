@@ -101,9 +101,10 @@ static void error_invalid_template_arity(Token token, int expected, int got)
                 memory_sprintf("Expected %d template argument(s) but got %d.", expected, got));
 }
 
-static void error_recursive_template_type(Token token)
+static void error_recursive_template_type(Token token, const char* name)
 {
-  checker_error(token, "Cannot instiantiate template, recursion limit reached.");
+  checker_error(
+    token, memory_sprintf("Cannot instiantiate '%s' template, recursion limit reached.", name));
 }
 
 static void error_not_a_function(Token token)
@@ -394,9 +395,10 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     return variable->data_type.class;
   }
 
-  static const int LIMIT = 64;
-  if (template.class_template->count >= LIMIT)
+  static const int RECURSION_LIMIT = 32;
+  if (template.class_template->count >= RECURSION_LIMIT)
   {
+    error_recursive_template_type(template_type.token, name);
     return NULL;
   }
 
@@ -667,7 +669,6 @@ static DataType data_type_token_to_data_type(DataTypeToken type)
     ClassStmt* class_statement = template_to_data_type(variable->data_type, type);
     if (!class_statement)
     {
-      error_recursive_template_type(type.token);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -1399,7 +1400,6 @@ static DataType check_call_expression(CallExpr* expression)
     ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
     if (!class_statement)
     {
-      error_recursive_template_type(expression->callee_token);
       return DATA_TYPE(TYPE_VOID);
     }
 

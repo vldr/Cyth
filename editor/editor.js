@@ -10,6 +10,7 @@ class EditorConsole {
     this.running = false;
 
     this.consoleStatus = document.getElementById("console-status");
+    this.consoleCanvas = document.getElementById("console-canvas");
     this.consoleOutput = document.getElementById("console-output");
     this.consoleButton = document.getElementById("console-action");
     this.consoleButtonText = document.getElementById("console-action-text");
@@ -24,14 +25,16 @@ class EditorConsole {
   }
 
   upload(size, data, sourceMapSize, sourceMap) {
+    this.clear();
+
     if (!size) {
-      this.clear();
       this.error("Cannot run program due to internal compiler error.\n");
       return;
     }
 
     const bytecode = Module.HEAPU8.subarray(data, data + size);
     const debug = Module.HEAPU8.subarray(sourceMap, sourceMap + sourceMapSize);
+    const offscreen = canvas.transferControlToOffscreen();
 
     this.running = true;
 
@@ -51,9 +54,8 @@ class EditorConsole {
     this.worker.onerror = () => this.onWorkerError();
     this.worker.onmessageerror = () => this.onWorkerError();
     this.worker.onmessage = (event) => this.onWorkerMessage(event);
-    this.worker.postMessage({ type: "start", bytecode, debug });
+    this.worker.postMessage({ type: "start", bytecode, debug, canvas: offscreen }, [offscreen]);
 
-    this.clear();
     this.onTimer();
 
     Module._free(data);
@@ -115,7 +117,8 @@ class EditorConsole {
   }
 
   clear() {
-    this.consoleOutput.textContent = "";
+    this.consoleCanvas.innerHTML = `<canvas id="canvas" width="0" height="0"></canvas>`;
+    this.consoleOutput.innerHTML = "";
   }
 
   error(text) {
@@ -153,7 +156,7 @@ class EditorConsole {
   }
 
   onWorkerError() {
-    this.stop();
+    this.stop(true);
     this.print("Program crashed unexpectedly due to an error:\n");
   }
 
@@ -212,6 +215,10 @@ class EditorTabs {
     if (!json) {
       this.tabIndex = 0;
       this.tabs.push({
+        name: "game_of_life",
+        text: `import "env"\n  void log(string n)\n  void size(int width, int height)\n  void fill(int r, int g, int b)\n  void rect(int x, int y, int width, int height)\n  void clear()\n\nclass GameOfLife\n  int width\n  int height\n  int windowWidth\n  int windowHeight\n\n  int[][] cells\n\n  void __init__(int width, int height, int windowWidth, int windowHeight)\n    this.width = width\n    this.height = height\n\n    this.windowWidth = windowWidth\n    this.windowHeight = windowHeight\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      cells.push(row)\n\n    size(windowWidth, windowHeight)\n                \n  void addCell(int x, int y)\n    cells[x][y] = 1\n\n  int countNeighbors(int x, int y)\n    int count = 0\n    for int dx = -1; dx <= 1; dx += 1\n      for int dy = -1; dy <= 1; dy += 1\n        if dx == 0 and dy == 0\n          continue\n\n        if x + dx < 0 or y + dy < 0\n          continue\n\n        if x + dx >= width or y + dy >= height\n          continue\n\n        if cells[x + dx][y + dy]\n          count = count + 1\n  \n    return count\n\n  void nextGeneration()\n    int[][] newCells\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      newCells.push(row)\n\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        int neighbors = countNeighbors(x, y)\n        if cells[x][y]\n          if neighbors == 2 or neighbors == 3\n            newCells[x][y] = 1\n        else\n          if neighbors == 3\n            newCells[x][y] = 1\n\n    cells = newCells\n\n  void draw()\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        if cells[x][y]\n          fill(0, 255, 0)\n        else\n          fill(0, 0, 0)\n        \n        int cx = windowWidth / width\n        int cy = windowHeight / height\n        rect(x * cx, y * cy, windowWidth, windowHeight)\n\nGameOfLife game = GameOfLife(50, 50, 300, 300)\ngame.addCell(5, 4)\ngame.addCell(6, 4)\ngame.addCell(7, 4)\ngame.addCell(7, 3)\ngame.addCell(6, 2)\n\nint fps = 1000 / 30\nint lastTime\n\nvoid draw(int time)\n  if time - lastTime > fps\n    game.draw()\n    game.nextGeneration()\n\n    lastTime = time`,
+      });
+      this.tabs.push({
         name: "fibonacci",
         text: `import "env"\n  void log(int n)\n\nint fibonacci(int n)\n  if n == 0\n    return n\n  else if n == 1\n    return n\n  else\n    return fibonacci(n - 2) + fibonacci(n - 1)\n\nfor int i = 0; i <= 42; i = i + 1\n  log(fibonacci(i))`,
       });
@@ -225,7 +232,7 @@ class EditorTabs {
       });
       this.tabs.push({
         name: "quick_sort",
-        text: `import "env"\n    void log(int n)\n\nclass QuickSort<T>\n  void sort(T[] array)\n    int low = 0\n    int high = array.length - 1\n\n    if low >= high\n      return\n\n    int[] stack\n    stack.push(low)\n    stack.push(high)\n\n    while stack.length > 0\n      high = stack.pop()\n      low = stack.pop()\n\n      int p = partition(array, low, high)\n\n      if p - 1 > low\n        stack.push(low)\n        stack.push(p - 1)\n\n      if p + 1 < high\n        stack.push(p + 1)\n        stack.push(high)\n\n  int partition(T[] array, int low, int high)\n    T pivot = array[high]\n    int i = low - 1\n\n    for int j = low; j < high; j = j + 1\n      if array[j] <= pivot\n        i = i + 1\n\n        swap(array, i, j)\n\n    swap(array, i + 1, high)\n    return i + 1\n\n  void swap(T[] array, int i, int j)\n    T temp = array[i]\n    array[i] = array[j]\n    array[j] = temp\n\nint[] array = [\n  55, 47, 35, 15, 20, 42,\n  52, 30, 58, 15, 13, 19,\n  32, 18, 44, 11, 7, 9,\n  34, 56, 17, 25, 14, 48,\n  40, 4, 5, 7, 36, 1,\n  33, 49, 25, 26, 30, 9\n]\n\nQuickSort<int> sorter = QuickSort<int>()\nsorter.sort(array)\n\nfor int i = 0; i < array.length; i = i + 1\n  log(array[i])`,
+        text: `import "env"\n  void log(int n)\n\nclass QuickSort<T>\n  void sort(T[] array)\n    int low = 0\n    int high = array.length - 1\n\n    if low >= high\n      return\n\n    int[] stack\n    stack.push(low)\n    stack.push(high)\n\n    while stack.length > 0\n      high = stack.pop()\n      low = stack.pop()\n\n      int p = partition(array, low, high)\n\n      if p - 1 > low\n        stack.push(low)\n        stack.push(p - 1)\n\n      if p + 1 < high\n        stack.push(p + 1)\n        stack.push(high)\n\n  int partition(T[] array, int low, int high)\n    T pivot = array[high]\n    int i = low - 1\n\n    for int j = low; j < high; j = j + 1\n      if array[j] <= pivot\n        i = i + 1\n\n        swap(array, i, j)\n\n    swap(array, i + 1, high)\n    return i + 1\n\n  void swap(T[] array, int i, int j)\n    T temp = array[i]\n    array[i] = array[j]\n    array[j] = temp\n\nint[] array = [\n  55, 47, 35, 15, 20, 42,\n  52, 30, 58, 15, 13, 19,\n  32, 18, 44, 11, 7, 9,\n  34, 56, 17, 25, 14, 48,\n  40, 4, 5, 7, 36, 1,\n  33, 49, 25, 26, 30, 9\n]\n\nQuickSort<int> sorter = QuickSort<int>()\nsorter.sort(array)\n\nfor int i = 0; i < array.length; i = i + 1\n  log(array[i])`,
       });
     } else {
       this.tabs = json.tabs;

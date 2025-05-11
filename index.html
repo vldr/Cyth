@@ -1,301 +1,279 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Cyth Playground</title>
-    <meta charset="utf-8" />
 
-    <link
-      rel="preload"
-      href="cyth.wasm"
-      as="fetch"
-      type="application/wasm"
-      crossorigin="anonymous"
-    />
-    <link
-      href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.min.css"
-      rel="stylesheet"
-    />
+<head>
+  <title>Cyth Playground</title>
+  <meta charset="utf-8" />
 
-    <style>
-      @import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=Roboto+Mono&display=swap");
+  <link rel="preload" href="cyth.wasm" as="fetch" type="application/wasm" crossorigin="anonymous" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.min.css"
+    rel="stylesheet" />
 
-      :root {
-        color-scheme: dark;
-      }
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=Roboto+Mono&display=swap");
 
-      body {
-        margin: 0;
-        padding: 0;
-        font-family: "Open Sans", sans-serif;
-        background: #1d1d1d;
-      }
+    :root {
+      color-scheme: dark;
+    }
 
-      .editor-tab {
-        font-size: 15px;
-        display: flex;
-        flex-direction: row;
-        text-align: center;
-        color: rgb(205, 205, 205);
-        user-select: none;
-        cursor: pointer;
-        border-radius: 21px;
-        padding: 5px 11px;
-        margin-top: 9px;
-        height: 22px;
-        margin-right: 6px;
-      }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Open Sans", sans-serif;
+      background: #1d1d1d;
+    }
 
-      .editor-tab:hover {
-        background-color: #151515;
-      }
+    .editor-tab {
+      font-size: 15px;
+      display: flex;
+      flex-direction: row;
+      text-align: center;
+      color: rgb(205, 205, 205);
+      user-select: none;
+      cursor: pointer;
+      border-radius: 21px;
+      padding: 5px 11px;
+      margin-top: 9px;
+      height: 22px;
+      margin-right: 6px;
+    }
 
-      .editor-tab-active {
-        background: #000000;
-        color: white;
-      }
+    .editor-tab:hover {
+      background-color: #151515;
+    }
 
-      .editor-tab-active:hover {
-        background: #000000;
-      }
+    .editor-tab-active {
+      background: #000000;
+      color: white;
+    }
 
-      .editor-tab-icon {
-        margin: 0;
-        font-size: 12px;
-        margin-bottom: -1px;
-        margin-right: 6px;
-        font-weight: bold;
-        color: rgb(255 255 255);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
+    .editor-tab-active:hover {
+      background: #000000;
+    }
 
-      .editor-tab-delete {
-        height: 9px;
-        width: 9px;
-        margin-left: 4px;
-        margin-right: 4px;
-        cursor: pointer;
-      }
+    .editor-tab-icon {
+      margin: 0;
+      font-size: 12px;
+      margin-bottom: -1px;
+      margin-right: 6px;
+      font-weight: bold;
+      color: rgb(255 255 255);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-      .editor-tab-delete:hover {
-        opacity: 0.8;
-      }
+    .editor-tab-delete {
+      height: 9px;
+      width: 9px;
+      margin-left: 4px;
+      margin-right: 4px;
+      cursor: pointer;
+    }
 
-      #wrapper {
-        display: flex;
-        flex-direction: row;
-      }
+    .editor-tab-delete:hover {
+      opacity: 0.8;
+    }
 
-      #editor-wrapper {
-        display: flex;
-        flex-direction: column;
-        width: 50%;
-      }
+    #wrapper {
+      display: flex;
+      flex-direction: row;
+    }
 
-      #editor-tabs {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        padding-left: 10px;
-        height: 50px;
-        z-index: 1;
-        border-bottom: 1px solid #3e3e3e;
-      }
+    #editor-wrapper {
+      display: flex;
+      flex-direction: column;
+      width: 50%;
+    }
 
-      #editor-tabs-list {
-        display: flex;
-        flex-direction: row;
-        width: 100%;
-        height: 100%;
-        overflow-x: hidden;
-        scrollbar-width: none;
-      }
+    #editor-tabs {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      padding-left: 10px;
+      height: 50px;
+      z-index: 1;
+      border-bottom: 1px solid #3e3e3e;
+    }
 
-      #editor-tabs-list:hover {
-        overflow-x: auto;
-      }
+    #editor-tabs-list {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      scrollbar-width: none;
+    }
 
-      #editor-tabs-buttons {
-        display: flex;
-        flex-direction: row;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-      }
+    #editor-tabs-list:hover {
+      overflow-x: auto;
+    }
 
-      #editor-tabs-buttons button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        outline: 0;
-        opacity: 0.55;
-        cursor: pointer;
-        border: none;
-        background: transparent;
-        height: 32px;
-        margin-right: 7px;
-        border-radius: 5px;
-      }
+    #editor-tabs-buttons {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
 
-      #editor-tabs-buttons button:hover {
-        background-color: #101010;
-      }
+    #editor-tabs-buttons button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: 0;
+      opacity: 0.55;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      height: 32px;
+      margin-right: 7px;
+      border-radius: 5px;
+    }
 
-      #editor-tabs-logo {
-        margin-left: 10px;
-      }
+    #editor-tabs-buttons button:hover {
+      background-color: #101010;
+    }
 
-      #editor {
-        height: calc(100vh - 51px);
-        width: 100%;
-      }
+    #editor-tabs-logo {
+      margin-left: 10px;
+    }
 
-      #console {
-        height: calc(100vh);
-        width: 50%;
+    #editor {
+      height: calc(100vh - 51px);
+      width: 100%;
+    }
 
-        display: flex;
-        flex-direction: column;
-        box-sizing: border-box;
-        background: #232323;
-        border-left: 1px solid #3e3e3e;
-      }
+    #console {
+      height: calc(100vh);
+      width: 50%;
 
-      #console-topbar {
-        display: flex;
-        box-shadow: 0px 4px 6px 0px #191919;
-        border-bottom: 1px solid #3e3e3e;
-        padding: 0px 15px;
-        margin-top: 15px;
-        align-items: center;
-        padding-bottom: 15px;
-      }
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      background: #232323;
+      border-left: 1px solid #3e3e3e;
+    }
 
-      #console-action {
-        font-family: "Open Sans", sans-serif;
-        outline: none;
-        align-items: center;
-        justify-items: center;
-        border: none;
-        flex-direction: row;
-        display: flex;
-        padding: 10px 15px;
-        background: black;
-        font-weight: 600;
-        color: white;
-        border-radius: 0.375rem;
-        cursor: pointer;
-      }
+    #console-topbar {
+      display: flex;
+      box-shadow: 0px 4px 6px 0px #191919;
+      border-bottom: 1px solid #3e3e3e;
+      padding: 0px 15px;
+      margin-top: 15px;
+      align-items: center;
+      padding-bottom: 15px;
+    }
 
-      #console-action:hover {
-        background: rgb(43, 43, 43);
-      }
+    #console-action {
+      font-family: "Open Sans", sans-serif;
+      outline: none;
+      align-items: center;
+      justify-items: center;
+      border: none;
+      flex-direction: row;
+      display: flex;
+      padding: 10px 15px;
+      background: black;
+      font-weight: 600;
+      color: white;
+      border-radius: 0.375rem;
+      cursor: pointer;
+    }
 
-      #console-action span {
-        margin-left: 8px;
-      }
+    #console-action:hover {
+      background: rgb(43, 43, 43);
+    }
 
-      #console-status {
-        margin: 0;
-        font-weight: 450;
-        color: #e5e5e5;
-        margin-left: 14px;
-        line-height: 18px;
-      }
+    #console-action span {
+      margin-left: 8px;
+    }
 
-      #console-status span {
-        font-size: 13px;
-        color: #adadad;
-      }
+    #console-status {
+      margin: 0;
+      font-weight: 450;
+      color: #e5e5e5;
+      margin-left: 14px;
+      line-height: 18px;
+    }
 
-      #console-output {
-        white-space: pre-wrap;
-        padding: 15px 20px;
-        font-size: 15px;
-        font-family: monospace;
-        color: #d8d8d8;
-        line-height: 23px;
-        overflow: auto;
-      }
+    #console-status span {
+      font-size: 13px;
+      color: #adadad;
+    }
 
-      #console-output h1 {
-        margin: 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="wrapper">
-      <div id="editor-wrapper">
-        <div id="editor-tabs">
-          <div id="editor-tabs-list"></div>
-          <div id="editor-tabs-buttons">
-            <button id="editor-tabs-add-button">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#fff"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="16"></line>
-                <line x1="8" y1="12" x2="16" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div id="editor"></div>
-      </div>
-      <div id="console">
-        <div id="console-topbar">
-          <button id="console-action">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              id="console-action-start-icon"
-            >
-              <path fill="#fff" d="M3 22v-20l18 10-18 10z" />
+    #console-output {
+      white-space: pre-wrap;
+      padding: 15px 20px;
+      font-size: 15px;
+      font-family: monospace;
+      color: #d8d8d8;
+      line-height: 23px;
+      overflow: auto;
+    }
+
+    #console-output h1 {
+      margin: 0;
+    }
+
+    #console-canvas {
+      display: flex;
+    }
+
+    #console-canvas:has(canvas[height]:not([height="0"])) {
+      padding: 20px;
+      border-bottom: 1px solid #3e3e3e;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="wrapper">
+    <div id="editor-wrapper">
+      <div id="editor-tabs">
+        <div id="editor-tabs-list"></div>
+        <div id="editor-tabs-buttons">
+          <button id="editor-tabs-add-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
-
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              id="console-action-stop-icon"
-              style="display: none"
-            >
-              <path fill="#fff" d="M2 2h20v20h-20z" />
-            </svg>
-            <span id="console-action-text">Run</span>
           </button>
-          <p id="console-status">Press 'Run' to start a program.</p>
         </div>
-        <div id="console-output"></div>
       </div>
+      <div id="editor"></div>
     </div>
+    <div id="console">
+      <div id="console-topbar">
+        <button id="console-action">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+            id="console-action-start-icon">
+            <path fill="#fff" d="M3 22v-20l18 10-18 10z" />
+          </svg>
 
-    <script
-      type="text/javascript"
-      src="https://requirejs.org/docs/release/2.3.6/minified/require.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.nls.min.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.min.js"
-    ></script>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+            id="console-action-stop-icon" style="display: none">
+            <path fill="#fff" d="M2 2h20v20h-20z" />
+          </svg>
+          <span id="console-action-text">Run</span>
+        </button>
+        <p id="console-status">Press 'Run' to start a program.</p>
+      </div>
+      <div id="console-canvas"></div>
+      <div id="console-output"></div>
+    </div>
+  </div>
 
-    <script type="text/javascript" src="editor.js"></script>
-    <script type="text/javascript" src="cyth.js"></script>
-  </body>
+  <script type="text/javascript" src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script>
+  <script type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.nls.min.js"></script>
+  <script type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.19.2/min/vs/editor/editor.main.min.js"></script>
+
+  <script type="text/javascript" src="editor.js"></script>
+  <script type="text/javascript" src="cyth.js"></script>
+</body>
+
 </html>

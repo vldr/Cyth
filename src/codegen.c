@@ -1020,6 +1020,28 @@ static const char* generate_float_hash_function(void)
   return name;
 }
 
+static const char* generate_float_sqrt_function(void)
+{
+  const char* name = "float.sqrt";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType params_list[] = { BinaryenTypeFloat32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeFloat32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0,
+                        BinaryenUnary(codegen.module, BinaryenSqrtFloat32(),
+                                      BinaryenLocalGet(codegen.module, 0, BinaryenTypeFloat32())));
+  }
+
+  return name;
+}
+
 static const char* generate_string_hash_function(void)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
@@ -1764,6 +1786,8 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
       name = generate_array_pop_function(callee_data_type);
     else if (strcmp(name, "int.hash") == 0)
       name = generate_int_hash_function();
+    else if (strcmp(name, "float.sqrt") == 0)
+      name = generate_float_sqrt_function();
     else if (strcmp(name, "float.hash") == 0)
       name = generate_float_hash_function();
     else if (strcmp(name, "string.hash") == 0)

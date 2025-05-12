@@ -75,9 +75,10 @@ static void error_cannot_find_name(Token token, const char* name)
   checker_error(token, memory_sprintf("Undeclared identifier '%s'.", name));
 }
 
-static void error_cannot_find_member_name(Token token, const char* name, const char* class_name)
+static void error_cannot_find_member_name(Token token, const char* name, DataType data_type)
 {
-  checker_error(token, memory_sprintf("No member named '%s' in '%s'.", name, class_name));
+  checker_error(
+    token, memory_sprintf("No member named '%s' in '%s'.", name, data_type_to_string(data_type)));
 }
 
 static void error_cannot_find_type(Token token, const char* name)
@@ -478,8 +479,6 @@ static const char* data_type_to_string(DataType data_type)
     return "string";
   case TYPE_ALIAS:
     return data_type_to_string(*data_type.alias.data_type);
-  case TYPE_FUNCTION_INTERNAL:
-    return data_type.function_internal.name;
   case TYPE_OBJECT:
     return data_type.class->name.lexeme;
   case TYPE_PROTOTYPE:
@@ -517,26 +516,44 @@ static const char* data_type_to_string(DataType data_type)
     return string.elems;
   }
   case TYPE_FUNCTION:
-  case TYPE_FUNCTION_MEMBER: {
-    FuncStmt* function =
-      data_type.type == TYPE_FUNCTION ? data_type.function : data_type.function_member.function;
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL: {
+    DataType return_data_type;
+    ArrayDataType parameter_types;
+    array_init(&parameter_types);
+
+    if (data_type.type == TYPE_FUNCTION || data_type.type == TYPE_FUNCTION_MEMBER)
+    {
+      FuncStmt* function =
+        data_type.type == TYPE_FUNCTION ? data_type.function : data_type.function_member.function;
+
+      for (unsigned int i = 0; i < function->parameters.size; i++)
+        array_add(&parameter_types, function->parameters.elems[i]->data_type);
+
+      return_data_type = function->data_type;
+    }
+    else
+    {
+      parameter_types = data_type.function_internal.parameter_types;
+      return_data_type = *data_type.function_internal.return_type;
+    }
 
     ArrayChar string;
     array_init(&string);
 
-    const char* c = data_type_to_string(function->data_type);
+    const char* c = data_type_to_string(return_data_type);
     while (*c)
       array_add(&string, *c++);
 
     array_add(&string, '(');
 
-    for (unsigned int i = 0; i < function->parameters.size; i++)
+    for (unsigned int i = 0; i < parameter_types.size; i++)
     {
-      const char* c = data_type_to_string(function->parameters.elems[i]->data_type);
+      const char* c = data_type_to_string(parameter_types.elems[i]);
       while (*c)
         array_add(&string, *c++);
 
-      if (i < function->parameters.size - 1)
+      if (i < parameter_types.size - 1)
       {
         array_add(&string, ',');
         array_add(&string, ' ');
@@ -1378,8 +1395,14 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
-  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+  if (array_size(&expression->types))
   {
+    if (!equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+    {
+      error_not_a_template_type(expression->callee_token, data_type_to_string(callee_data_type));
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     int expected = array_size(&callee_data_type.class_template->types);
     int got = array_size(&expression->types);
 
@@ -1666,7 +1689,7 @@ static DataType check_access_expression(AccessExpr* expression)
 
     if (!variable)
     {
-      error_cannot_find_member_name(expression->name, name, class->name.lexeme);
+      error_cannot_find_member_name(expression->name, name, data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -1727,7 +1750,7 @@ static DataType check_access_expression(AccessExpr* expression)
       return expression->data_type;
     }
 
-    error_cannot_find_member_name(expression->name, name, "array");
+    error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);
   }
   else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
@@ -1758,7 +1781,7 @@ static DataType check_access_expression(AccessExpr* expression)
       return expression->data_type;
     }
 
-    error_cannot_find_member_name(expression->name, name, "string");
+    error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);
   }
   else if (equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) ||
@@ -1800,8 +1823,40 @@ static DataType check_access_expression(AccessExpr* expression)
 
       return expression->data_type;
     }
+    else if (strcmp("sqrt", name) == 0)
+    {
+      const char* function_name;
+      switch (data_type.type)
+      {
 
-    error_cannot_find_member_name(expression->name, name, "string");
+      case TYPE_BOOL:
+      case TYPE_CHAR:
+      case TYPE_INTEGER:
+        error_cannot_find_member_name(expression->name, name, data_type);
+        return DATA_TYPE(TYPE_VOID);
+      case TYPE_FLOAT:
+        function_name = "float.sqrt";
+        break;
+      default:
+        UNREACHABLE("Unknown data type hash");
+      }
+
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = function_name;
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      expression->data_type.function_internal.return_type->type = TYPE_FLOAT;
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
+
+    error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);
   }
   else

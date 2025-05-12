@@ -20,7 +20,7 @@
       margin: 0;
       padding: 0;
       font-family: "Open Sans", sans-serif;
-      background: #1d1d1d;
+      background: black;
     }
 
     .editor-tab {
@@ -43,12 +43,12 @@
     }
 
     .editor-tab-active {
-      background: #000000;
+      background: #1c2f4d;
       color: white;
     }
 
     .editor-tab-active:hover {
-      background: #000000;
+      background: #26416b;
     }
 
     .editor-tab-icon {
@@ -92,8 +92,6 @@
       align-items: center;
       padding-left: 10px;
       height: 50px;
-      z-index: 1;
-      border-bottom: 1px solid #3e3e3e;
     }
 
     #editor-tabs-list {
@@ -122,7 +120,6 @@
       align-items: center;
       justify-content: center;
       outline: 0;
-      opacity: 0.55;
       cursor: pointer;
       border: none;
       background: transparent;
@@ -132,7 +129,7 @@
     }
 
     #editor-tabs-buttons button:hover {
-      background-color: #101010;
+      background-color: #212121;
     }
 
     #editor-tabs-logo {
@@ -151,14 +148,13 @@
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
-      background: #232323;
-      border-left: 1px solid #3e3e3e;
+      background: #151517;
+      border-left: 1px solid #232323;
     }
 
     #console-topbar {
       display: flex;
-      box-shadow: 0px 4px 6px 0px #191919;
-      border-bottom: 1px solid #3e3e3e;
+      border-bottom: 1px solid #232323;
       padding: 0px 15px;
       margin-top: 15px;
       align-items: center;
@@ -174,15 +170,15 @@
       flex-direction: row;
       display: flex;
       padding: 10px 15px;
-      background: black;
+      background: #3571de;
       font-weight: 600;
       color: white;
-      border-radius: 0.375rem;
+      border-radius: 999px;
       cursor: pointer;
     }
 
     #console-action:hover {
-      background: rgb(43, 43, 43);
+      background: #3b7df7;
     }
 
     #console-action span {
@@ -216,13 +212,17 @@
       margin: 0;
     }
 
+    #console-output a {
+      color: #eaeaea;
+    }
+
     #console-canvas {
       display: flex;
     }
 
     #console-canvas:has(canvas[height]:not([height="0"])) {
       padding: 20px;
-      border-bottom: 1px solid #3e3e3e;
+      border-bottom: 1px solid #232323;
     }
   </style>
 </head>
@@ -234,8 +234,8 @@
         <div id="editor-tabs-list"></div>
         <div id="editor-tabs-buttons">
           <button id="editor-tabs-add-button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="#3b82f6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="8" x2="12" y2="16"></line>
               <line x1="8" y1="12" x2="16" y2="12"></line>

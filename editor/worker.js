@@ -91,7 +91,7 @@ onerror = (error) => {
     type: "error",
     message: error.message ? errorMessage : "Internal error.",
   });
-}
+};
 
 onmessage = (event) => {
   const data = event.data;
@@ -111,8 +111,7 @@ onmessage = (event) => {
               const at = instance.exports["string.at"];
 
               const array = new Uint8Array(length(text));
-              for (let i = 0; i < array.byteLength; i++)
-                array[i] = at(text, i);
+              for (let i = 0; i < array.byteLength; i++) array[i] = at(text, i);
 
               postMessage({ type: "print", text: textDecoder.decode(array) });
             } else {
@@ -149,8 +148,10 @@ onmessage = (event) => {
 
           rect: function (x, y, width, height) {
             context.fillRect(x, y, width, height);
-          }
-        }
+          },
+
+          sqrt: Math.sqrt,
+        },
       });
 
       try {
@@ -161,6 +162,52 @@ onmessage = (event) => {
 
       if (!instance.exports["draw"]) {
         postMessage({ type: "stop" });
+      }
+
+      break;
+    }
+
+    case "mousedown": {
+      if (instance.exports["mousePressed"]) {
+        try {
+          instance.exports["mousePressed"](data.x, data.y);
+        } catch (error) {
+          onerror(error);
+        }
+      }
+
+      break;
+    }
+
+    case "mousemove": {
+      if (data.buttons) {
+        if (instance.exports["mouseDragged"]) {
+          try {
+            instance.exports["mouseDragged"](data.x, data.y);
+          } catch (error) {
+            onerror(error);
+          }
+        }
+      } else {
+        if (instance.exports["mouseMoved"]) {
+          try {
+            instance.exports["mouseMoved"](data.x, data.y);
+          } catch (error) {
+            onerror(error);
+          }
+        }
+      }
+
+      break;
+    }
+
+    case "mouseup": {
+      if (instance.exports["mouseReleased"]) {
+        try {
+          instance.exports["mouseReleased"](data.x, data.y);
+        } catch (error) {
+          onerror(error);
+        }
       }
 
       break;

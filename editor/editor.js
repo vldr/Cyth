@@ -54,7 +54,10 @@ class EditorConsole {
     this.worker.onerror = () => this.onWorkerError();
     this.worker.onmessageerror = () => this.onWorkerError();
     this.worker.onmessage = (event) => this.onWorkerMessage(event);
-    this.worker.postMessage({ type: "start", bytecode, debug, canvas: offscreen }, [offscreen]);
+    this.worker.postMessage(
+      { type: "start", bytecode, debug, canvas: offscreen },
+      [offscreen]
+    );
 
     this.onTimer();
 
@@ -69,13 +72,13 @@ class EditorConsole {
       for (const error of this.editor.errors) {
         this.print(
           this.editorTabs.getTabName() +
-          ".cy:" +
-          error.startLineNumber +
-          ":" +
-          error.startColumn +
-          ": <span style='color:red'>error: </span>" +
-          error.message +
-          "\n"
+            ".cy:" +
+            error.startLineNumber +
+            ":" +
+            error.startColumn +
+            ": <span style='color:red'>error: </span>" +
+            error.message +
+            "\n"
         );
       }
 
@@ -119,6 +122,38 @@ class EditorConsole {
   clear() {
     this.consoleCanvas.innerHTML = `<canvas id="canvas" width="0" height="0"></canvas>`;
     this.consoleOutput.innerHTML = "";
+
+    const canvas = document.getElementById("canvas");
+    canvas.onmousemove = (event) => {
+      if (this.worker) {
+        this.worker.postMessage({
+          type: "mousemove",
+          x: event.offsetX,
+          y: event.offsetY,
+          buttons: event.buttons,
+        });
+      }
+    };
+
+    canvas.onmouseup = (event) => {
+      if (this.worker) {
+        this.worker.postMessage({
+          type: "mouseup",
+          x: event.offsetX,
+          y: event.offsetY,
+        });
+      }
+    };
+
+    canvas.onmousedown = (event) => {
+      if (this.worker) {
+        this.worker.postMessage({
+          type: "mousedown",
+          x: event.offsetX,
+          y: event.offsetY,
+        });
+      }
+    };
   }
 
   error(text) {
@@ -128,8 +163,8 @@ class EditorConsole {
   print(text) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
-      this.consoleOutput.clientHeight -
-      this.consoleOutput.scrollHeight >=
+        this.consoleOutput.clientHeight -
+        this.consoleOutput.scrollHeight >=
       -5;
 
     this.consoleOutput.innerHTML += text;
@@ -216,7 +251,7 @@ class EditorTabs {
       this.tabIndex = 0;
       this.tabs.push({
         name: "game_of_life",
-        text: `import "env"\n  void log(string n)\n  void size(int width, int height)\n  void fill(int r, int g, int b)\n  void rect(int x, int y, int width, int height)\n  void clear()\n\nclass GameOfLife\n  int width\n  int height\n  int windowWidth\n  int windowHeight\n\n  int[][] cells\n\n  void __init__(int width, int height, int windowWidth, int windowHeight)\n    this.width = width\n    this.height = height\n\n    this.windowWidth = windowWidth\n    this.windowHeight = windowHeight\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      cells.push(row)\n\n    size(windowWidth, windowHeight)\n                \n  void addCell(int x, int y)\n    cells[x][y] = 1\n\n  int countNeighbors(int x, int y)\n    int count = 0\n    for int dx = -1; dx <= 1; dx += 1\n      for int dy = -1; dy <= 1; dy += 1\n        if dx == 0 and dy == 0\n          continue\n\n        if x + dx < 0 or y + dy < 0\n          continue\n\n        if x + dx >= width or y + dy >= height\n          continue\n\n        if cells[x + dx][y + dy]\n          count = count + 1\n  \n    return count\n\n  void nextGeneration()\n    int[][] newCells\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      newCells.push(row)\n\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        int neighbors = countNeighbors(x, y)\n        if cells[x][y]\n          if neighbors == 2 or neighbors == 3\n            newCells[x][y] = 1\n        else\n          if neighbors == 3\n            newCells[x][y] = 1\n\n    cells = newCells\n\n  void draw()\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        if cells[x][y]\n          fill(0, 255, 0)\n        else\n          fill(0, 0, 0)\n        \n        int cx = windowWidth / width\n        int cy = windowHeight / height\n        rect(x * cx, y * cy, windowWidth, windowHeight)\n\nGameOfLife game = GameOfLife(50, 50, 300, 300)\ngame.addCell(5, 4)\ngame.addCell(6, 4)\ngame.addCell(7, 4)\ngame.addCell(7, 3)\ngame.addCell(6, 2)\n\nint fps = 1000 / 30\nint lastTime\n\nvoid draw(int time)\n  if time - lastTime > fps\n    game.draw()\n    game.nextGeneration()\n\n    lastTime = time`,
+        text: `import "env"\n  float sqrt(float n)\n  void log(string n)\n  void size(int width, int height)\n  void fill(int r, int g, int b)\n  void rect(int x, int y, int width, int height)\n  void clear()\n\nGameOfLife game = GameOfLife(50, 50, 500, 500)\ngame.addCell(5, 4)\ngame.addCell(6, 4)\ngame.addCell(7, 4)\ngame.addCell(7, 3)\ngame.addCell(6, 2)\n\nint fps = 1000 / 30\nint lastTime\n\nvoid mouseDragged(int x, int y)\n  float cellX = game.width * (float)x / game.windowWidth\n  float cellY = game.height * (float)y / game.windowHeight\n\n  game.addCell((int)cellX, (int)cellY)\n\nvoid draw(int time)\n  if time - lastTime <= fps\n    return\n\n  lastTime = time\n  \n  game.draw()\n  game.nextGeneration()\n\nclass GameOfLife\n  int width\n  int height\n  int windowWidth\n  int windowHeight\n\n  int[][] cells\n\n  void __init__(int width, int height, int windowWidth, int windowHeight)\n    this.width = width\n    this.height = height\n\n    this.windowWidth = windowWidth\n    this.windowHeight = windowHeight\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      cells.push(row)\n\n    size(windowWidth, windowHeight)\n                \n  void addCell(int x, int y)\n    if x >= width or y >= height\n      return\n\n    cells[x][y] = 1\n\n  int countNeighbors(int x, int y)\n    int count = 0\n    for int dx = -1; dx <= 1; dx += 1\n      for int dy = -1; dy <= 1; dy += 1\n        if dx == 0 and dy == 0\n          continue\n\n        if x + dx < 0 or y + dy < 0\n          continue\n\n        if x + dx >= width or y + dy >= height\n          continue\n\n        if cells[x + dx][y + dy]\n          count = count + 1\n  \n    return count\n\n  void nextGeneration()\n    int[][] newCells\n\n    for int x = 0; x < width; x += 1\n      int[] row\n\n      for int y = 0; y < height; y += 1\n        row.push(0)\n\n      newCells.push(row)\n\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        int neighbors = countNeighbors(x, y)\n        if cells[x][y]\n          if neighbors == 2 or neighbors == 3\n            newCells[x][y] = 1\n        else\n          if neighbors == 3\n            newCells[x][y] = 1\n\n    cells = newCells\n\n  int[] hsvToRgb(float h, float s, float v) \n    float r\n    float g\n    float b\n    \n    int i = (int)(h * 6)\n    float f = h * 6 - i\n    float p = v * (1 - s)\n    float q = v * (1 - f * s)\n    float t = v * (1 - (1 - f) * s)\n\n    i %= 6\n\n    if i == 0\n      r = v\n      g = t\n      b = p\n    else if i == 1\n      r = q\n      g = v\n      b = p\n    else if i == 2\n      r = p\n      g = v\n      b = t\n    else if i == 3\n      r = p\n      g = q\n      b = v\n    else if i == 4\n      r = t\n      g = p\n      b = v\n    else\n      r = v\n      g = p\n      b = q\n\n    int[] rgb\n    rgb.push((int)(r * 255))\n    rgb.push((int)(g * 255))\n    rgb.push((int)(b * 255))\n\n    return rgb\n\n  void draw()\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        if cells[x][y]\n          float fx = (float)x / width\n          float fy = (float)y / height\n          float h = sqrt(fx * fx + fy * fy)\n\n          int[] rgb = hsvToRgb(h, 1.0, 1.0)\n          fill(rgb[0], rgb[1], rgb[2])\n        else\n          fill(0, 0, 0)\n        \n        int cx = windowWidth / width\n        int cy = windowHeight / height\n        rect(x * cx, y * cy, windowWidth, windowHeight)`,
       });
       this.tabs.push({
         name: "fibonacci",
@@ -357,8 +392,6 @@ class EditorTabs {
 }
 
 class Editor {
-
-
   constructor() {
     require.config({
       paths: {
@@ -556,7 +589,7 @@ class Editor {
       this.editor.layout();
       this.editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-        () => { }
+        () => {}
       );
       this.editor.onDidChangeModelContent(() => this.onInput());
 

@@ -14,7 +14,7 @@ jobs:
   build-web:
     name: Web
     concurrency: ci-web-${{ github.ref }}
-    runs-on: self-hosted
+    runs-on: macos-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -27,17 +27,17 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Build (Linux)
+      - name: Build
         run: |
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build
           cd build
-          make -j8
+          make -j3
 
       - name: Build (Web)
         run: |
           emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
           cd embuild
-          make -j8
+          make -j3
 
       - name: Test
         run: |

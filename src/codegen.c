@@ -820,6 +820,14 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
   case TYPE_OBJECT:
+    if (!data_type.class->ref)
+    {
+      ArrayTypeBuilderSubtype subtypes;
+      array_init(&subtypes);
+
+      generate_class_declaration(data_type.class, NULL, &subtypes);
+    }
+
     return BinaryenRefNull(codegen.module, data_type.class->ref);
   case TYPE_ANY:
     return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());

@@ -33,7 +33,6 @@
       cursor: pointer;
       border-radius: 21px;
       padding: 5px 11px;
-      margin-top: 9px;
       height: 22px;
       margin-right: 6px;
     }
@@ -97,6 +96,7 @@
     #editor-tabs-list {
       display: flex;
       flex-direction: row;
+      align-items: center;
       width: 100%;
       height: 100%;
       overflow-x: hidden;
@@ -218,6 +218,10 @@
 
     #console-canvas {
       display: flex;
+    }
+
+    #console-canvas canvas {
+      touch-action: none;
     }
 
     #console-canvas:has(canvas[height]:not([height="0"])) {

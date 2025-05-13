@@ -66,10 +66,10 @@ class EditorConsole {
 
   start() {
     if (this.editor.errors.length) {
-      this.clear();
+      let buffer = "";
 
       for (const error of this.editor.errors) {
-        this.print(
+        buffer += (
           `<a onclick='Module.editor.goto(${error.startLineNumber}, ${error.startColumn})' href='#'>` +
           this.editorTabs.getTabName() +
           ".cy:" +
@@ -77,10 +77,13 @@ class EditorConsole {
           ":" +
           error.startColumn +
           "</a>: <span style='color:red'>error: </span>" +
-          error.message +
+          error.message.replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
           "\n"
         );
       }
+
+      this.clear();
+      this.print(buffer);
 
       return;
     }
@@ -122,7 +125,7 @@ class EditorConsole {
     this.consoleOutput.innerHTML = "";
 
     const canvas = document.getElementById("canvas");
-    canvas.onmousemove = (event) => {
+    canvas.onpointermove = (event) => {
       if (this.worker) {
         this.worker.postMessage({
           type: "mousemove",
@@ -133,7 +136,7 @@ class EditorConsole {
       }
     };
 
-    canvas.onmouseup = (event) => {
+    canvas.onpointerup = (event) => {
       if (this.worker) {
         this.worker.postMessage({
           type: "mouseup",
@@ -143,7 +146,7 @@ class EditorConsole {
       }
     };
 
-    canvas.onmousedown = (event) => {
+    canvas.onpointerdown = (event) => {
       if (this.worker) {
         this.worker.postMessage({
           type: "mousedown",
@@ -158,14 +161,17 @@ class EditorConsole {
     this.print("<span style='color:red'>error: </span>" + text);
   }
 
-  print(text) {
+  print(text, isTextOnly) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
       this.consoleOutput.clientHeight -
       this.consoleOutput.scrollHeight >=
       -5;
 
-    this.consoleOutput.innerHTML += text;
+    if (isTextOnly)
+      this.consoleOutput.textContent += text;
+    else
+      this.consoleOutput.innerHTML += text;
 
     if (shouldScrollToBottom) {
       this.consoleOutput.scrollTo(0, this.consoleOutput.scrollHeight);
@@ -202,7 +208,7 @@ class EditorConsole {
       }
 
       case "print": {
-        this.print(data.text + "\n");
+        this.print(data.text + "\n", true);
         break;
       }
 

@@ -49,15 +49,22 @@ static void error_type_mismatch(Token token, DataType expected, DataType got)
                                       data_type_to_string(expected), data_type_to_string(got)));
 }
 
-static void error_operation_not_defined(Token token, const char* type)
+static void error_operation_not_defined(Token token, DataType data_type)
 {
-  checker_error(token, memory_sprintf("Operator '%s' is only defined for %s.", token.lexeme, type));
+  checker_error(token, memory_sprintf("Operator '%s' is not defined for '%s'.", token.lexeme,
+                                      data_type_to_string(data_type)));
 }
 
-static void error_missing_operator_overload(Token token, const char* function_name)
+static void error_unknown_operation(Token token)
 {
-  checker_error(token, memory_sprintf("Cannot use operator '%s', missing %s method.", token.lexeme,
-                                      function_name));
+  checker_error(token, memory_sprintf("Operator '%s' is not valid.", token.lexeme));
+}
+
+static void error_missing_operator_overload(Token token, DataType data_type,
+                                            const char* function_name)
+{
+  checker_error(token, memory_sprintf("Operator '%s' is not defined for '%s' (missing %s method).",
+                                      token.lexeme, data_type_to_string(data_type), function_name));
 }
 
 static void error_name_already_exists(Token token, const char* name)
@@ -1073,14 +1080,14 @@ static DataType check_unary_expression(UnaryExpr* expression)
   case TOKEN_MINUS:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
-      error_operation_not_defined(op, "'int' and 'float'");
+      error_operation_not_defined(op, data_type);
 
     expression->data_type = data_type;
     break;
 
   case TOKEN_TILDE:
     if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
-      error_operation_not_defined(op, "'int'");
+      error_operation_not_defined(op, data_type);
 
     expression->data_type = data_type;
     break;
@@ -1181,7 +1188,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
         goto skip;
       }
 
-      error_missing_operator_overload(op, name);
+      error_missing_operator_overload(op, left, name);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -1226,9 +1233,13 @@ skip:
       Expr* left_cast_expression = cast_to_bool(expression->left, left);
       Expr* right_cast_expression = cast_to_bool(expression->right, right);
 
-      if (!left_cast_expression || !right_cast_expression)
+      if (!left_cast_expression)
       {
-        error_operation_not_defined(op, "'bool'");
+        error_operation_not_defined(op, left);
+      }
+      else if (!right_cast_expression)
+      {
+        error_operation_not_defined(op, right);
       }
       else
       {
@@ -1248,7 +1259,7 @@ skip:
         !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_CHAR)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
-      error_operation_not_defined(op, "'int', 'float', 'bool', 'object', 'char' and 'string'");
+      error_operation_not_defined(op, left);
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -1259,7 +1270,7 @@ skip:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
-      error_operation_not_defined(op, "'int', 'float' and 'bool'");
+      error_operation_not_defined(op, left);
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
@@ -1267,7 +1278,7 @@ skip:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
-      error_operation_not_defined(op, "'int', 'float' and 'string'");
+      error_operation_not_defined(op, left);
 
     break;
   case TOKEN_MINUS:
@@ -1275,7 +1286,7 @@ skip:
   case TOKEN_SLASH:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
         !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)))
-      error_operation_not_defined(op, "'int' and 'float'");
+      error_operation_not_defined(op, left);
 
     break;
 
@@ -1286,12 +1297,12 @@ skip:
   case TOKEN_LESS_LESS:
   case TOKEN_GREATER_GREATER:
     if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)))
-      error_operation_not_defined(op, "'int'");
+      error_operation_not_defined(op, left);
 
     break;
 
   default:
-    error_operation_not_defined(op, "'unknown'");
+    error_unknown_operation(op);
   }
 
   return expression->return_data_type;

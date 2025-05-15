@@ -27,8 +27,11 @@ static struct
 
 static void init_statement(Stmt* statement);
 static void check_statement(Stmt* statement, bool synchronize);
-static void check_class_declaration(ClassStmt* statement);
 static DataType check_expression(Expr* expression);
+static void check_class_declaration(ClassStmt* statement);
+
+static bool analyze_statement(Stmt* statement);
+static bool analyze_statements(ArrayStmt statements);
 
 static const char* data_type_to_string(DataType data_type);
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
@@ -235,6 +238,11 @@ static void error_invalid_type_conversion(Token token)
 static void error_imported_functions_cannot_have_bodies(Token token)
 {
   checker_error(token, "An imported function cannot have a body.");
+}
+
+static void error_no_return(Token token)
+{
+  checker_error(token, "Non-void function must return a value.");
 }
 
 static void error_cannot_duduce_conflicting_type(Token token)
@@ -2319,6 +2327,13 @@ static void check_function_declaration(FuncStmt* statement)
     environment_set_variable(checker.environment, name, parameter);
   }
 
+  if (statement->import.type != TOKEN_STRING &&
+      !equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)) &&
+      !analyze_statements(statement->body))
+  {
+    error_no_return(statement->name);
+  }
+
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
@@ -2497,6 +2512,42 @@ static void check_statement(Stmt* statement, bool synchronize)
   default:
     UNREACHABLE("Unhandled statement");
   }
+}
+
+static bool analyze_statement(Stmt* statement)
+{
+  switch (statement->type)
+  {
+  case STMT_RETURN:
+    return true;
+
+  case STMT_IF:
+    return analyze_statements(statement->cond.then_branch) &&
+           analyze_statements(statement->cond.else_branch);
+
+  case STMT_WHILE:
+  case STMT_EXPR:
+  case STMT_CONTINUE:
+  case STMT_BREAK:
+  case STMT_FUNCTION_DECL:
+  case STMT_VARIABLE_DECL:
+  case STMT_CLASS_DECL:
+  case STMT_IMPORT_DECL:
+  case STMT_CLASS_TEMPLATE_DECL:
+    return false;
+  }
+}
+
+static bool analyze_statements(ArrayStmt statements)
+{
+  Stmt* statement;
+  array_foreach(&statements, statement)
+  {
+    if (analyze_statement(statement))
+      return true;
+  }
+
+  return false;
 }
 
 void checker_init(ArrayStmt statements)

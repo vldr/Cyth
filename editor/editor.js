@@ -69,7 +69,7 @@ class EditorConsole {
       let buffer = "";
 
       for (const error of this.editor.errors) {
-        buffer += (
+        buffer +=
           `<a onclick='Module.editor.goto(${error.startLineNumber}, ${error.startColumn})' href='#'>` +
           this.editorTabs.getTabName() +
           ".cy:" +
@@ -78,8 +78,7 @@ class EditorConsole {
           error.startColumn +
           "</a>: <span style='color:red'>error: </span>" +
           error.message.replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
-          "\n"
-        );
+          "\n";
       }
 
       this.clear();
@@ -164,14 +163,12 @@ class EditorConsole {
   print(text, isTextOnly) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
-      this.consoleOutput.clientHeight -
-      this.consoleOutput.scrollHeight >=
+        this.consoleOutput.clientHeight -
+        this.consoleOutput.scrollHeight >=
       -5;
 
-    if (isTextOnly)
-      this.consoleOutput.textContent += text;
-    else
-      this.consoleOutput.innerHTML += text;
+    if (isTextOnly) this.consoleOutput.textContent += text;
+    else this.consoleOutput.innerHTML += text;
 
     if (shouldScrollToBottom) {
       this.consoleOutput.scrollTo(0, this.consoleOutput.scrollHeight);
@@ -188,9 +185,7 @@ class EditorConsole {
   }
 
   onStart() {
-    this.setStatus(
-      `Program is running...`
-    );
+    this.setStatus(`Program is running...`);
   }
 
   onWorkerError() {
@@ -495,6 +490,8 @@ class Editor {
           ">>>=",
         ],
         symbols: /[=><!~?:&|+\-*\/\^%]+/,
+        escapes: /\\(?:[abfnrt0\\"']|x[0-9A-Fa-f]{1,2})/,
+
         tokenizer: {
           root: [
             [/#.*/, "comment"],
@@ -529,23 +526,17 @@ class Editor {
             ],
             { include: "@whitespace" },
 
-            [/("|')([^"\\]|\\.)*$/, "string.invalid"],
-            [
-              /("|')/,
-              { token: "string.quote", bracket: "@open", next: "@string" },
-            ],
-
-            [/("|')[^\\("|')]("|')/, "string"],
-            [/("|')/, "string.invalid"],
+            [/"/, { token: "string.quote", bracket: "@open", next: "@string" }],
+            [/'[^\\']'/, "string"],
+            [/(')(@escapes)(')/, ["string", "string.escape", "string"]],
+            [/'/, "string.invalid"],
           ],
 
           string: [
-            [/[^\\("|')]+/, "string"],
+            [/[^\\"]+/, "string"],
+            [/@escapes/, "string.escape"],
             [/\\./, "string.escape.invalid"],
-            [
-              /("|')/,
-              { token: "string.quote", bracket: "@close", next: "@pop" },
-            ],
+            [/"/, { token: "string.quote", bracket: "@close", next: "@pop" }],
           ],
 
           whitespace: [[/[ \t\r\n]+/, "white"]],
@@ -565,6 +556,7 @@ class Editor {
           { token: "operator", foreground: "c0c0c0" },
           { token: "class", foreground: "92ffc7" },
           { token: "default", foreground: "909090" },
+          { token: "string.escape", foreground: "f9c684" },
         ],
         colors: {
           "editor.background": "#000000",
@@ -596,7 +588,7 @@ class Editor {
       this.editor.layout();
       this.editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-        () => { }
+        () => {}
       );
       this.editor.onDidChangeModelContent(() => this.onInput());
 

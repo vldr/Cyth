@@ -14,6 +14,8 @@ static Expr* expression(void);
 static Stmt* statement(void);
 static ArrayStmt statements(void);
 
+static DataTypeToken data_type_array_function(bool* skip_greater_greater);
+
 static struct
 {
   bool error;
@@ -35,11 +37,6 @@ static void parser_error(Token token, const char* message)
 static Token peek(void)
 {
   return array_at(&parser.tokens, parser.current);
-}
-
-static Token peek_offset(int offset)
-{
-  return array_at(&parser.tokens, parser.current + offset);
 }
 
 static Token previous(void)
@@ -91,9 +88,11 @@ static Token consume(TokenType type, const char* message)
   return advance();
 }
 
-static bool is_data_type(int* offset, int* count, bool* right_shift, ArrayDataTypeToken* types)
+static DataTypeToken data_type_primary(void)
 {
-  switch (peek().type)
+  Token token = advance();
+
+  switch (token.type)
   {
   case TOKEN_IDENTIFIER:
   case TOKEN_IDENTIFIER_VOID:
@@ -102,125 +101,147 @@ static bool is_data_type(int* offset, int* count, bool* right_shift, ArrayDataTy
   case TOKEN_IDENTIFIER_INT:
   case TOKEN_IDENTIFIER_FLOAT:
   case TOKEN_IDENTIFIER_BOOL:
-  case TOKEN_IDENTIFIER_STRING:
-    break;
+  case TOKEN_IDENTIFIER_STRING: {
+    DataTypeToken data_type_token = {
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
+      .token = token,
+    };
+
+    return data_type_token;
+  }
   default:
-    return false;
+    return DATA_TYPE_TOKEN_EMPTY();
+  }
+}
+
+static DataTypeToken data_type_template(bool* skip_greater_greater)
+{
+  DataTypeToken data_type_token = data_type_primary();
+  if (!data_type_token.type)
+  {
+    return DATA_TYPE_TOKEN_EMPTY();
   }
 
-  *offset += 1;
-  *count = 0;
-
-  if (peek_offset(*offset).type == TOKEN_LESS)
+  if (match(TOKEN_LESS))
   {
+    array_init(&data_type_token.types);
+
     do
     {
-      *offset += 1;
-
-      int sub_offset = *offset;
-      int sub_count = 0;
-      ArrayDataTypeToken* sub_types = NULL;
-
-      if (types)
+      DataTypeToken inner_data_type_token = data_type_array_function(skip_greater_greater);
+      if (!inner_data_type_token.type)
       {
-        sub_types = ALLOC(ArrayDataTypeToken);
-        array_init(sub_types);
+        return DATA_TYPE_TOKEN_EMPTY();
       }
 
-      if (!is_data_type(offset, &sub_count, right_shift, sub_types))
-      {
-        return false;
-      }
+      array_add(&data_type_token.types, inner_data_type_token);
 
-      if (types)
-      {
-        DataTypeToken token = { .token = peek_offset(sub_offset),
-                                .types = sub_types,
-                                .count = sub_count };
+    } while (match(TOKEN_COMMA));
 
-        array_add(types, token);
-      }
+    Token closing_tag = peek();
 
-    } while (peek_offset(*offset).type == TOKEN_COMMA);
-
-    if (peek_offset(*offset).type == TOKEN_GREATER)
+    if (closing_tag.type == TOKEN_GREATER)
     {
-      *offset += 1;
+      advance();
     }
-    else if (peek_offset(*offset).type == TOKEN_GREATER_GREATER)
+    else if (closing_tag.type == TOKEN_GREATER_GREATER && *skip_greater_greater)
     {
-      if (*right_shift)
-      {
-        *offset += 1;
-        *right_shift = false;
-      }
-      else
-      {
-        *offset += 0;
-        *right_shift = true;
-      }
+      advance();
+
+      *skip_greater_greater = false;
+    }
+    else if (closing_tag.type == TOKEN_GREATER_GREATER && !*skip_greater_greater)
+    {
+      *skip_greater_greater = true;
     }
     else
     {
-      return false;
+      return DATA_TYPE_TOKEN_EMPTY();
     }
   }
 
-  while (peek_offset(*offset).type == TOKEN_LEFT_BRACKET)
+  return data_type_token;
+}
+
+static DataTypeToken data_type_array_function(bool* skip_greater_greater)
+{
+  DataTypeToken data_type_token = data_type_template(skip_greater_greater);
+  if (!data_type_token.type)
   {
-    if (peek_offset(*offset + 1).type != TOKEN_RIGHT_BRACKET)
-    {
-      return false;
-    }
-
-    *offset += 2;
-    *count += 1;
+    return DATA_TYPE_TOKEN_EMPTY();
   }
 
-  return true;
+  for (;;)
+  {
+    if (match(TOKEN_LEFT_BRACKET))
+    {
+      int count = 0;
+
+      do
+      {
+        if (!match(TOKEN_RIGHT_BRACKET))
+        {
+          return DATA_TYPE_TOKEN_EMPTY();
+        }
+
+        count++;
+      } while (match(TOKEN_LEFT_BRACKET));
+
+      DataTypeToken* inner_data_type_token = ALLOC(DataTypeToken);
+      *inner_data_type_token = data_type_token;
+
+      data_type_token.type = DATA_TYPE_TOKEN_ARRAY;
+      data_type_token.array.count = count;
+      data_type_token.array.type = inner_data_type_token;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  return data_type_token;
 }
 
 static bool is_data_type_and_identifier(void)
 {
-  int offset = 0;
-  int count = 0;
-  bool right_shift = false;
-  ArrayDataTypeToken* types = NULL;
+  int current = parser.current;
+  bool skip_greater_greater = false;
 
-  return is_data_type(&offset, &count, &right_shift, types) &&
-         peek_offset(offset).type == TOKEN_IDENTIFIER;
+  DataTypeToken data_type_token = data_type_array_function(&skip_greater_greater);
+  Token next = advance();
+
+  seek(current);
+
+  return data_type_token.type && next.type == TOKEN_IDENTIFIER;
 }
 
 static bool is_data_type_and_right_paren(void)
 {
-  int offset = 0;
-  int count = 0;
-  bool right_shift = false;
-  ArrayDataTypeToken* types = NULL;
+  int current = parser.current;
+  bool skip_greater_greater = false;
 
-  return is_data_type(&offset, &count, &right_shift, types) &&
-         peek_offset(offset).type == TOKEN_RIGHT_PAREN;
+  DataTypeToken data_type_token = data_type_array_function(&skip_greater_greater);
+  Token next = advance();
+
+  seek(current);
+
+  return data_type_token.type && next.type == TOKEN_RIGHT_PAREN;
 }
 
 static DataTypeToken consume_data_type(const char* message)
 {
-  int offset = 0;
-  int count = 0;
-  bool right_shift = false;
-  ArrayDataTypeToken* types = ALLOC(ArrayDataTypeToken);
-  array_init(types);
+  int current = parser.current;
+  bool skip_greater_greater = false;
 
-  if (!is_data_type(&offset, &count, &right_shift, types))
+  DataTypeToken data_type_token = data_type_array_function(&skip_greater_greater);
+  if (!data_type_token.type)
   {
+    seek(current);
     parser_error(peek(), message);
-
-    return (DataTypeToken){ 0 };
   }
 
-  DataTypeToken token = { .token = peek(), .count = count, .types = types };
-  parser.current += offset;
-
-  return token;
+  return data_type_token;
 }
 
 static void synchronize(void)
@@ -437,21 +458,16 @@ static Expr* call(void)
 
       do
       {
-        int offset = 0;
-        int count = 0;
-        ArrayDataTypeToken* sub_types = ALLOC(ArrayDataTypeToken);
-        array_init(sub_types);
+        DataTypeToken data_type_token = data_type_array_function(&right_shift);
 
-        if (is_data_type(&offset, &count, &right_shift, sub_types))
+        if (data_type_token.type)
         {
-          DataTypeToken token = { .token = peek(), .count = count, .types = sub_types };
-          parser.current += offset;
-
-          array_add(&types, token);
+          array_add(&types, data_type_token);
         }
         else
         {
           error = true;
+          break;
         }
 
       } while (match(TOKEN_COMMA));

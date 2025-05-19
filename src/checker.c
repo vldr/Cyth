@@ -401,8 +401,6 @@ static DataType token_to_data_type(Token token)
 
 static ClassStmt* template_to_data_type(DataType template, DataTypeToken template_type)
 {
-  template_type.count = 0;
-
   const char* name = data_type_token_to_string(template_type, NULL);
   VarStmt* variable = environment_get_variable(checker.environment, name);
 
@@ -444,11 +442,11 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   for (unsigned int i = 0; i < template.class_template->types.size; i++)
   {
     Token name = template.class_template->types.elems[i];
-    DataTypeToken actual_data_type_token = array_at(template_type.types, i);
+    DataTypeToken actual_data_type_token = array_at(&template_type.types, i);
 
     VarStmt* variable = ALLOC(VarStmt);
     variable->name = name;
-    variable->type = (DataTypeToken){ .token = name, .count = 0 };
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
     variable->initializer = NULL;
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
@@ -603,45 +601,61 @@ static const char* data_type_to_string(DataType data_type)
   }
 }
 
-static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string)
+static const char* data_type_token_to_string(DataTypeToken data_type_token, ArrayChar* string)
 {
   if (string == NULL)
   {
     ArrayChar string;
     array_init(&string);
-    data_type_token_to_string(type, &string);
+    data_type_token_to_string(data_type_token, &string);
     array_add(&string, '\0');
 
     return string.elems;
   }
   else
   {
-    const char* c = type.token.lexeme;
-    while (*c)
-      array_add(string, *c++);
-
-    if (array_size(type.types))
+    switch (data_type_token.type)
     {
-      array_add(string, '<');
+    case DATA_TYPE_TOKEN_PRIMITIVE: {
+      const char* c = data_type_token.token.lexeme;
+      while (*c)
+        array_add(string, *c++);
 
-      for (unsigned int i = 0; i < array_size(type.types); i++)
+      if (array_size(&data_type_token.types))
       {
-        data_type_token_to_string(array_at(type.types, i), string);
+        array_add(string, '<');
 
-        if (i != array_size(type.types) - 1)
+        for (unsigned int i = 0; i < array_size(&data_type_token.types); i++)
         {
-          array_add(string, ',');
-          array_add(string, ' ');
+          data_type_token_to_string(array_at(&data_type_token.types, i), string);
+
+          if (i != array_size(&data_type_token.types) - 1)
+          {
+            array_add(string, ',');
+            array_add(string, ' ');
+          }
         }
+
+        array_add(string, '>');
       }
 
-      array_add(string, '>');
+      break;
     }
 
-    for (int i = 0; i < type.count; i++)
-    {
-      array_add(string, '[');
-      array_add(string, ']');
+    case DATA_TYPE_TOKEN_ARRAY: {
+      data_type_token_to_string(*data_type_token.array.type, string);
+
+      for (int i = 0; i < data_type_token.array.count; i++)
+      {
+        array_add(string, '[');
+        array_add(string, ']');
+      }
+
+      break;
+    }
+
+    default:
+      UNREACHABLE("Unexpected data type token");
     }
 
     return string->elems;
@@ -660,60 +674,67 @@ static void data_type_token_unalias(ArrayDataTypeToken* types)
       array_at(types, i) = variable->data_type.alias.token;
     }
 
-    data_type_token_unalias(array_at(types, i).types);
+    data_type_token_unalias(&array_at(types, i).types);
   }
 }
 
-static DataType data_type_token_to_data_type(DataTypeToken type)
+static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 {
-  if (type.types && array_size(type.types))
+  switch (data_type_token.type)
   {
-    if (type.token.type != TOKEN_IDENTIFIER)
+  case DATA_TYPE_TOKEN_PRIMITIVE: {
+    Token token = data_type_token.token;
+    ArrayDataTypeToken* types = &data_type_token.types;
+
+    if (array_size(types))
     {
-      error_not_a_template_type(type.token, type.token.lexeme);
-      return DATA_TYPE(TYPE_VOID);
+      if (token.type != TOKEN_IDENTIFIER)
+      {
+        error_not_a_template_type(token, token.lexeme);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      VarStmt* variable = environment_get_variable(checker.environment, token.lexeme);
+      if (!variable)
+      {
+        error_cannot_find_type(token, token.lexeme);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+      {
+        error_not_a_template_type(token, token.lexeme);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      int expected = array_size(&variable->data_type.class_template->types);
+      int got = array_size(types);
+
+      if (expected != got)
+      {
+        error_invalid_template_arity(token, expected, got);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      data_type_token_unalias(types);
+
+      ClassStmt* class_statement = template_to_data_type(variable->data_type, data_type_token);
+      if (!class_statement)
+      {
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      token.lexeme = class_statement->name.lexeme;
     }
 
-    VarStmt* variable = environment_get_variable(checker.environment, type.token.lexeme);
-    if (!variable)
-    {
-      error_cannot_find_type(type.token, type.token.lexeme);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
-    {
-      error_not_a_template_type(type.token, type.token.lexeme);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    int expected = array_size(&variable->data_type.class_template->types);
-    int got = array_size(type.types);
-
-    if (expected != got)
-    {
-      error_invalid_template_arity(type.token, expected, got);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    data_type_token_unalias(type.types);
-
-    ClassStmt* class_statement = template_to_data_type(variable->data_type, type);
-    if (!class_statement)
-    {
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    type.token.lexeme = class_statement->name.lexeme;
+    return token_to_data_type(token);
   }
-
-  if (type.count > 0)
-  {
-    DataType element_data_type = token_to_data_type(type.token);
-
+  case DATA_TYPE_TOKEN_ARRAY: {
     DataType data_type = DATA_TYPE(TYPE_ARRAY);
     data_type.array.data_type = ALLOC(DataType);
-    data_type.array.count = type.count;
+    data_type.array.count = data_type_token.array.count;
+
+    DataType element_data_type = data_type_token_to_data_type(*data_type_token.array.type);
 
     if (equal_data_type(element_data_type, DATA_TYPE(TYPE_ARRAY)))
     {
@@ -727,9 +748,9 @@ static DataType data_type_token_to_data_type(DataTypeToken type)
 
     return data_type;
   }
-  else
-  {
-    return token_to_data_type(type.token);
+
+  default:
+    UNREACHABLE("Unexpected data type token");
   }
 }
 
@@ -740,7 +761,7 @@ static Expr* cast_to_bool(Expr* expression, DataType data_type)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
-    cast_expression->cast.type = (DataTypeToken){ .token = TOKEN_EMPTY(), .count = 0 };
+    cast_expression->cast.type = DATA_TYPE_TOKEN_EMPTY();
     cast_expression->cast.from_data_type = data_type;
     cast_expression->cast.to_data_type = DATA_TYPE(TYPE_BOOL);
     cast_expression->cast.expr = expression;
@@ -774,7 +795,7 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
 
   Expr* cast_expression = EXPR();
   cast_expression->type = EXPR_CAST;
-  cast_expression->cast.type = (DataTypeToken){ .token = TOKEN_EMPTY(), .count = 0 };
+  cast_expression->cast.type = DATA_TYPE_TOKEN_EMPTY();
   cast_expression->cast.from_data_type = from;
   cast_expression->cast.to_data_type = to;
   cast_expression->cast.expr = *target;
@@ -804,7 +825,10 @@ static void init_function_declaration(FuncStmt* statement)
 
     VarStmt* parameter = ALLOC(VarStmt);
     parameter->name = (Token){ .lexeme = "this" };
-    parameter->type = (DataTypeToken){ .token = checker.class->name, .count = 0 };
+    parameter->type = (DataTypeToken){
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
+      .token = checker.class->name,
+    };
     parameter->initializer = NULL;
     parameter->index = 0;
     parameter->scope = SCOPE_LOCAL;
@@ -872,7 +896,10 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
-  variable->type = (DataTypeToken){ .token = statement->name, .count = 0 };
+  variable->type = (DataTypeToken){
+    .type = DATA_TYPE_TOKEN_PRIMITIVE,
+    .token = statement->name,
+  };
   variable->initializer = NULL;
   variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
@@ -892,7 +919,10 @@ static void init_class_declaration(ClassStmt* statement)
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
-  variable->type = (DataTypeToken){ .token = statement->name, .count = 0 };
+  variable->type = (DataTypeToken){
+    .type = DATA_TYPE_TOKEN_PRIMITIVE,
+    .token = statement->name,
+  };
   variable->initializer = NULL;
   variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
@@ -1434,9 +1464,9 @@ static DataType check_call_expression(CallExpr* expression)
     data_type_token_unalias(&expression->types);
 
     DataTypeToken class_type = {
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
       .token = callee_data_type.class_template->name,
-      .types = &expression->types,
-      .count = 0,
+      .types = expression->types,
     };
 
     ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
@@ -2535,6 +2565,9 @@ static bool analyze_statement(Stmt* statement)
   case STMT_IMPORT_DECL:
   case STMT_CLASS_TEMPLATE_DECL:
     return false;
+
+  default:
+    UNREACHABLE("Unexpected statement to analyze");
   }
 }
 

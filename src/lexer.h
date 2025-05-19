@@ -5,6 +5,10 @@
 #include "memory.h"
 
 #define TOKEN_EMPTY() ((Token){ 0 })
+#define DATA_TYPE_TOKEN_EMPTY() ((DataTypeToken){ 0 })
+
+array_def(struct _TOKEN, Token);
+array_def(struct _DATA_TYPE_TOKEN, DataTypeToken);
 
 typedef enum
 {
@@ -93,7 +97,7 @@ typedef enum
   TOKEN_EOF
 } TokenType;
 
-typedef struct
+typedef struct _TOKEN
 {
   TokenType type;
   int start_line;
@@ -106,13 +110,31 @@ typedef struct
 
 typedef struct _DATA_TYPE_TOKEN
 {
-  Token token;
-  int count;
-  struct ArrayDataTypeToken* types;
-} DataTypeToken;
+  enum
+  {
+    DATA_TYPE_TOKEN_NONE,
+    DATA_TYPE_TOKEN_PRIMITIVE,
+    DATA_TYPE_TOKEN_ARRAY,
+    DATA_TYPE_TOKEN_FUNCTION,
+  } type;
 
-array_def(Token, Token);
-array_def(DataTypeToken, DataTypeToken);
+  Token token;
+  struct ArrayDataTypeToken types;
+
+  union {
+    struct
+    {
+      int count;
+      struct _DATA_TYPE_TOKEN* type;
+    } array;
+
+    struct
+    {
+      struct _DATA_TYPE_TOKEN* return_value;
+      struct ArrayDataTypeToken parameters;
+    } function;
+  };
+} DataTypeToken;
 
 void lexer_init(char* source);
 void lexer_print(void);

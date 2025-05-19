@@ -9,7 +9,6 @@ on:
 
 env:
   EM_VERSION: 4.0.7
-  EM_CACHE_FOLDER: "emsdk-cache"
 
 jobs:
   build-web:
@@ -24,7 +23,6 @@ jobs:
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: ${{env.EM_VERSION}}
-          actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

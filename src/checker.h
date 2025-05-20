@@ -4,6 +4,8 @@
 #include "statement.h"
 
 ArrayVarStmt global_locals(void);
+void expand_function_data_type(DataType data_type, DataType* return_data_type,
+                               ArrayDataType* parameter_types);
 bool equal_data_type(DataType left, DataType right);
 bool assignable_data_type(DataType left, DataType right);
 

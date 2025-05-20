@@ -194,6 +194,35 @@ static DataTypeToken data_type_array_function(bool* skip_greater_greater)
       data_type_token.array.count = count;
       data_type_token.array.type = inner_data_type_token;
     }
+    else if (match(TOKEN_LEFT_PAREN))
+    {
+      DataTypeToken* inner_data_type_token = ALLOC(DataTypeToken);
+      *inner_data_type_token = data_type_token;
+
+      data_type_token.type = DATA_TYPE_TOKEN_FUNCTION;
+      data_type_token.function.return_value = inner_data_type_token;
+      array_init(&data_type_token.function.parameters);
+
+      if (!check(TOKEN_RIGHT_PAREN))
+      {
+        do
+        {
+          DataTypeToken parameter_data_type_token = data_type_array_function(skip_greater_greater);
+          if (!parameter_data_type_token.type)
+          {
+            return DATA_TYPE_TOKEN_EMPTY();
+          }
+
+          array_add(&data_type_token.function.parameters, parameter_data_type_token);
+
+        } while (match(TOKEN_COMMA));
+      }
+
+      if (!match(TOKEN_RIGHT_PAREN))
+      {
+        return DATA_TYPE_TOKEN_EMPTY();
+      }
+    }
     else
     {
       break;

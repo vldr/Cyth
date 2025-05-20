@@ -271,6 +271,31 @@ ArrayVarStmt global_locals(void)
   return checker.global_locals;
 }
 
+void expand_function_data_type(DataType data_type, DataType* return_data_type,
+                               ArrayDataType* parameter_types)
+{
+  assert(data_type.type == TYPE_FUNCTION || data_type.type == TYPE_FUNCTION_INTERNAL ||
+         data_type.type == TYPE_FUNCTION_MEMBER || data_type.type == TYPE_FUNCTION_POINTER);
+
+  array_init(parameter_types);
+
+  if (data_type.type == TYPE_FUNCTION || data_type.type == TYPE_FUNCTION_MEMBER)
+  {
+    FuncStmt* function =
+      data_type.type == TYPE_FUNCTION ? data_type.function : data_type.function_member.function;
+
+    for (unsigned int i = 0; i < function->parameters.size; i++)
+      array_add(parameter_types, function->parameters.elems[i]->data_type);
+
+    *return_data_type = function->data_type;
+  }
+  else
+  {
+    *parameter_types = data_type.function_internal.parameter_types;
+    *return_data_type = *data_type.function_internal.return_type;
+  }
+}
+
 bool equal_data_type(DataType left, DataType right)
 {
   if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
@@ -288,6 +313,31 @@ bool assignable_data_type(DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
     return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY;
+
+  if (destination.type == TYPE_FUNCTION_POINTER &&
+      (source.type == TYPE_FUNCTION || source.type == TYPE_FUNCTION_MEMBER ||
+       source.type == TYPE_FUNCTION_INTERNAL || source.type == TYPE_FUNCTION_POINTER))
+  {
+    DataType left_return_data_type;
+    ArrayDataType left_parameter_types;
+    expand_function_data_type(destination, &left_return_data_type, &left_parameter_types);
+
+    DataType right_return_data_type;
+    ArrayDataType right_parameter_types;
+    expand_function_data_type(source, &right_return_data_type, &right_parameter_types);
+
+    if (!equal_data_type(left_return_data_type, right_return_data_type))
+      return false;
+
+    if (left_parameter_types.size != right_parameter_types.size)
+      return false;
+
+    for (unsigned int i = 0; i < left_parameter_types.size; i++)
+      if (!equal_data_type(array_at(&left_parameter_types, i), array_at(&right_parameter_types, i)))
+        return false;
+
+    return true;
+  }
 
   return false;
 }
@@ -493,7 +543,7 @@ static const char* data_type_to_string(DataType data_type)
   case TYPE_ALIAS:
     return data_type_to_string(*data_type.alias.data_type);
   case TYPE_OBJECT:
-    return data_type.class->name.lexeme;
+    return data_type.class ? data_type.class->name.lexeme : "null";
   case TYPE_PROTOTYPE:
     return memory_sprintf("class %s", data_type.class->name.lexeme);
   case TYPE_PROTOTYPE_TEMPLATE: {
@@ -530,26 +580,11 @@ static const char* data_type_to_string(DataType data_type)
   }
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
-  case TYPE_FUNCTION_INTERNAL: {
+  case TYPE_FUNCTION_INTERNAL:
+  case TYPE_FUNCTION_POINTER: {
     DataType return_data_type;
     ArrayDataType parameter_types;
-    array_init(&parameter_types);
-
-    if (data_type.type == TYPE_FUNCTION || data_type.type == TYPE_FUNCTION_MEMBER)
-    {
-      FuncStmt* function =
-        data_type.type == TYPE_FUNCTION ? data_type.function : data_type.function_member.function;
-
-      for (unsigned int i = 0; i < function->parameters.size; i++)
-        array_add(&parameter_types, function->parameters.elems[i]->data_type);
-
-      return_data_type = function->data_type;
-    }
-    else
-    {
-      parameter_types = data_type.function_internal.parameter_types;
-      return_data_type = *data_type.function_internal.return_type;
-    }
+    expand_function_data_type(data_type, &return_data_type, &parameter_types);
 
     ArrayChar string;
     array_init(&string);
@@ -729,6 +764,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
     return token_to_data_type(token);
   }
+
   case DATA_TYPE_TOKEN_ARRAY: {
     DataType data_type = DATA_TYPE(TYPE_ARRAY);
     data_type.array.data_type = ALLOC(DataType);
@@ -745,6 +781,26 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
     {
       *data_type.array.data_type = element_data_type;
     }
+
+    return data_type;
+  }
+
+  case DATA_TYPE_TOKEN_FUNCTION: {
+    DataType data_type = DATA_TYPE(TYPE_FUNCTION_POINTER);
+    array_init(&data_type.function_internal.parameter_types);
+
+    DataTypeToken parameter_data_type_token;
+    array_foreach(&data_type_token.function.parameters, parameter_data_type_token)
+    {
+      array_add(&data_type.function_internal.parameter_types,
+                data_type_token_to_data_type(parameter_data_type_token));
+    }
+
+    data_type.function_internal.return_type = ALLOC(DataType);
+    *data_type.function_internal.return_type =
+      data_type_token_to_data_type(*data_type_token.function.return_value);
+
+    data_type.function_internal.name = "";
 
     return data_type;
   }
@@ -1577,7 +1633,8 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
-  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_INTERNAL)))
+  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_INTERNAL)) ||
+           equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_POINTER)))
   {
     if (callee_data_type.function_internal.this)
     {

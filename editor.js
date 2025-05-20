@@ -163,8 +163,8 @@ class EditorConsole {
   print(text, isTextOnly) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
-        this.consoleOutput.clientHeight -
-        this.consoleOutput.scrollHeight >=
+      this.consoleOutput.clientHeight -
+      this.consoleOutput.scrollHeight >=
       -5;
 
     if (isTextOnly) this.consoleOutput.textContent += text;
@@ -495,7 +495,6 @@ class Editor {
         tokenizer: {
           root: [
             [/#.*/, "comment"],
-            [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, ["function", "default"]],
             [/\d+\.[fF]/, "number"],
             [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, "number"],
             [/0[xX][0-9a-fA-F]+[uU]/, "number"],
@@ -503,6 +502,13 @@ class Editor {
             [/\d+[uU]/, "number"],
             [/\d+/, "number"],
             [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
+            [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, [
+              {
+                cases: {
+                  "@types": "types",
+                  "@default": "function",
+                },
+              }, "default"]],
             [
               /[a-zA-Z_$][\w$]*/,
               {
@@ -588,7 +594,7 @@ class Editor {
       this.editor.layout();
       this.editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-        () => {}
+        () => { }
       );
       this.editor.onDidChangeModelContent(() => this.onInput());
 

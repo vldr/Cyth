@@ -23,13 +23,15 @@ typedef struct
   enum
   {
     SUBTYPE_ARRAY,
-    SUBTYPE_CLASS
+    SUBTYPE_CLASS,
+    SUBTYPE_FUNCTION,
   } type;
 
   unsigned int index;
 
   union {
     unsigned int hash;
+    const char* key;
     ClassStmt* class;
   };
 } TypeBuilderSubtype;
@@ -60,7 +62,8 @@ static struct
   ArrayStmt statements;
 
   ArrayBinaryenType global_local_types;
-  MapBinaryenHeapType heap_types;
+  MapUintBinaryenHeapType heap_types;
+  MapStringBinaryenHeapType function_types;
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
   MapSInt string_constants;
@@ -677,7 +680,7 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
                                                           DataType data_type)
 {
   unsigned int hash = array_data_type_hash(data_type);
-  BinaryenHeapType array_binaryen_type = map_get_binaryen_heap_type(&codegen.heap_types, hash);
+  BinaryenHeapType array_binaryen_type = map_get_uint_binaryen_heap_type(&codegen.heap_types, hash);
 
   if (!array_binaryen_type)
   {
@@ -732,7 +735,7 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
       array_binaryen_type = heap_types[1];
     }
 
-    map_put_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
+    map_put_uint_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
   }
 
   return array_binaryen_type;
@@ -750,32 +753,68 @@ static const char* get_function_member(DataType data_type, const char* name)
   return function->name.lexeme;
 }
 
-static BinaryenType generate_function_ref(DataType data_type)
+static BinaryenHeapType generate_function_ref(TypeBuilderRef type_builder_ref,
+                                              ArrayTypeBuilderSubtype* subtypes, DataType data_type)
 {
-  DataType return_data_type;
-  ArrayDataType parameter_types;
-  expand_function_data_type(data_type, &return_data_type, &parameter_types);
+  const char* key = data_type_to_string(data_type);
+  BinaryenHeapType function_binaryen_heap_type =
+    map_get_string_binaryen_heap_type(&codegen.function_types, key);
 
-  ArrayBinaryenType parameter_binaryen_types;
-  array_init(&parameter_binaryen_types);
-
-  DataType parameter_type;
-  array_foreach(&parameter_types, parameter_type)
+  if (!function_binaryen_heap_type)
   {
-    array_add(&parameter_binaryen_types, data_type_to_binaryen_type(parameter_type));
+    TypeBuilderRef type_builder;
+    int offset;
+
+    if (type_builder_ref)
+    {
+      type_builder = type_builder_ref;
+      offset = TypeBuilderGetSize(type_builder);
+
+      TypeBuilderGrow(type_builder, 1);
+    }
+    else
+    {
+      type_builder = TypeBuilderCreate(1);
+      offset = 0;
+    }
+
+    DataType return_data_type;
+    ArrayDataType parameter_types;
+    expand_function_data_type(data_type, &return_data_type, &parameter_types);
+
+    ArrayBinaryenType parameter_binaryen_types;
+    array_init(&parameter_binaryen_types);
+
+    DataType parameter_type;
+    array_foreach(&parameter_types, parameter_type)
+    {
+      array_add(&parameter_binaryen_types,
+                data_type_to_temporary_binaryen_type(type_builder_ref, subtypes, parameter_type));
+    }
+
+    BinaryenType param_types =
+      BinaryenTypeCreate(parameter_binaryen_types.elems, parameter_binaryen_types.size);
+
+    TypeBuilderSetSignatureType(
+      type_builder, offset, param_types,
+      data_type_to_temporary_binaryen_type(type_builder_ref, subtypes, return_data_type));
+
+    if (type_builder_ref)
+    {
+      TypeBuilderSubtype subtype = { .type = SUBTYPE_FUNCTION, .index = offset, .key = key };
+      array_add(subtypes, subtype);
+
+      function_binaryen_heap_type = TypeBuilderGetTempHeapType(type_builder, offset);
+    }
+    else
+    {
+      TypeBuilderBuildAndDispose(type_builder, &function_binaryen_heap_type, NULL, NULL);
+    }
+
+    map_put_string_binaryen_heap_type(&codegen.function_types, key, function_binaryen_heap_type);
   }
 
-  BinaryenType param_types =
-    BinaryenTypeCreate(parameter_binaryen_types.elems, parameter_binaryen_types.size);
-
-  TypeBuilderRef type_builder = TypeBuilderCreate(1);
-  TypeBuilderSetSignatureType(type_builder, 0, param_types,
-                              data_type_to_binaryen_type(return_data_type));
-
-  BinaryenHeapType heap_type;
-  TypeBuilderBuildAndDispose(type_builder, &heap_type, NULL, NULL);
-
-  return BinaryenTypeFromHeapType(heap_type, true);
+  return function_binaryen_heap_type;
 }
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
@@ -789,8 +828,12 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
   case TYPE_FUNCTION_INTERNAL:
-  case TYPE_FUNCTION_POINTER:
-    return generate_function_ref(data_type);
+  case TYPE_FUNCTION_POINTER: {
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    return BinaryenTypeFromHeapType(generate_function_ref(NULL, &subtypes, data_type), true);
+  }
   case TYPE_ANY:
     return BinaryenTypeAnyref();
   case TYPE_BOOL:
@@ -824,17 +867,24 @@ static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_bui
 {
   switch (data_type.type)
   {
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL:
+  case TYPE_FUNCTION_POINTER:
+    return TypeBuilderGetTempRefType(
+      type_builder_ref, generate_function_ref(type_builder_ref, subtypes, data_type), true);
+
   case TYPE_ARRAY:
     return TypeBuilderGetTempRefType(
       type_builder_ref, generate_array_heap_binaryen_type(type_builder_ref, subtypes, data_type),
       true);
+
   case TYPE_OBJECT:
     if (!data_type.class->ref)
-    {
       generate_class_declaration(data_type.class, type_builder_ref, subtypes);
-    }
 
     return data_type.class->ref;
+
   default:
     return data_type_to_binaryen_type(data_type);
   }
@@ -850,7 +900,13 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
-  case TYPE_OBJECT:
+  case TYPE_FUNCTION_POINTER: {
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    return BinaryenRefNull(codegen.module, data_type_to_binaryen_type(data_type));
+  }
+  case TYPE_OBJECT: {
     if (!data_type.class->ref)
     {
       ArrayTypeBuilderSubtype subtypes;
@@ -860,6 +916,7 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     }
 
     return BinaryenRefNull(codegen.module, data_type.class->ref);
+  }
   case TYPE_ANY:
     return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
   case TYPE_STRING:
@@ -867,14 +924,12 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_ARRAY:
     return BinaryenStructNew(codegen.module, NULL, 0,
                              generate_array_heap_binaryen_type(NULL, NULL, data_type));
-  case TYPE_FUNCTION_POINTER:
-    return BinaryenRefNull(codegen.module, generate_function_ref(data_type));
   default:
     UNREACHABLE("Unexpected default initializer");
   }
 }
 
-static const char* generate_array_push_function(DataType callee_data_type)
+static const char* generate_array_push_function(DataType data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
@@ -885,12 +940,12 @@ static const char* generate_array_push_function(DataType callee_data_type)
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   DataType element_data_type =
-    array_data_type_element(array_at(&callee_data_type.function_internal.parameter_types, 0));
+    array_data_type_element(array_at(&data_type.function_internal.parameter_types, 0));
 
   BinaryenType this_type =
-    data_type_to_binaryen_type(array_at(&callee_data_type.function_internal.parameter_types, 0));
+    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 0));
   BinaryenType value_type =
-    data_type_to_binaryen_type(array_at(&callee_data_type.function_internal.parameter_types, 1));
+    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 1));
 
   const char* name = memory_sprintf("array.push.%d", this_type);
 
@@ -952,7 +1007,7 @@ static const char* generate_array_push_function(DataType callee_data_type)
 #undef CONSTANT
 }
 
-static const char* generate_array_pop_function(DataType callee_data_type)
+static const char* generate_array_pop_function(DataType data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
@@ -962,10 +1017,10 @@ static const char* generate_array_pop_function(DataType callee_data_type)
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   DataType element_data_type =
-    array_data_type_element(array_at(&callee_data_type.function_internal.parameter_types, 0));
+    array_data_type_element(array_at(&data_type.function_internal.parameter_types, 0));
 
   BinaryenType this_type =
-    data_type_to_binaryen_type(array_at(&callee_data_type.function_internal.parameter_types, 0));
+    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 0));
   BinaryenType element_type = data_type_to_binaryen_type(element_data_type);
 
   const char* name = memory_sprintf("array.pop.%d", this_type);
@@ -1138,6 +1193,28 @@ static const char* generate_string_hash_function(void)
 #undef HASH
 #undef SIZE
 #undef CONSTANT
+}
+
+static const char* generate_function_internal(DataType data_type)
+{
+  assert(data_type.type == TYPE_FUNCTION_INTERNAL);
+
+  const char* name = data_type.function_internal.name;
+
+  if (strcmp(name, "array.push") == 0)
+    return generate_array_push_function(data_type);
+  else if (strcmp(name, "array.pop") == 0)
+    return generate_array_pop_function(data_type);
+  else if (strcmp(name, "int.hash") == 0)
+    return generate_int_hash_function();
+  else if (strcmp(name, "float.sqrt") == 0)
+    return generate_float_sqrt_function();
+  else if (strcmp(name, "float.hash") == 0)
+    return generate_float_hash_function();
+  else if (strcmp(name, "string.hash") == 0)
+    return generate_string_hash_function();
+  else
+    UNREACHABLE("Unexpected internal function");
 }
 
 static BinaryenExpressionRef generate_group_expression(GroupExpr* expression)
@@ -1676,7 +1753,27 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
       expression->data_type.type == TYPE_FUNCTION_MEMBER ||
       expression->data_type.type == TYPE_FUNCTION_INTERNAL)
   {
-    return BinaryenRefFunc(codegen.module, expression->data_type.function->name.lexeme, type);
+    const char* name;
+
+    switch (expression->data_type.type)
+    {
+    case TYPE_FUNCTION:
+      name = expression->data_type.function->name.lexeme;
+      break;
+
+    case TYPE_FUNCTION_MEMBER:
+      name = expression->data_type.function_member.function->name.lexeme;
+      break;
+
+    case TYPE_FUNCTION_INTERNAL:
+      name = generate_function_internal(expression->data_type);
+      break;
+
+    default:
+      UNREACHABLE("Unexpected function data type");
+    }
+
+    return BinaryenRefFunc(codegen.module, name, type);
   }
 
   Scope scope = expression->variable->scope;
@@ -1811,33 +1908,21 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
                           name);
 
     break;
+
   case TYPE_FUNCTION:
     name = callee_data_type.function->name.lexeme;
     break;
+
   case TYPE_FUNCTION_MEMBER:
     name = callee_data_type.function_member.function->name.lexeme;
     break;
+
   case TYPE_FUNCTION_INTERNAL:
-    name = callee_data_type.function_internal.name;
-
-    if (strcmp(name, "array.push") == 0)
-      name = generate_array_push_function(callee_data_type);
-    else if (strcmp(name, "array.pop") == 0)
-      name = generate_array_pop_function(callee_data_type);
-    else if (strcmp(name, "int.hash") == 0)
-      name = generate_int_hash_function();
-    else if (strcmp(name, "float.sqrt") == 0)
-      name = generate_float_sqrt_function();
-    else if (strcmp(name, "float.hash") == 0)
-      name = generate_float_hash_function();
-    else if (strcmp(name, "string.hash") == 0)
-      name = generate_string_hash_function();
-    else
-      UNREACHABLE("Unhandled function internal");
-
+    name = generate_function_internal(callee_data_type);
     break;
 
   case TYPE_FUNCTION_POINTER:
+    name = "";
     break;
 
   case TYPE_ALIAS:
@@ -1878,6 +1963,33 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
 {
   BinaryenExpressionRef ref = generate_expression(expression->expr);
 
+  if (expression->data_type.type == TYPE_FUNCTION ||
+      expression->data_type.type == TYPE_FUNCTION_MEMBER ||
+      expression->data_type.type == TYPE_FUNCTION_INTERNAL)
+  {
+    const char* name;
+
+    switch (expression->data_type.type)
+    {
+    case TYPE_FUNCTION:
+      name = expression->data_type.function->name.lexeme;
+      break;
+
+    case TYPE_FUNCTION_MEMBER:
+      name = expression->data_type.function_member.function->name.lexeme;
+      break;
+
+    case TYPE_FUNCTION_INTERNAL:
+      name = generate_function_internal(expression->data_type);
+      break;
+
+    default:
+      UNREACHABLE("Unexpected function data type");
+    }
+
+    return BinaryenRefFunc(codegen.module, name, data_type_to_binaryen_type(expression->data_type));
+  }
+
   if (expression->expr_data_type.type == TYPE_STRING)
   {
     if (strcmp(expression->name.lexeme, "length") == 0)
@@ -1905,6 +2017,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
   else
   {
     BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+
     BinaryenExpressionRef access =
       BinaryenStructGet(codegen.module, expression->variable->index, ref, type, false);
     generate_debug_info(expression->name, access, codegen.function);
@@ -2193,9 +2306,17 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   else
   {
     BinaryenExpressionRef body = generate_statements(&statement->body);
-    BinaryenAddFunction(codegen.module, name, params, results, variable_types.elems,
-                        variable_types.size, body);
+    BinaryenFunctionRef func = BinaryenAddFunction(codegen.module, name, params, results,
+                                                   variable_types.elems, variable_types.size, body);
     BinaryenAddFunctionExport(codegen.module, name, name);
+
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    BinaryenHeapType heap_type =
+      generate_function_ref(NULL, &subtypes, statement->function_data_type);
+
+    BinaryenFunctionSetType(func, heap_type);
   }
 
   codegen.function = previous_function;
@@ -2361,9 +2482,14 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
     array_foreach(subtypes, subtype)
     {
       BinaryenHeapType heap_type = heap_types[subtype.index];
+
       if (subtype.type == SUBTYPE_ARRAY)
       {
-        map_put_binaryen_heap_type(&codegen.heap_types, subtype.hash, heap_type);
+        map_put_uint_binaryen_heap_type(&codegen.heap_types, subtype.hash, heap_type);
+      }
+      else if (subtype.type == SUBTYPE_FUNCTION)
+      {
+        map_put_string_binaryen_heap_type(&codegen.function_types, subtype.key, heap_type);
       }
       else if (subtype.type == SUBTYPE_CLASS)
       {
@@ -2489,7 +2615,8 @@ void codegen_init(ArrayStmt statements)
 
   codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, false);
   map_init_sint(&codegen.string_constants, 0, 0);
-  map_init_binaryen_heap_type(&codegen.heap_types, 0, 0);
+  map_init_string_binaryen_heap_type(&codegen.function_types, 0, 0);
+  map_init_uint_binaryen_heap_type(&codegen.heap_types, 0, 0);
 }
 
 Codegen codegen_generate(void)

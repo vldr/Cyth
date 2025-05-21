@@ -33,7 +33,6 @@ static void check_class_declaration(ClassStmt* statement);
 static bool analyze_statement(Stmt* statement);
 static bool analyze_statements(ArrayStmt statements);
 
-static const char* data_type_to_string(DataType data_type);
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
 static DataType data_type_token_to_data_type(DataTypeToken type);
 
@@ -271,6 +270,120 @@ ArrayVarStmt global_locals(void)
   return checker.global_locals;
 }
 
+const char* data_type_to_string(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_VOID:
+    return "void";
+  case TYPE_ANY:
+    return "any";
+  case TYPE_BOOL:
+    return "bool";
+  case TYPE_CHAR:
+    return "char";
+  case TYPE_INTEGER:
+    return "int";
+  case TYPE_FLOAT:
+    return "float";
+  case TYPE_STRING:
+    return "string";
+  case TYPE_ALIAS:
+    return data_type_to_string(*data_type.alias.data_type);
+  case TYPE_OBJECT:
+    return data_type.class ? data_type.class->name.lexeme : "null";
+  case TYPE_PROTOTYPE:
+    return memory_sprintf("class %s", data_type.class->name.lexeme);
+  case TYPE_PROTOTYPE_TEMPLATE: {
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = "class ";
+    while (*c)
+      array_add(&string, *c++);
+
+    c = data_type.class_template->name.lexeme;
+    while (*c)
+      array_add(&string, *c++);
+
+    array_add(&string, '<');
+
+    for (unsigned i = 0; i < data_type.class_template->types.size; i++)
+    {
+      const char* c = data_type.class_template->types.elems[i].lexeme;
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i < data_type.class_template->types.size - 1)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
+    }
+
+    array_add(&string, '>');
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL:
+  case TYPE_FUNCTION_POINTER: {
+    DataType return_data_type;
+    ArrayDataType parameter_types;
+    expand_function_data_type(data_type, &return_data_type, &parameter_types);
+
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = data_type_to_string(return_data_type);
+    while (*c)
+      array_add(&string, *c++);
+
+    array_add(&string, '(');
+
+    for (unsigned int i = 0; i < parameter_types.size; i++)
+    {
+      const char* c = data_type_to_string(parameter_types.elems[i]);
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i < parameter_types.size - 1)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
+    }
+
+    array_add(&string, ')');
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  case TYPE_ARRAY: {
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = data_type_to_string(*data_type.array.data_type);
+    while (*c)
+      array_add(&string, *c++);
+
+    for (int i = 0; i < data_type.array.count; i++)
+    {
+      array_add(&string, '[');
+      array_add(&string, ']');
+    }
+
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  default:
+    UNREACHABLE("Unexpected data type to string");
+  }
+}
+
 void expand_function_data_type(DataType data_type, DataType* return_data_type,
                                ArrayDataType* parameter_types)
 {
@@ -305,6 +418,9 @@ bool equal_data_type(DataType left, DataType right)
       right.array.data_type)
     return left.array.count == right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
+
+  if (left.type == TYPE_FUNCTION_POINTER && right.type == TYPE_FUNCTION_POINTER)
+    return assignable_data_type(left, right);
 
   return left.type == right.type;
 }
@@ -422,7 +538,7 @@ static DataType token_to_data_type(Token token)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+    if (variable->data_type.type == TYPE_PROTOTYPE)
     {
       if (!variable->data_type.class->declared)
       {
@@ -434,7 +550,7 @@ static DataType token_to_data_type(Token token)
 
       return object;
     }
-    else if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+    else if (variable->data_type.type == TYPE_ALIAS)
     {
       return *variable->data_type.alias.data_type;
     }
@@ -454,7 +570,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   const char* name = data_type_token_to_string(template_type, NULL);
   VarStmt* variable = environment_get_variable(checker.environment, name);
 
-  if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+  if (variable && variable->data_type.type == TYPE_PROTOTYPE)
   {
     return variable->data_type.class;
   }
@@ -520,120 +636,6 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   array_add(&template.class_template->classes, class_statement);
 
   return class_statement;
-}
-
-static const char* data_type_to_string(DataType data_type)
-{
-  switch (data_type.type)
-  {
-  case TYPE_VOID:
-    return "void";
-  case TYPE_ANY:
-    return "any";
-  case TYPE_BOOL:
-    return "bool";
-  case TYPE_CHAR:
-    return "char";
-  case TYPE_INTEGER:
-    return "int";
-  case TYPE_FLOAT:
-    return "float";
-  case TYPE_STRING:
-    return "string";
-  case TYPE_ALIAS:
-    return data_type_to_string(*data_type.alias.data_type);
-  case TYPE_OBJECT:
-    return data_type.class ? data_type.class->name.lexeme : "null";
-  case TYPE_PROTOTYPE:
-    return memory_sprintf("class %s", data_type.class->name.lexeme);
-  case TYPE_PROTOTYPE_TEMPLATE: {
-    ArrayChar string;
-    array_init(&string);
-
-    const char* c = "class ";
-    while (*c)
-      array_add(&string, *c++);
-
-    c = data_type.class_template->name.lexeme;
-    while (*c)
-      array_add(&string, *c++);
-
-    array_add(&string, '<');
-
-    for (unsigned i = 0; i < data_type.class_template->types.size; i++)
-    {
-      const char* c = data_type.class_template->types.elems[i].lexeme;
-      while (*c)
-        array_add(&string, *c++);
-
-      if (i < data_type.class_template->types.size - 1)
-      {
-        array_add(&string, ',');
-        array_add(&string, ' ');
-      }
-    }
-
-    array_add(&string, '>');
-    array_add(&string, '\0');
-
-    return string.elems;
-  }
-  case TYPE_FUNCTION:
-  case TYPE_FUNCTION_MEMBER:
-  case TYPE_FUNCTION_INTERNAL:
-  case TYPE_FUNCTION_POINTER: {
-    DataType return_data_type;
-    ArrayDataType parameter_types;
-    expand_function_data_type(data_type, &return_data_type, &parameter_types);
-
-    ArrayChar string;
-    array_init(&string);
-
-    const char* c = data_type_to_string(return_data_type);
-    while (*c)
-      array_add(&string, *c++);
-
-    array_add(&string, '(');
-
-    for (unsigned int i = 0; i < parameter_types.size; i++)
-    {
-      const char* c = data_type_to_string(parameter_types.elems[i]);
-      while (*c)
-        array_add(&string, *c++);
-
-      if (i < parameter_types.size - 1)
-      {
-        array_add(&string, ',');
-        array_add(&string, ' ');
-      }
-    }
-
-    array_add(&string, ')');
-    array_add(&string, '\0');
-
-    return string.elems;
-  }
-  case TYPE_ARRAY: {
-    ArrayChar string;
-    array_init(&string);
-
-    const char* c = data_type_to_string(*data_type.array.data_type);
-    while (*c)
-      array_add(&string, *c++);
-
-    for (int i = 0; i < data_type.array.count; i++)
-    {
-      array_add(&string, '[');
-      array_add(&string, ']');
-    }
-
-    array_add(&string, '\0');
-
-    return string.elems;
-  }
-  default:
-    UNREACHABLE("Unexpected data type to string");
-  }
 }
 
 static const char* data_type_token_to_string(DataTypeToken data_type_token, ArrayChar* string)
@@ -704,7 +706,7 @@ static void data_type_token_unalias(ArrayDataTypeToken* types)
     VarStmt* variable =
       environment_get_variable(checker.environment, array_at(types, i).token.lexeme);
 
-    if (variable && equal_data_type(variable->data_type, DATA_TYPE(TYPE_ALIAS)))
+    if (variable && variable->data_type.type == TYPE_ALIAS)
     {
       array_at(types, i) = variable->data_type.alias.token;
     }
@@ -736,7 +738,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
         return DATA_TYPE(TYPE_VOID);
       }
 
-      if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+      if (variable->data_type.type != TYPE_PROTOTYPE_TEMPLATE)
       {
         error_not_a_template_type(token, token.lexeme);
         return DATA_TYPE(TYPE_VOID);
@@ -772,7 +774,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
     DataType element_data_type = data_type_token_to_data_type(*data_type_token.array.type);
 
-    if (equal_data_type(element_data_type, DATA_TYPE(TYPE_ARRAY)))
+    if (element_data_type.type == TYPE_ARRAY)
     {
       data_type.array.count += element_data_type.array.count;
       *data_type.array.data_type = *element_data_type.array.data_type;
@@ -800,7 +802,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
     *data_type.function_internal.return_type =
       data_type_token_to_data_type(*data_type_token.function.return_value);
 
-    data_type.function_internal.name = "";
+    data_type.function_internal.name = data_type_to_string(data_type);
 
     return data_type;
   }
@@ -812,8 +814,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
-  if (equal_data_type(data_type, DATA_TYPE(TYPE_OBJECT)) ||
-      equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
+  if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_INTEGER)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
@@ -926,6 +927,8 @@ static void init_function_declaration(FuncStmt* statement)
     variable->data_type = DATA_TYPE(TYPE_FUNCTION);
     variable->data_type.function = statement;
   }
+
+  statement->function_data_type = variable->data_type;
 
   environment_set_variable(checker.environment, name, variable);
 }
@@ -1172,15 +1175,14 @@ static DataType check_unary_expression(UnaryExpr* expression)
   switch (op.type)
   {
   case TOKEN_MINUS:
-    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)))
+    if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_FLOAT)
       error_operation_not_defined(op, data_type);
 
     expression->data_type = data_type;
     break;
 
   case TOKEN_TILDE:
-    if (!equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)))
+    if (data_type.type != TYPE_INTEGER)
       error_operation_not_defined(op, data_type);
 
     expression->data_type = data_type;
@@ -1188,7 +1190,7 @@ static DataType check_unary_expression(UnaryExpr* expression)
 
   case TOKEN_NOT:
   case TOKEN_BANG:
-    if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+    if (data_type.type != TYPE_BOOL)
     {
       Expr* cast_expression = cast_to_bool(expression->expr, data_type);
       if (cast_expression)
@@ -1213,7 +1215,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
   DataType left = check_expression(expression->left);
   DataType right = check_expression(expression->right);
 
-  if (equal_data_type(left, DATA_TYPE(TYPE_OBJECT)))
+  if (left.type == TYPE_OBJECT)
   {
     ClassStmt* class = left.class;
     char* name;
@@ -1322,7 +1324,7 @@ skip:
   {
   case TOKEN_AND:
   case TOKEN_OR:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
+    if (left.type != TYPE_BOOL)
     {
       Expr* left_cast_expression = cast_to_bool(expression->left, left);
       Expr* right_cast_expression = cast_to_bool(expression->right, right);
@@ -1347,12 +1349,8 @@ skip:
     break;
   case TOKEN_EQUAL_EQUAL:
   case TOKEN_BANG_EQUAL:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_BOOL)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_OBJECT)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_CHAR)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
+    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_BOOL &&
+        left.type != TYPE_OBJECT && left.type != TYPE_CHAR && left.type != TYPE_STRING)
       error_operation_not_defined(op, left);
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
@@ -1361,25 +1359,20 @@ skip:
   case TOKEN_GREATER_EQUAL:
   case TOKEN_LESS:
   case TOKEN_LESS_EQUAL:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_BOOL)))
+    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_BOOL)
       error_operation_not_defined(op, left);
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_PLUS:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_STRING)))
+    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_STRING)
       error_operation_not_defined(op, left);
 
     break;
   case TOKEN_MINUS:
   case TOKEN_STAR:
   case TOKEN_SLASH:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)) &&
-        !equal_data_type(left, DATA_TYPE(TYPE_FLOAT)))
+    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT)
       error_operation_not_defined(op, left);
 
     break;
@@ -1390,7 +1383,7 @@ skip:
   case TOKEN_CARET:
   case TOKEN_LESS_LESS:
   case TOKEN_GREATER_GREATER:
-    if (!equal_data_type(left, DATA_TYPE(TYPE_INTEGER)))
+    if (left.type != TYPE_INTEGER)
       error_operation_not_defined(op, left);
 
     break;
@@ -1425,10 +1418,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
   DataType target_data_type = check_expression(target);
   DataType value_data_type = check_expression(expression->value);
 
-  if (equal_data_type(target_data_type, DATA_TYPE(TYPE_VOID)) ||
-      equal_data_type(target_data_type, DATA_TYPE(TYPE_PROTOTYPE)) ||
-      equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION)) ||
-      equal_data_type(target_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  if (target_data_type.type == TYPE_VOID || target_data_type.type == TYPE_PROTOTYPE ||
+      target_data_type.type == TYPE_FUNCTION || target_data_type.type == TYPE_FUNCTION_MEMBER)
   {
     error_not_assignable(expression->op);
     return DATA_TYPE(TYPE_VOID);
@@ -1502,7 +1493,7 @@ static DataType check_call_expression(CallExpr* expression)
 
   if (array_size(&expression->types))
   {
-    if (!equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE)))
+    if (callee_data_type.type != TYPE_PROTOTYPE_TEMPLATE)
     {
       error_not_a_template_type(expression->callee_token, data_type_to_string(callee_data_type));
       return DATA_TYPE(TYPE_VOID);
@@ -1535,7 +1526,7 @@ static DataType check_call_expression(CallExpr* expression)
     callee_data_type.class = class_statement;
   }
 
-  if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  if (callee_data_type.type == TYPE_FUNCTION_MEMBER)
   {
     FuncStmt* function = callee_data_type.function_member.function;
     Expr* argument;
@@ -1597,7 +1588,7 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
-  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION)))
+  else if (callee_data_type.type == TYPE_FUNCTION)
   {
     FuncStmt* function = callee_data_type.function;
     int number_of_arguments = array_size(&expression->arguments);
@@ -1633,8 +1624,8 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
-  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_INTERNAL)) ||
-           equal_data_type(callee_data_type, DATA_TYPE(TYPE_FUNCTION_POINTER)))
+  else if (callee_data_type.type == TYPE_FUNCTION_INTERNAL ||
+           callee_data_type.type == TYPE_FUNCTION_POINTER)
   {
     if (callee_data_type.function_internal.this)
     {
@@ -1690,7 +1681,7 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
-  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_PROTOTYPE)))
+  else if (callee_data_type.type == TYPE_PROTOTYPE)
   {
     ClassStmt* class = callee_data_type.class;
     VarStmt* variable = get_class_member(class, expression->callee_token, "__init__", true);
@@ -1761,7 +1752,7 @@ static DataType check_call_expression(CallExpr* expression)
 
     return expression->return_data_type;
   }
-  else if (equal_data_type(callee_data_type, DATA_TYPE(TYPE_ALIAS)))
+  else if (callee_data_type.type == TYPE_ALIAS)
   {
     int number_of_arguments = array_size(&expression->arguments);
     if (number_of_arguments > 1)
@@ -1786,7 +1777,7 @@ static DataType check_access_expression(AccessExpr* expression)
 {
   DataType data_type = check_expression(expression->expr);
 
-  if (equal_data_type(data_type, DATA_TYPE(TYPE_OBJECT)))
+  if (data_type.type == TYPE_OBJECT)
   {
     const char* name = expression->name.lexeme;
 
@@ -1810,7 +1801,7 @@ static DataType check_access_expression(AccessExpr* expression)
 
     return expression->data_type;
   }
-  else if (equal_data_type(data_type, DATA_TYPE(TYPE_ARRAY)))
+  else if (data_type.type == TYPE_ARRAY)
   {
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0 || strcmp("capacity", name) == 0)
@@ -1859,7 +1850,7 @@ static DataType check_access_expression(AccessExpr* expression)
     error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);
   }
-  else if (equal_data_type(data_type, DATA_TYPE(TYPE_STRING)))
+  else if (data_type.type == TYPE_STRING)
   {
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0)
@@ -1890,10 +1881,8 @@ static DataType check_access_expression(AccessExpr* expression)
     error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);
   }
-  else if (equal_data_type(data_type, DATA_TYPE(TYPE_INTEGER)) ||
-           equal_data_type(data_type, DATA_TYPE(TYPE_FLOAT)) ||
-           equal_data_type(data_type, DATA_TYPE(TYPE_CHAR)) ||
-           equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+  else if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_FLOAT ||
+           data_type.type == TYPE_CHAR || data_type.type == TYPE_BOOL)
   {
     const char* name = expression->name.lexeme;
 
@@ -1977,9 +1966,9 @@ static DataType check_index_expression(IndexExpr* expression)
   DataType index_data_type = check_expression(expression->index);
   DataType expr_data_type = check_expression(expression->expr);
 
-  if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_STRING)))
+  if (expr_data_type.type == TYPE_STRING)
   {
-    if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
+    if (index_data_type.type != TYPE_INTEGER)
     {
       error_index_not_an_int(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
@@ -1990,9 +1979,9 @@ static DataType check_index_expression(IndexExpr* expression)
 
     return expression->data_type;
   }
-  else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_ARRAY)))
+  else if (expr_data_type.type == TYPE_ARRAY)
   {
-    if (!equal_data_type(index_data_type, DATA_TYPE(TYPE_INTEGER)))
+    if (index_data_type.type != TYPE_INTEGER)
     {
       error_index_not_an_int(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
@@ -2003,7 +1992,7 @@ static DataType check_index_expression(IndexExpr* expression)
 
     return expression->data_type;
   }
-  else if (equal_data_type(expr_data_type, DATA_TYPE(TYPE_OBJECT)))
+  else if (expr_data_type.type == TYPE_OBJECT)
   {
     ClassStmt* class = expr_data_type.class;
     VarStmt* variable = get_class_member(class, expression->expr_token, "__get__", false);
@@ -2054,7 +2043,7 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
     Token token = expression->tokens.elems[i];
 
     DataType value_data_type = check_expression(value);
-    if (equal_data_type(element_data_type, DATA_TYPE(TYPE_VOID)))
+    if (element_data_type.type == TYPE_VOID)
     {
       element_data_type = value_data_type;
     }
@@ -2084,7 +2073,7 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
     }
   }
 
-  if (equal_data_type(element_data_type, DATA_TYPE(TYPE_ARRAY)))
+  if (element_data_type.type == TYPE_ARRAY)
   {
     data_type.array.count = element_data_type.array.count + 1;
     data_type.array.data_type = element_data_type.array.data_type;
@@ -2189,7 +2178,7 @@ static void check_break_statement(BreakStmt* statement)
 static void check_if_statement(IfStmt* statement)
 {
   DataType data_type = check_expression(statement->condition);
-  if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+  if (data_type.type != TYPE_BOOL)
   {
     Expr* cast_expression = cast_to_bool(statement->condition, data_type);
     if (cast_expression)
@@ -2232,7 +2221,7 @@ static void check_while_statement(WhileStmt* statement)
   }
 
   DataType data_type = check_expression(statement->condition);
-  if (!equal_data_type(data_type, DATA_TYPE(TYPE_BOOL)))
+  if (data_type.type != TYPE_BOOL)
   {
     Expr* cast_expression = cast_to_bool(statement->condition, data_type);
     if (cast_expression)

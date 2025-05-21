@@ -77,7 +77,7 @@ map_dec_scalar(32, 32, uint32_t, uint32_t)
 map_dec_scalar(64, 64, uint64_t, uint64_t)
 map_dec_scalar(64v, 64v, uint64_t, void *)
 map_dec_scalar(64s, 64s, uint64_t, const char *)
-map_dec_scalar(BinaryenHeapType, binaryen_heap_type, unsigned int, uintptr_t)
+map_dec_scalar(UintBinaryenHeapType, uint_binaryen_heap_type, unsigned int, uintptr_t)
 
 map_dec_strkey(Str, str, const char *, const char *)
 map_dec_strkey(Sv, sv, const char *, void *)
@@ -88,6 +88,7 @@ map_dec_strkey(SInt, sint, const char *, int)
 map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
 map_dec_strkey(VarStmt, var_stmt, const char*, struct _VAR_STMT*)
 map_dec_strkey(Expr, expr, const char*, struct _EXPR*)
+map_dec_strkey(StringBinaryenHeapType, string_binaryen_heap_type, const char*, uintptr_t)
 
 // clang-format on
 

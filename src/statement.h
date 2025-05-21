@@ -55,6 +55,7 @@ typedef struct _WHILE_STMT
 typedef struct _FUNC_STMT
 {
   DataType data_type;
+  DataType function_data_type;
   DataTypeToken type;
 
   Token name;

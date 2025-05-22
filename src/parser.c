@@ -897,6 +897,7 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
       parameter->var.name = name;
       parameter->var.index = -1;
       parameter->var.initializer = NULL;
+      parameter->var.function = NULL;
 
       array_add(&stmt->func.parameters, &parameter->var);
     } while (match(TOKEN_COMMA));
@@ -918,6 +919,7 @@ static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool
   stmt->var.type = type;
   stmt->var.name = name;
   stmt->var.equals = peek();
+  stmt->var.function = NULL;
 
   if (stmt->var.equals.type == TOKEN_EQUAL)
   {

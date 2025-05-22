@@ -9,8 +9,6 @@ void expand_function_data_type(DataType data_type, DataType* return_data_type,
 bool equal_data_type(DataType left, DataType right);
 bool assignable_data_type(DataType left, DataType right);
 const char* data_type_to_string(DataType data_type);
-
-unsigned int array_data_type_hash(DataType array_data_type);
 DataType array_data_type_element(DataType array_data_type);
 
 void checker_init(ArrayStmt statements);

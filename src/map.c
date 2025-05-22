@@ -403,7 +403,6 @@ map_def_scalar(32, uint32_t, uint32_t, map_eq, map_hash_32)
 map_def_scalar(64, uint64_t, uint64_t, map_eq, map_hash_64)
 map_def_scalar(64v, uint64_t, void *, map_eq, map_hash_64)
 map_def_scalar(64s, uint64_t, const char *, map_eq, map_hash_64)
-map_def_scalar(uint_binaryen_heap_type, unsigned int, uintptr_t, map_eq, map_hash_64)
 
 map_def_strkey(str, const char *, const char *, map_streq, murmurhash)
 map_def_strkey(sv, const char *, void *, map_streq, murmurhash)

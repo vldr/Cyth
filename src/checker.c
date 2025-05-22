@@ -84,6 +84,11 @@ static void error_cannot_find_name(Token token, const char* name)
   checker_error(token, memory_sprintf("Undeclared identifier '%s'.", name));
 }
 
+static void error_cannot_access_name_outside_function(Token token, const char* name)
+{
+  checker_error(token, memory_sprintf("Cannot access '%s' outside function.", name));
+}
+
 static void error_cannot_find_member_name(Token token, const char* name, DataType data_type)
 {
   checker_error(
@@ -150,11 +155,6 @@ static void error_index_not_an_int(Token token)
 static void error_not_assignable(Token token)
 {
   checker_error(token, "The expression is not assignable.");
-}
-
-static void error_unexpected_function(Token token)
-{
-  checker_error(token, "A function declaration is not allowed here.");
 }
 
 static void error_unexpected_class(Token token)
@@ -419,28 +419,18 @@ bool equal_data_type(DataType left, DataType right)
     return left.array.count == right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
 
-  if (left.type == TYPE_FUNCTION_POINTER && right.type == TYPE_FUNCTION_POINTER)
-    return assignable_data_type(left, right);
-
-  return left.type == right.type;
-}
-
-bool assignable_data_type(DataType destination, DataType source)
-{
-  if (destination.type == TYPE_ANY)
-    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY;
-
-  if (destination.type == TYPE_FUNCTION_POINTER &&
-      (source.type == TYPE_FUNCTION || source.type == TYPE_FUNCTION_MEMBER ||
-       source.type == TYPE_FUNCTION_INTERNAL || source.type == TYPE_FUNCTION_POINTER))
+  if ((left.type == TYPE_FUNCTION || left.type == TYPE_FUNCTION_MEMBER ||
+       left.type == TYPE_FUNCTION_INTERNAL || left.type == TYPE_FUNCTION_POINTER) &&
+      (right.type == TYPE_FUNCTION || right.type == TYPE_FUNCTION_MEMBER ||
+       right.type == TYPE_FUNCTION_INTERNAL || right.type == TYPE_FUNCTION_POINTER))
   {
     DataType left_return_data_type;
     ArrayDataType left_parameter_types;
-    expand_function_data_type(destination, &left_return_data_type, &left_parameter_types);
+    expand_function_data_type(left, &left_return_data_type, &left_parameter_types);
 
     DataType right_return_data_type;
     ArrayDataType right_parameter_types;
-    expand_function_data_type(source, &right_return_data_type, &right_parameter_types);
+    expand_function_data_type(right, &right_return_data_type, &right_parameter_types);
 
     if (!equal_data_type(left_return_data_type, right_return_data_type))
       return false;
@@ -455,19 +445,15 @@ bool assignable_data_type(DataType destination, DataType source)
     return true;
   }
 
-  return false;
+  return left.type == right.type;
 }
 
-unsigned int array_data_type_hash(DataType array_data_type)
+bool assignable_data_type(DataType destination, DataType source)
 {
-  assert(array_data_type.type == TYPE_ARRAY);
-  assert(array_data_type.array.count >= 1);
+  if (destination.type == TYPE_ANY)
+    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY;
 
-  unsigned int hash = array_data_type.array.data_type->type << 8 | array_data_type.array.count;
-  if (array_data_type.array.data_type->type == TYPE_OBJECT)
-    hash |= array_data_type.array.data_type->class->id << 16;
-
-  return hash;
+  return false;
 }
 
 DataType array_data_type_element(DataType array_data_type)
@@ -613,6 +599,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     VarStmt* variable = ALLOC(VarStmt);
     variable->name = name;
     variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
     variable->initializer = NULL;
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
@@ -872,6 +859,19 @@ static void init_function_declaration(FuncStmt* statement)
     return;
   }
 
+  if (checker.function)
+  {
+    statement->name.lexeme =
+      memory_sprintf("%s.%s<%d:%d>", checker.function->name.lexeme, statement->name.lexeme,
+                     statement->name.start_line, statement->name.start_column);
+  }
+  else if (checker.loop)
+  {
+    statement->name.lexeme =
+      memory_sprintf("%s<%d:%d>", statement->name.lexeme, statement->name.start_line,
+                     statement->name.start_column);
+  }
+
   if (checker.class)
   {
     if (strcmp(name, "__init__") == 0 && statement->type.token.type != TOKEN_IDENTIFIER_VOID)
@@ -886,6 +886,7 @@ static void init_function_declaration(FuncStmt* statement)
       .type = DATA_TYPE_TOKEN_PRIMITIVE,
       .token = checker.class->name,
     };
+    parameter->function = NULL;
     parameter->initializer = NULL;
     parameter->index = 0;
     parameter->scope = SCOPE_LOCAL;
@@ -915,6 +916,7 @@ static void init_function_declaration(FuncStmt* statement)
   variable->name = statement->name;
   variable->type = statement->type;
   variable->initializer = NULL;
+  variable->function = NULL;
 
   if (checker.class)
   {
@@ -960,6 +962,7 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
     .token = statement->name,
   };
   variable->initializer = NULL;
+  variable->function = NULL;
   variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
   variable->data_type = DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE);
@@ -983,6 +986,7 @@ static void init_class_declaration(ClassStmt* statement)
     .token = statement->name,
   };
   variable->initializer = NULL;
+  variable->function = NULL;
   variable->scope = SCOPE_GLOBAL;
   variable->index = -1;
   variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
@@ -1026,8 +1030,7 @@ static void init_statement(Stmt* statement)
 
 static DataType check_cast_expression(CastExpr* expression)
 {
-  if (equal_data_type(expression->from_data_type, DATA_TYPE(TYPE_VOID)) &&
-      equal_data_type(expression->to_data_type, DATA_TYPE(TYPE_VOID)))
+  if (expression->from_data_type.type == TYPE_VOID && expression->to_data_type.type == TYPE_VOID)
   {
     expression->from_data_type = check_expression(expression->expr);
     expression->to_data_type = data_type_token_to_data_type(expression->type);
@@ -1277,7 +1280,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     }
 
     VarStmt* variable = get_class_member(class, op, name, false);
-    if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
     {
       if (op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL)
       {
@@ -1406,6 +1409,12 @@ static DataType check_variable_expression(VarExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
+  if (variable->function && variable->function != checker.function)
+  {
+    error_cannot_access_name_outside_function(expression->name, name);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
   expression->variable = variable;
   expression->data_type = variable->data_type;
 
@@ -1458,18 +1467,18 @@ static DataType check_assignment_expression(AssignExpr* expression)
   }
   else if (target->type == EXPR_INDEX)
   {
-    if (equal_data_type(target->index.expr_data_type, DATA_TYPE(TYPE_STRING)))
+    if (target->index.expr_data_type.type == TYPE_STRING)
     {
       error_not_assignable(expression->op);
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (equal_data_type(target->index.expr_data_type, DATA_TYPE(TYPE_OBJECT)))
+    if (target->index.expr_data_type.type == TYPE_OBJECT)
     {
       ClassStmt* class = target->index.expr_data_type.class;
       VarStmt* variable = get_class_member(class, target->index.expr_token, "__set__", false);
 
-      if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+      if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
       {
         error_not_indexable_and_assignable_missing_overload(expression->op);
         return DATA_TYPE(TYPE_VOID);
@@ -1702,7 +1711,7 @@ static DataType check_call_expression(CallExpr* expression)
 
     if (variable)
     {
-      if (!equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+      if (variable->data_type.type != TYPE_FUNCTION_MEMBER)
       {
         error_not_a_function(expression->callee_token);
         return DATA_TYPE(TYPE_VOID);
@@ -1790,7 +1799,7 @@ static DataType check_access_expression(AccessExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    if (variable->data_type.type == TYPE_FUNCTION_MEMBER)
     {
       variable->data_type.function_member.this = expression->expr;
     }
@@ -1997,7 +2006,7 @@ static DataType check_index_expression(IndexExpr* expression)
     ClassStmt* class = expr_data_type.class;
     VarStmt* variable = get_class_member(class, expression->expr_token, "__get__", false);
 
-    if (!variable || !equal_data_type(variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+    if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
     {
       error_not_indexable_missing_overload(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
@@ -2258,6 +2267,7 @@ static void check_variable_declaration(VarStmt* statement)
 
   if (checker.function)
   {
+    statement->function = checker.function;
     statement->scope = SCOPE_LOCAL;
     statement->index =
       array_size(&checker.function->variables) + array_size(&checker.function->parameters);
@@ -2288,7 +2298,7 @@ static void check_variable_declaration(VarStmt* statement)
 
   statement->data_type = data_type_token_to_data_type(statement->type);
 
-  if (equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)))
+  if (statement->data_type.type == TYPE_VOID)
   {
     error_type_cannot_be_void(statement->type.token, statement->type.token.lexeme);
     return;
@@ -2343,7 +2353,7 @@ static void check_set_function_declaration(FuncStmt* function)
       return;
     }
 
-    if (!equal_data_type(function->data_type, DATA_TYPE(TYPE_VOID)))
+    if (function->data_type.type != TYPE_VOID)
     {
       error_invalid_set_return_type(function->name);
       return;
@@ -2370,8 +2380,7 @@ static void check_function_declaration(FuncStmt* statement)
 {
   if (checker.function || checker.loop)
   {
-    error_unexpected_function(statement->name);
-    return;
+    init_function_declaration(statement);
   }
 
   if (statement->body.size && statement->import.type == TOKEN_STRING)
@@ -2381,6 +2390,7 @@ static void check_function_declaration(FuncStmt* statement)
   }
 
   FuncStmt* previous_function = checker.function;
+  Environment* previous_environment = checker.environment;
 
   checker.environment = environment_init(checker.environment);
   checker.function = statement;
@@ -2403,8 +2413,7 @@ static void check_function_declaration(FuncStmt* statement)
     environment_set_variable(checker.environment, name, parameter);
   }
 
-  if (statement->import.type != TOKEN_STRING &&
-      !equal_data_type(statement->data_type, DATA_TYPE(TYPE_VOID)) &&
+  if (statement->import.type != TOKEN_STRING && statement->data_type.type != TYPE_VOID &&
       !analyze_statements(statement->body))
   {
     error_no_return(statement->name);
@@ -2442,7 +2451,7 @@ static void check_function_declaration(FuncStmt* statement)
   }
 
   checker.function = previous_function;
-  checker.environment = checker.environment->parent;
+  checker.environment = previous_environment;
 }
 
 static void check_set_get_function_declarations(ClassStmt* statement)
@@ -2450,9 +2459,8 @@ static void check_set_get_function_declarations(ClassStmt* statement)
   VarStmt* set_variable = map_get_var_stmt(statement->members, "__set__");
   VarStmt* get_variable = map_get_var_stmt(statement->members, "__get__");
 
-  if (set_variable && get_variable &&
-      equal_data_type(set_variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)) &&
-      equal_data_type(get_variable->data_type, DATA_TYPE(TYPE_FUNCTION_MEMBER)))
+  if (set_variable && get_variable && set_variable->data_type.type == TYPE_FUNCTION_MEMBER &&
+      get_variable->data_type.type == TYPE_FUNCTION_MEMBER)
   {
     FuncStmt* set_function = set_variable->data_type.function_member.function;
     FuncStmt* get_function = get_variable->data_type.function_member.function;

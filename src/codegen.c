@@ -62,8 +62,7 @@ static struct
   ArrayStmt statements;
 
   ArrayBinaryenType global_local_types;
-  MapUintBinaryenHeapType heap_types;
-  MapStringBinaryenHeapType function_types;
+  MapStringBinaryenHeapType heap_types;
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
   MapSInt string_constants;
@@ -679,8 +678,9 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
                                                           ArrayTypeBuilderSubtype* subtypes,
                                                           DataType data_type)
 {
-  unsigned int hash = array_data_type_hash(data_type);
-  BinaryenHeapType array_binaryen_type = map_get_uint_binaryen_heap_type(&codegen.heap_types, hash);
+  const char* key = data_type_to_string(data_type);
+  BinaryenHeapType array_binaryen_type =
+    map_get_string_binaryen_heap_type(&codegen.heap_types, key);
 
   if (!array_binaryen_type)
   {
@@ -722,7 +722,7 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
 
     if (type_builder_ref)
     {
-      TypeBuilderSubtype subtype = { .type = SUBTYPE_ARRAY, .index = offset + 1, .hash = hash };
+      TypeBuilderSubtype subtype = { .type = SUBTYPE_ARRAY, .index = offset + 1, .key = key };
       array_add(subtypes, subtype);
 
       array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
@@ -735,7 +735,7 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
       array_binaryen_type = heap_types[1];
     }
 
-    map_put_uint_binaryen_heap_type(&codegen.heap_types, hash, array_binaryen_type);
+    map_put_string_binaryen_heap_type(&codegen.heap_types, key, array_binaryen_type);
   }
 
   return array_binaryen_type;
@@ -758,7 +758,7 @@ static BinaryenHeapType generate_function_ref(TypeBuilderRef type_builder_ref,
 {
   const char* key = data_type_to_string(data_type);
   BinaryenHeapType function_binaryen_heap_type =
-    map_get_string_binaryen_heap_type(&codegen.function_types, key);
+    map_get_string_binaryen_heap_type(&codegen.heap_types, key);
 
   if (!function_binaryen_heap_type)
   {
@@ -811,7 +811,7 @@ static BinaryenHeapType generate_function_ref(TypeBuilderRef type_builder_ref,
       TypeBuilderBuildAndDispose(type_builder, &function_binaryen_heap_type, NULL, NULL);
     }
 
-    map_put_string_binaryen_heap_type(&codegen.function_types, key, function_binaryen_heap_type);
+    map_put_string_binaryen_heap_type(&codegen.heap_types, key, function_binaryen_heap_type);
   }
 
   return function_binaryen_heap_type;
@@ -900,6 +900,9 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(0));
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL:
   case TYPE_FUNCTION_POINTER: {
     ArrayTypeBuilderSubtype subtypes;
     array_init(&subtypes);
@@ -2485,11 +2488,11 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
 
       if (subtype.type == SUBTYPE_ARRAY)
       {
-        map_put_uint_binaryen_heap_type(&codegen.heap_types, subtype.hash, heap_type);
+        map_put_string_binaryen_heap_type(&codegen.heap_types, subtype.key, heap_type);
       }
       else if (subtype.type == SUBTYPE_FUNCTION)
       {
-        map_put_string_binaryen_heap_type(&codegen.function_types, subtype.key, heap_type);
+        map_put_string_binaryen_heap_type(&codegen.heap_types, subtype.key, heap_type);
       }
       else if (subtype.type == SUBTYPE_CLASS)
       {
@@ -2615,8 +2618,7 @@ void codegen_init(ArrayStmt statements)
 
   codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, false);
   map_init_sint(&codegen.string_constants, 0, 0);
-  map_init_string_binaryen_heap_type(&codegen.function_types, 0, 0);
-  map_init_uint_binaryen_heap_type(&codegen.heap_types, 0, 0);
+  map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
 }
 
 Codegen codegen_generate(void)

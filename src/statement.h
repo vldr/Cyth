@@ -77,6 +77,7 @@ typedef struct _VAR_STMT
   Token name;
   Token equals;
   Expr* initializer;
+  FuncStmt* function;
 } VarStmt;
 
 typedef struct _CLASS_STMT

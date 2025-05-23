@@ -189,7 +189,7 @@ class EditorConsole {
   }
 
   onWorkerError() {
-    this.stop(true);
+    this.stop();
     this.print("Program crashed unexpectedly due to an error:\n");
   }
 
@@ -586,6 +586,7 @@ class Editor {
         scrollBeyondLastLine: true,
         minimap: { enabled: false },
         fixedOverflowWidgets: true,
+        accessibilitySupport: "off",
       });
 
       this.editorTabs = new EditorTabs(this);

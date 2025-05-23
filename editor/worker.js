@@ -127,11 +127,11 @@ onmessage = (event) => {
               function render(time) {
                 try {
                   instance.exports["draw"](time);
+                  requestAnimationFrame(render);
                 } catch (error) {
                   onerror(error);
                 }
 
-                requestAnimationFrame(render);
               }
 
               requestAnimationFrame(render);

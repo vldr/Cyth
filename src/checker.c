@@ -47,8 +47,20 @@ static void checker_error(Token token, const char* message)
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
 {
-  checker_error(token, memory_sprintf("Mismatched types '%s' and '%s'",
+  checker_error(token, memory_sprintf("Mismatched types '%s' and '%s'.",
                                       data_type_to_string(expected), data_type_to_string(got)));
+}
+
+static void error_should_not_return_value(Token token, const char* function_name)
+{
+  checker_error(token,
+                memory_sprintf("Void function '%s' should not return a value.", function_name));
+}
+
+static void error_should_return_value(Token token, const char* function_name)
+{
+  checker_error(token,
+                memory_sprintf("Non-void function '%s' should return a value.", function_name));
 }
 
 static void error_operation_not_defined(Token token, DataType data_type)
@@ -74,9 +86,9 @@ static void error_name_already_exists(Token token, const char* name)
   checker_error(token, memory_sprintf("The name '%s' already exists.", name));
 }
 
-static void error_type_cannot_be_void(Token token, const char* name)
+static void error_type_cannot_be_void(Token token)
 {
-  checker_error(token, memory_sprintf("The type %s cannot be used here", name));
+  checker_error(token, "The type cannot be void here.");
 }
 
 static void error_cannot_find_name(Token token, const char* name)
@@ -760,6 +772,11 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
     data_type.array.count = data_type_token.array.count;
 
     DataType element_data_type = data_type_token_to_data_type(*data_type_token.array.type);
+    if (element_data_type.type == TYPE_VOID)
+    {
+      error_type_cannot_be_void(data_type_token.token);
+      return DATA_TYPE(TYPE_VOID);
+    }
 
     if (element_data_type.type == TYPE_ARRAY)
     {
@@ -2052,6 +2069,14 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
     Token token = expression->tokens.elems[i];
 
     DataType value_data_type = check_expression(value);
+    if (value_data_type.type == TYPE_VOID)
+    {
+      error_type_cannot_be_void(token);
+      data_type = DATA_TYPE(TYPE_VOID);
+
+      goto finish;
+    }
+
     if (element_data_type.type == TYPE_VOID)
     {
       element_data_type = value_data_type;
@@ -2151,20 +2176,31 @@ static void check_return_statement(ReturnStmt* statement)
     return;
   }
 
-  DataType data_type = DATA_TYPE(TYPE_VOID);
-
   if (statement->expr)
   {
-    data_type = check_expression(statement->expr);
+    if (checker.function->data_type.type == TYPE_VOID)
+    {
+      error_should_not_return_value(statement->keyword, checker.function->name.lexeme);
+      return;
+    }
 
+    DataType data_type = check_expression(statement->expr);
     array_data_type_inference(&data_type, &checker.function->data_type);
-  }
 
-  if (!equal_data_type(checker.function->data_type, data_type) &&
-      !assignable_data_type(checker.function->data_type, data_type))
+    if (!equal_data_type(checker.function->data_type, data_type) &&
+        !assignable_data_type(checker.function->data_type, data_type))
+    {
+      error_type_mismatch(statement->keyword, checker.function->data_type, data_type);
+      return;
+    }
+  }
+  else
   {
-    error_type_mismatch(statement->keyword, checker.function->data_type, data_type);
-    return;
+    if (checker.function->data_type.type != TYPE_VOID)
+    {
+      error_should_return_value(statement->keyword, checker.function->name.lexeme);
+      return;
+    }
   }
 }
 
@@ -2300,7 +2336,7 @@ static void check_variable_declaration(VarStmt* statement)
 
   if (statement->data_type.type == TYPE_VOID)
   {
-    error_type_cannot_be_void(statement->type.token, statement->type.token.lexeme);
+    error_type_cannot_be_void(statement->type.token);
     return;
   }
 

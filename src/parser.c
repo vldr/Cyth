@@ -898,6 +898,7 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
       parameter->var.index = -1;
       parameter->var.initializer = NULL;
       parameter->var.function = NULL;
+      parameter->var.scope = SCOPE_NONE;
 
       array_add(&stmt->func.parameters, &parameter->var);
     } while (match(TOKEN_COMMA));
@@ -920,6 +921,7 @@ static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool
   stmt->var.name = name;
   stmt->var.equals = peek();
   stmt->var.function = NULL;
+  stmt->var.scope = SCOPE_NONE;
 
   if (stmt->var.equals.type == TOKEN_EQUAL)
   {
@@ -1007,8 +1009,6 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->type = STMT_CLASS_DECL;
   stmt->class.id = parser.classes++;
   stmt->class.initializer_function = NULL;
-  stmt->class.declared = false;
-  stmt->class.initializing = false;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
   stmt->class.ref = 0;

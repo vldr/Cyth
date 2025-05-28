@@ -25,10 +25,11 @@ static struct
   ArrayLiteralArrayExpr* array;
 } checker;
 
-static void init_statement(Stmt* statement);
 static void check_statement(Stmt* statement, bool synchronize);
 static DataType check_expression(Expr* expression);
-static void check_class_declaration(ClassStmt* statement);
+
+static void init_class_declaration(ClassStmt* statement);
+static void init_class_declaration_body(ClassStmt* statement);
 
 static bool analyze_statement(Stmt* statement);
 static bool analyze_statements(ArrayStmt statements);
@@ -259,22 +260,6 @@ static void error_no_return(Token token)
 static void error_cannot_duduce_conflicting_type(Token token)
 {
   checker_error(token, "This type conflicts with the other deduced types.");
-}
-
-static void error_incomplete_type(Token token)
-{
-  checker_error(token, "This type is incomplete.");
-}
-
-VarStmt* get_class_member(ClassStmt* class, Token token, const char* key, bool ignore_undeclared)
-{
-  if (!ignore_undeclared && !class->declared)
-  {
-    error_incomplete_type(token);
-    return NULL;
-  }
-
-  return map_get_var_stmt(class->members, key);
 }
 
 ArrayVarStmt global_locals(void)
@@ -538,11 +523,6 @@ static DataType token_to_data_type(Token token)
 
     if (variable->data_type.type == TYPE_PROTOTYPE)
     {
-      if (!variable->data_type.class->declared)
-      {
-        check_class_declaration(variable->data_type.class);
-      }
-
       DataType object = DATA_TYPE(TYPE_OBJECT);
       object.class = variable->data_type.class;
 
@@ -599,7 +579,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   checker.loop = NULL;
   checker.environment = checker.global_environment;
 
-  init_statement(statement);
+  init_class_declaration(class_statement);
 
   checker.environment = environment_init(previous_environment);
 
@@ -623,7 +603,7 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
 
-  check_statement(statement, false);
+  init_class_declaration_body(class_statement);
 
   template.class_template->count--;
 
@@ -969,7 +949,7 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
     if (map_get_sint(&type_set, type.lexeme))
       error_name_already_exists(type, type.lexeme);
     else
-      map_put_sint(&type_set, type.lexeme, 1);
+      map_put_sint(&type_set, type.lexeme, true);
   }
 
   VarStmt* variable = ALLOC(VarStmt);
@@ -1012,36 +992,99 @@ static void init_class_declaration(ClassStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
+static void init_variable_declaration(VarStmt* statement)
+{
+  Environment* environment = checker.environment;
+  const char* name = statement->name.lexeme;
+
+  if (checker.function)
+  {
+    statement->function = checker.function;
+    statement->scope = SCOPE_LOCAL;
+    statement->index =
+      array_size(&checker.function->variables) + array_size(&checker.function->parameters);
+  }
+  else if (checker.class)
+  {
+    statement->scope = SCOPE_CLASS;
+  }
+  else
+  {
+    if (environment == checker.global_environment)
+    {
+      statement->scope = SCOPE_GLOBAL;
+    }
+    else
+    {
+      statement->scope = SCOPE_LOCAL;
+      statement->index = array_size(&checker.global_locals);
+      array_add(&checker.global_locals, statement);
+    }
+  }
+
+  if (environment_check_variable(environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+    return;
+  }
+
+  statement->data_type = data_type_token_to_data_type(statement->type);
+
+  if (statement->data_type.type == TYPE_VOID)
+  {
+    error_type_cannot_be_void(statement->type.token);
+    return;
+  }
+
+  if (checker.function)
+  {
+    array_add(&checker.function->variables, statement);
+  }
+
+  environment_set_variable(environment, name, statement);
+}
+
+static void init_class_declaration_body(ClassStmt* statement)
+{
+  Environment* previous_environment = checker.environment;
+  checker.environment = environment_init(checker.environment);
+
+  ClassStmt* previous_class = checker.class;
+  checker.class = statement;
+  checker.class->environment = checker.environment;
+  checker.class->members = &checker.environment->variables;
+
+  FuncStmt* function_statement;
+  array_foreach(&statement->functions, function_statement)
+  {
+    init_function_declaration(function_statement);
+
+    const char* class_name = statement->name.lexeme;
+    const char* function_name = function_statement->name.lexeme;
+
+    function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
+  }
+
+  int count = 0;
+  VarStmt* variable_statement;
+  array_foreach(&statement->variables, variable_statement)
+  {
+    variable_statement->index = count++;
+
+    init_variable_declaration(variable_statement);
+  }
+
+  checker.class = previous_class;
+  checker.environment = previous_environment;
+}
+
 static void init_import_declaration(ImportStmt* statement)
 {
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
-    init_statement(body_statement);
-  }
-}
-
-static void init_statement(Stmt* statement)
-{
-  checker.error = false;
-
-  switch (statement->type)
-  {
-  case STMT_FUNCTION_DECL:
-    init_function_declaration(&statement->func);
-    break;
-  case STMT_CLASS_DECL:
-    init_class_declaration(&statement->class);
-    break;
-  case STMT_CLASS_TEMPLATE_DECL:
-    init_class_template_declaration(&statement->class_template);
-    break;
-  case STMT_IMPORT_DECL:
-    init_import_declaration(&statement->import);
-    break;
-
-  default:
-    break;
+    if (body_statement->type == STMT_FUNCTION_DECL)
+      init_function_declaration(&body_statement->func);
   }
 }
 
@@ -1296,7 +1339,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
       goto skip;
     }
 
-    VarStmt* variable = get_class_member(class, op, name, false);
+    VarStmt* variable = map_get_var_stmt(class->members, name);
     if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
     {
       if (op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL)
@@ -1493,7 +1536,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
     if (target->index.expr_data_type.type == TYPE_OBJECT)
     {
       ClassStmt* class = target->index.expr_data_type.class;
-      VarStmt* variable = get_class_member(class, target->index.expr_token, "__set__", false);
+      VarStmt* variable = map_get_var_stmt(class->members, "__set__");
 
       if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
       {
@@ -1710,7 +1753,7 @@ static DataType check_call_expression(CallExpr* expression)
   else if (callee_data_type.type == TYPE_PROTOTYPE)
   {
     ClassStmt* class = callee_data_type.class;
-    VarStmt* variable = get_class_member(class, expression->callee_token, "__init__", true);
+    VarStmt* variable = map_get_var_stmt(class->members, "__init__");
 
     Expr* argument = EXPR();
     argument->type = EXPR_LITERAL;
@@ -1808,7 +1851,7 @@ static DataType check_access_expression(AccessExpr* expression)
     const char* name = expression->name.lexeme;
 
     ClassStmt* class = data_type.class;
-    VarStmt* variable = get_class_member(class, expression->name, name, false);
+    VarStmt* variable = map_get_var_stmt(class->members, name);
 
     if (!variable)
     {
@@ -2021,7 +2064,7 @@ static DataType check_index_expression(IndexExpr* expression)
   else if (expr_data_type.type == TYPE_OBJECT)
   {
     ClassStmt* class = expr_data_type.class;
-    VarStmt* variable = get_class_member(class, expression->expr_token, "__get__", false);
+    VarStmt* variable = map_get_var_stmt(class->members, "__get__");
 
     if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
     {
@@ -2298,46 +2341,9 @@ static void check_while_statement(WhileStmt* statement)
 
 static void check_variable_declaration(VarStmt* statement)
 {
-  Environment* environment = checker.environment;
-  const char* name = statement->name.lexeme;
-
-  if (checker.function)
+  if (statement->scope == SCOPE_NONE)
   {
-    statement->function = checker.function;
-    statement->scope = SCOPE_LOCAL;
-    statement->index =
-      array_size(&checker.function->variables) + array_size(&checker.function->parameters);
-  }
-  else if (checker.class)
-  {
-    statement->scope = SCOPE_CLASS;
-  }
-  else
-  {
-    if (environment == checker.global_environment)
-    {
-      statement->scope = SCOPE_GLOBAL;
-    }
-    else
-    {
-      statement->scope = SCOPE_LOCAL;
-      statement->index = array_size(&checker.global_locals);
-      array_add(&checker.global_locals, statement);
-    }
-  }
-
-  if (environment_check_variable(environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-    return;
-  }
-
-  statement->data_type = data_type_token_to_data_type(statement->type);
-
-  if (statement->data_type.type == TYPE_VOID)
-  {
-    error_type_cannot_be_void(statement->type.token);
-    return;
+    init_variable_declaration(statement);
   }
 
   if (statement->initializer)
@@ -2352,13 +2358,6 @@ static void check_variable_declaration(VarStmt* statement)
       error_type_mismatch(statement->equals, statement->data_type, initializer_data_type);
     }
   }
-
-  if (checker.function)
-  {
-    array_add(&checker.function->variables, statement);
-  }
-
-  environment_set_variable(environment, name, statement);
 }
 
 static void check_get_function_declaration(FuncStmt* function)
@@ -2426,10 +2425,10 @@ static void check_function_declaration(FuncStmt* statement)
   }
 
   FuncStmt* previous_function = checker.function;
-  Environment* previous_environment = checker.environment;
-
-  checker.environment = environment_init(checker.environment);
   checker.function = statement;
+
+  Environment* previous_environment = checker.environment;
+  checker.environment = environment_init(checker.environment);
 
   int index = 0;
   VarStmt* parameter;
@@ -2486,8 +2485,8 @@ static void check_function_declaration(FuncStmt* statement)
     check_binary_overload_function_declaration(statement, "__ne__");
   }
 
-  checker.function = previous_function;
   checker.environment = previous_environment;
+  checker.function = previous_function;
 }
 
 static void check_set_get_function_declarations(ClassStmt* statement)
@@ -2521,47 +2520,25 @@ static void check_set_get_function_declarations(ClassStmt* statement)
 
 static void check_class_declaration(ClassStmt* statement)
 {
-  if (checker.function || checker.loop)
+  if (checker.function || checker.loop || checker.class)
   {
     error_unexpected_class(statement->name);
     return;
   }
 
-  if (statement->initializing)
-  {
-    return;
-  }
-
-  statement->initializing = true;
-
   ClassStmt* previous_class = checker.class;
-  checker.environment = environment_init(checker.environment);
   checker.class = statement;
-  checker.class->members = &checker.environment->variables;
 
-  FuncStmt* function_statement;
-  array_foreach(&statement->functions, function_statement)
-  {
-    init_function_declaration(function_statement);
+  Environment* previous_environment = checker.environment;
+  checker.environment = statement->environment;
 
-    const char* class_name = statement->name.lexeme;
-    const char* function_name = function_statement->name.lexeme;
-
-    function_statement->data_type = data_type_token_to_data_type(function_statement->type);
-    function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
-  }
-
-  int count = 0;
   VarStmt* variable_statement;
   array_foreach(&statement->variables, variable_statement)
   {
-    variable_statement->index = count++;
-
     check_variable_declaration(variable_statement);
   }
 
-  statement->declared = true;
-
+  FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)
   {
     check_function_declaration(function_statement);
@@ -2569,8 +2546,17 @@ static void check_class_declaration(ClassStmt* statement)
 
   check_set_get_function_declarations(statement);
 
+  checker.environment = previous_environment;
   checker.class = previous_class;
-  checker.environment = checker.environment->parent;
+}
+
+static void check_class_template_declaration(ClassTemplateStmt* statement)
+{
+  ClassStmt* class_statement;
+  array_foreach(&statement->classes, class_statement)
+  {
+    check_class_declaration(class_statement);
+  }
 }
 
 static void check_import_declaration(ImportStmt* statement)
@@ -2691,13 +2677,66 @@ void checker_init(ArrayStmt statements)
 void checker_validate(void)
 {
   Stmt* statement;
+
   array_foreach(&checker.statements, statement)
   {
-    init_statement(statement);
+    checker.error = false;
+
+    switch (statement->type)
+    {
+    case STMT_CLASS_DECL:
+      init_class_declaration(&statement->class);
+      break;
+    case STMT_CLASS_TEMPLATE_DECL:
+      init_class_template_declaration(&statement->class_template);
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  array_foreach(&checker.statements, statement)
+  {
+    checker.error = false;
+
+    switch (statement->type)
+    {
+    case STMT_FUNCTION_DECL:
+      init_function_declaration(&statement->func);
+      break;
+    case STMT_CLASS_DECL:
+      init_class_declaration_body(&statement->class);
+      break;
+    case STMT_IMPORT_DECL:
+      init_import_declaration(&statement->import);
+      break;
+    case STMT_VARIABLE_DECL:
+      init_variable_declaration(&statement->var);
+      break;
+
+    default:
+      break;
+    }
   }
 
   array_foreach(&checker.statements, statement)
   {
     check_statement(statement, true);
+  }
+
+  array_foreach(&checker.statements, statement)
+  {
+    checker.error = false;
+
+    switch (statement->type)
+    {
+    case STMT_CLASS_TEMPLATE_DECL:
+      check_class_template_declaration(&statement->class_template);
+      break;
+
+    default:
+      break;
+    }
   }
 }

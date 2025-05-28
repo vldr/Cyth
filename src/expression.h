@@ -38,6 +38,7 @@ array_def(struct _DATA_TYPE, DataType);
 
 typedef enum _SCOPE
 {
+  SCOPE_NONE,
   SCOPE_LOCAL,
   SCOPE_GLOBAL,
   SCOPE_CLASS

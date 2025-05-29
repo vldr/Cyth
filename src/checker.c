@@ -20,6 +20,7 @@ static struct
 
   FuncStmt* function;
   ClassStmt* class;
+  ClassTemplateStmt* class_template;
   WhileStmt* loop;
 
   ArrayLiteralArrayExpr* array;
@@ -41,6 +42,11 @@ static void checker_error(Token token, const char* message)
 {
   if (checker.error)
     return;
+
+  if (checker.class_template && checker.class)
+    message =
+      memory_sprintf("%s (occurred when creating %s at %d:%d)", message, checker.class->name.lexeme,
+                     checker.class->name.start_line, checker.class->name.start_column);
 
   error(token.start_line, token.start_column, token.end_line, token.end_column, message);
   checker.error = true;
@@ -99,7 +105,8 @@ static void error_cannot_find_name(Token token, const char* name)
 
 static void error_cannot_access_name_outside_function(Token token, const char* name)
 {
-  checker_error(token, memory_sprintf("Cannot access '%s' outside function.", name));
+  checker_error(token,
+                memory_sprintf("Cannot access '%s' because it is outside of the function.", name));
 }
 
 static void error_cannot_find_member_name(Token token, const char* name, DataType data_type)
@@ -568,6 +575,10 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
 
   ClassStmt* class_statement = &statement->class;
   class_statement->name.lexeme = name;
+  class_statement->name.start_line = template_type.token.start_line;
+  class_statement->name.end_line = template_type.token.end_line;
+  class_statement->name.start_column = template_type.token.start_column;
+  class_statement->name.end_column = template_type.token.end_column;
 
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
@@ -2444,6 +2455,7 @@ static void check_function_declaration(FuncStmt* statement)
 
     parameter->scope = SCOPE_LOCAL;
     parameter->index = index++;
+    parameter->function = statement;
 
     environment_set_variable(checker.environment, name, parameter);
   }
@@ -2552,11 +2564,16 @@ static void check_class_declaration(ClassStmt* statement)
 
 static void check_class_template_declaration(ClassTemplateStmt* statement)
 {
+  ClassTemplateStmt* previous_class_template = checker.class_template;
+  checker.class_template = statement;
+
   ClassStmt* class_statement;
   array_foreach(&statement->classes, class_statement)
   {
     check_class_declaration(class_statement);
   }
+
+  checker.class_template = previous_class_template;
 }
 
 static void check_import_declaration(ImportStmt* statement)

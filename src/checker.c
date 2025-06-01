@@ -923,6 +923,7 @@ static void init_function_declaration(FuncStmt* statement)
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
   variable->type = statement->type;
+  variable->scope = SCOPE_GLOBAL;
   variable->initializer = NULL;
   variable->function = NULL;
 
@@ -1480,7 +1481,8 @@ static DataType check_variable_expression(VarExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
-  if (variable->function && variable->function != checker.function)
+  if (variable->scope != SCOPE_GLOBAL && variable->scope != SCOPE_CLASS &&
+      variable->function != checker.function)
   {
     error_cannot_access_name_outside_function(expression->name, name);
     return DATA_TYPE(TYPE_VOID);

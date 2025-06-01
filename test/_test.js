@@ -57,7 +57,7 @@ for await (const path of glob.scan(".")) {
     const text = await file.text();
     const expectedLogs = text
       .split("\n")
-      .filter((line) => line.includes("#"))
+      .filter((line) => line.startsWith("#") && !line.startsWith("#!"))
       .map((line) =>
         line
           .substring(line.indexOf("#") + 1)
@@ -69,6 +69,21 @@ for await (const path of glob.scan(".")) {
           .replaceAll("\\f", "\f")
           .trimStart()
       );
+
+    const expectedErrors = text
+      .split("\n")
+      .filter((line) => line.startsWith("#!"))
+      .map((line) => {
+        const matches = line.match(/^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/);
+
+        return {
+          startLineNumber: parseInt(matches[1]),
+          startColumn: parseInt(matches[2]),
+          endLineNumber: parseInt(matches[3]),
+          endColumn: parseInt(matches[4]),
+          message: matches[5]
+        }
+      });
 
     errors.length = 0;
     logs.length = 0;
@@ -101,7 +116,7 @@ for await (const path of glob.scan(".")) {
       result.instance.exports["<start>"]();
     }
 
-    expect(errors).toBeEmpty();
+    expect(errors).toEqual(expectedErrors);
     expect(logs).toEqual(expectedLogs);
   });
 }

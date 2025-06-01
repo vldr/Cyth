@@ -22,7 +22,7 @@ if (EMSCRIPTEN)
                      -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_run,_set_error_callback,_set_result_callback)
 
     add_custom_target(test
-        COMMAND bun test --bail tests/
+        COMMAND bun test --bail test/
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )

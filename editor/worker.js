@@ -151,6 +151,7 @@ onmessage = (event) => {
           },
 
           sqrt: Math.sqrt,
+          random: Math.random,
         },
       });
 

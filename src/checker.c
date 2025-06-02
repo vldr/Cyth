@@ -269,6 +269,11 @@ static void error_cannot_duduce_conflicting_type(Token token)
   checker_error(token, "This type conflicts with the other deduced types.");
 }
 
+static void error_array_type_is_uninferred(Token token)
+{
+  checker_error(token, "The array type is uninferred so it cannot be used here.");
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -1730,6 +1735,12 @@ static DataType check_call_expression(CallExpr* expression)
 
     if (number_of_arguments != expected_number_of_arguments)
     {
+      if (callee_data_type.function_internal.this)
+      {
+        number_of_arguments--;
+        expected_number_of_arguments--;
+      }
+
       error_invalid_arity(expression->callee_token, expected_number_of_arguments,
                           number_of_arguments);
       return DATA_TYPE(TYPE_VOID);
@@ -1885,6 +1896,12 @@ static DataType check_access_expression(AccessExpr* expression)
   }
   else if (data_type.type == TYPE_ARRAY)
   {
+    if (data_type.array.data_type->type == TYPE_VOID)
+    {
+      error_array_type_is_uninferred(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0 || strcmp("capacity", name) == 0)
     {
@@ -2088,6 +2105,12 @@ static DataType check_index_expression(IndexExpr* expression)
     if (index_data_type.type != TYPE_INTEGER)
     {
       error_index_not_an_int(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    if (expr_data_type.array.data_type->type == TYPE_VOID)
+    {
+      error_array_type_is_uninferred(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
     }
 

@@ -932,7 +932,7 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   }
 }
 
-static const char* generate_array_push_function(DataType data_type)
+static const char* generate_array_push_function(DataType this_data_type, DataType value_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
@@ -942,13 +942,10 @@ static const char* generate_array_push_function(DataType data_type)
 #define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
-  DataType element_data_type =
-    array_data_type_element(array_at(&data_type.function_internal.parameter_types, 0));
+  DataType element_data_type = array_data_type_element(this_data_type);
 
-  BinaryenType this_type =
-    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 0));
-  BinaryenType value_type =
-    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 1));
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+  BinaryenType value_type = data_type_to_binaryen_type(value_data_type);
 
   const char* name = memory_sprintf("array.push.%d", this_type);
 
@@ -1010,7 +1007,7 @@ static const char* generate_array_push_function(DataType data_type)
 #undef CONSTANT
 }
 
-static const char* generate_array_pop_function(DataType data_type)
+static const char* generate_array_pop_function(DataType this_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
@@ -1019,11 +1016,9 @@ static const char* generate_array_pop_function(DataType data_type)
 #define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
-  DataType element_data_type =
-    array_data_type_element(array_at(&data_type.function_internal.parameter_types, 0));
+  DataType element_data_type = array_data_type_element(this_data_type);
 
-  BinaryenType this_type =
-    data_type_to_binaryen_type(array_at(&data_type.function_internal.parameter_types, 0));
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
   BinaryenType element_type = data_type_to_binaryen_type(element_data_type);
 
   const char* name = memory_sprintf("array.pop.%d", this_type);
@@ -1064,6 +1059,116 @@ static const char* generate_array_pop_function(DataType data_type)
 #undef ARRAY
 #undef CAPACITY
 #undef SIZE
+#undef CONSTANT
+}
+
+static const char* generate_array_reserve_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define AMOUNT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define COUNTER()                                                                                  \
+  (BinaryenLocalGet(codegen.module, this_data_type.array.count + 1, BinaryenTypeInt32()))
+#define SUBTHIS() (BinaryenLocalGet(codegen.module, this_data_type.array.count + 2, element_type))
+
+#define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  DataType element_data_type = array_data_type_element(this_data_type);
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+  BinaryenType element_type = data_type_to_binaryen_type(element_data_type);
+
+  const char* name = memory_sprintf("array.reserve.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef loop;
+
+    if (this_data_type.array.count > 1)
+    {
+      const char* block_name = "array.reserve.block";
+      const char* loop_name = "array.reserve.loop";
+
+      ArrayBinaryenExpressionRef operands;
+      array_init(&operands);
+      array_add(&operands, SUBTHIS());
+
+      for (int i = 2; i <= this_data_type.array.count; i++)
+        array_add(&operands, BinaryenLocalGet(codegen.module, i, BinaryenTypeInt32()));
+
+      BinaryenExpressionRef reserve =
+        BinaryenCall(codegen.module, generate_array_reserve_function(element_data_type),
+                     operands.elems, operands.size, BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, block_name,
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), COUNTER(), AMOUNT()),
+                      NULL),
+
+        BinaryenLocalSet(codegen.module, this_data_type.array.count + 2,
+                         generate_default_initialization(element_data_type)),
+
+        reserve,
+
+        BinaryenArraySet(codegen.module, ARRAY(), COUNTER(), SUBTHIS()),
+
+        BinaryenLocalSet(
+          codegen.module, this_data_type.array.count + 1,
+          BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
+
+        BinaryenBreak(codegen.module, loop_name, NULL, NULL)
+      };
+
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, block_name, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+
+      loop = BinaryenLoop(codegen.module, loop_name, loop_block);
+    }
+    else
+    {
+      loop = BinaryenNop(codegen.module);
+    }
+
+    BinaryenType array_type = BinaryenExpressionGetType(
+      BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false));
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenStructSet(codegen.module, 0, THIS(),
+                        BinaryenArrayNew(codegen.module, array_type, AMOUNT(),
+                                         generate_default_initialization(element_data_type))),
+      BinaryenStructSet(codegen.module, 1, THIS(), AMOUNT()),
+
+      loop,
+    };
+
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    ArrayBinaryenType params_list;
+    array_init(&params_list);
+    array_add(&params_list, this_type);
+
+    for (int i = 0; i < this_data_type.array.count; i++)
+      array_add(&params_list, BinaryenTypeInt32());
+
+    BinaryenType params = BinaryenTypeCreate(params_list.elems, params_list.size);
+
+    BinaryenType results = BinaryenTypeNone();
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), element_type };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef THIS
+#undef AMOUNT
+#undef COUNTER
+#undef SUBTHIS
+#undef ARRAY
 #undef CONSTANT
 }
 
@@ -1205,9 +1310,13 @@ static const char* generate_function_internal(DataType data_type)
   const char* name = data_type.function_internal.name;
 
   if (strcmp(name, "array.push") == 0)
-    return generate_array_push_function(data_type);
+    return generate_array_push_function(array_at(&data_type.function_internal.parameter_types, 0),
+                                        array_at(&data_type.function_internal.parameter_types, 1));
   else if (strcmp(name, "array.pop") == 0)
-    return generate_array_pop_function(data_type);
+    return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.reserve") == 0)
+    return generate_array_reserve_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();
   else if (strcmp(name, "float.sqrt") == 0)

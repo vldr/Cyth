@@ -335,11 +335,12 @@ static Expr* primary(void)
 
     break;
   case TOKEN_INTEGER:
+  case TOKEN_HEX_INTEGER:
     advance();
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_INTEGER);
-    expr->literal.integer = strtoul(token.lexeme, NULL, 10);
+    expr->literal.integer = strtoul(token.lexeme, NULL, token.type == TOKEN_INTEGER ? 10 : 16);
 
     break;
   case TOKEN_FLOAT:

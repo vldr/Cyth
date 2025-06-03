@@ -226,6 +226,24 @@ static void text(TokenType token_type, char terminator)
   add_custom_token(token_type, lexer.start + 1, (int)(lexer.current - lexer.start - shifts - 2));
 }
 
+static void hex(void)
+{
+  advance();
+
+  while (isxdigit(peek()))
+    advance();
+
+  int length = (int)(lexer.current - lexer.start - 2);
+  if (!length)
+  {
+    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+          "Invalid hexadecimal literal.");
+    return;
+  }
+
+  add_custom_token(TOKEN_HEX_INTEGER, lexer.start + 2, length);
+}
+
 static void number(void)
 {
   TokenType type = TOKEN_INTEGER;
@@ -513,7 +531,11 @@ static void scan_token(void)
   default:
     if (isdigit(c))
     {
-      number();
+      if (peek() == 'x')
+        hex();
+      else
+        number();
+
       break;
     }
     else if (isalpha(c) || c == '_' || c == '#')
@@ -703,6 +725,7 @@ void lexer_print(void)
       "TOKEN_CHAR",
       "TOKEN_STRING",
       "TOKEN_INTEGER",
+      "TOKEN_HEX_INTEGER",
       "TOKEN_FLOAT",
 
       "TOKEN_AND",

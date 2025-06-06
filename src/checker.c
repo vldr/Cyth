@@ -869,7 +869,6 @@ static void init_function_declaration(FuncStmt* statement)
   if (environment_check_variable(checker.environment, name))
   {
     error_name_already_exists(statement->name, name);
-    return;
   }
 
   if (checker.function)
@@ -1717,7 +1716,7 @@ static DataType check_call_expression(CallExpr* expression)
     if (callee_data_type.function_internal.this)
     {
       ArrayExpr arguments;
-      Expr* argument = callee_data_type.function_member.this;
+      Expr* argument = callee_data_type.function_internal.this;
 
       array_init(&arguments);
       array_add(&arguments, argument);
@@ -1883,14 +1882,12 @@ static DataType check_access_expression(AccessExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (variable->data_type.type == TYPE_FUNCTION_MEMBER)
-    {
-      variable->data_type.function_member.this = expression->expr;
-    }
-
     expression->variable = variable;
     expression->data_type = variable->data_type;
     expression->expr_data_type = data_type;
+
+    if (expression->data_type.type == TYPE_FUNCTION_MEMBER)
+      expression->data_type.function_member.this = expression->expr;
 
     return expression->data_type;
   }

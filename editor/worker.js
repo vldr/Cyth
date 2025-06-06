@@ -150,6 +150,12 @@ onmessage = (event) => {
             context.fillRect(x, y, width, height);
           },
 
+          circle: function (x, y, radius) {
+            context.beginPath();
+            context.arc(x, y, radius, 0, 2 * Math.PI, false);
+            context.fill();
+          },
+
           sqrt: Math.sqrt,
           random: Math.random,
         },
@@ -163,6 +169,30 @@ onmessage = (event) => {
 
       if (!instance.exports["draw"]) {
         postMessage({ type: "stop" });
+      }
+
+      break;
+    }
+
+    case "keydown": {
+      if (instance.exports["keyPressed"]) {
+        try {
+          instance.exports["keyPressed"](data.key);
+        } catch (error) {
+          onerror(error);
+        }
+      }
+
+      break;
+    }
+
+    case "keyup": {
+      if (instance.exports["keyReleased"]) {
+        try {
+          instance.exports["keyReleased"](data.key);
+        } catch (error) {
+          onerror(error);
+        }
       }
 
       break;

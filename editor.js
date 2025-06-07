@@ -267,7 +267,7 @@ class EditorTabs {
       this.tabIndex = 0;
       this.tabs.push({
         name: "snake",
-        text: `import "env"\n  float random()\n  void log(string n)\n  void size(int width, int height)\n  void fill(int r, int g, int b)\n  void rect(int x, int y, int width, int height)\n  void circle(int x, int y, int radius)\n  void clear()\n\nGame game = Game(25, 25, 500, 500)\n\nvoid keyPressed(char key)\n  game.input(key)\n\nvoid draw(int time)\n  game.update(time)\n  game.draw()\n\nclass Game\n  float ticksPerSecond\n  float tickLength\n  float delta\n  int deltaTicks\n  int lastTime\n\n  int height\n  int width\n  Vector resolution\n\n  Snake snake\n  Apple apple\n\n  void __init__(int width, int height, int windowWidth, int windowHeight)\n    this.ticksPerSecond = 10.0\n    this.tickLength = 1000.0 / ticksPerSecond\n\n    this.width = width\n    this.height = height\n    this.resolution = Vector(windowWidth / width, windowHeight / height)\n\n    this.snake = Snake(width / 2 * resolution.x, (height - 1) * resolution.y)\n    this.apple = Apple(width / 2 * resolution.x, height / 2 * resolution.y)\n\n    size(windowWidth, windowHeight)\n\n  void update(int time)\n    delta += (float)(time - lastTime) / tickLength\n    deltaTicks = (int)delta\n    delta -= (float)deltaTicks\n    lastTime = time\n\n    for int i = 0; i < deltaTicks; i += 1\n      snake.update()\n      apple.update()\n\n  void draw()\n    fill(0, 0, 0)\n    clear()\n\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        int color = 30\n        if (x + y) % 2 == 0\n          color = 20\n\n        fill(color, color, color)\n        rect(x * resolution.x, y * resolution.y, resolution.x, resolution.y)\n\n    apple.draw()\n    snake.draw()\n\n  void input(char key)\n    if snake.dead\n      return\n\n    char up = (char)38\n    char down = (char)40\n    char left = (char)37\n    char right = (char)39\n\n    if key == up and (snake.body.length == 1 or snake.direction.y == 0)\n      snake.direction.y = -1\n      snake.direction.x = 0\n    else if key == down and (snake.body.length == 1 or snake.direction.y == 0)\n      snake.direction.y = 1\n      snake.direction.x = 0\n    else if key == left and (snake.body.length == 1 or snake.direction.x == 0)\n      snake.direction.y = 0\n      snake.direction.x = -1\n    else if key == right and (snake.body.length == 1 or snake.direction.x == 0)\n      snake.direction.y = 0\n      snake.direction.x = 1\n\n  int[] hsvToRgb(float h, float s, float v) \n    float r\n    float g\n    float b\n    \n    int i = (int)(h * 6)\n    float f = h * 6 - i\n    float p = v * (1 - s)\n    float q = v * (1 - f * s)\n    float t = v * (1 - (1 - f) * s)\n\n    i %= 6\n\n    if i == 0\n      r = v\n      g = t\n      b = p\n    else if i == 1\n      r = q\n      g = v\n      b = p\n    else if i == 2\n      r = p\n      g = v\n      b = t\n    else if i == 3\n      r = p\n      g = q\n      b = v\n    else if i == 4\n      r = t\n      g = p\n      b = v\n    else\n      r = v\n      g = p\n      b = q\n\n    int[] rgb\n    rgb.push((int)(r * 255))\n    rgb.push((int)(g * 255))\n    rgb.push((int)(b * 255))\n\n    return rgb\n\nclass Snake\n  Vector[] body\n  Vector[] oldBody\n\n  Vector direction\n  bool dead\n\n  void __init__(int x, int y)\n    direction = Vector(0, -1)\n    body.push(Vector(x, y))\n    oldBody.push(Vector(x, y))\n\n  void update()\n    if dead\n      body.pop()\n      oldBody.pop()\n\n      if body.length > 1\n        return\n      \n      dead = false\n  \n    for int i = 0; i < body.length; i += 1\n      oldBody[i].x = body[i].x\n      oldBody[i].y = body[i].y\n\n    for int i = body.length - 1; i > 0; i -= 1\n      if body[i] == body[0]\n        game.apple.hue = 0.0\n        dead = true\n        return\n\n    for int i = body.length - 1; i > 0; i -= 1\n      body[i].x = body[i - 1].x\n      body[i].y = body[i - 1].y\n\n    body[0] += direction * game.resolution\n\n    if body[0] == game.apple.position\n      body.push(body[0] + direction * game.resolution)\n      oldBody.push(body[0].clone())\n\n    if body[0].x < 0\n      body[0].x = (game.width - 1) * game.resolution.x\n    else if body[0].x >= game.width * game.resolution.x\n      body[0].x = 0\n    \n    if body[0].y < 0\n      body[0].y = (game.height - 1) * game.resolution.y\n    else if body[0].y >= game.height * game.resolution.y\n      body[0].y = 0\n\n  void draw()\n    for int i = 0; i < body.length; i += 1\n      if dead\n        fill(100, 100, 100)\n      else if i == 0\n        fill(255, 255, 255)\n      else\n        int[] rgb = game.hsvToRgb((i - 1) * 0.05, 1.0, 1.0)\n        fill(rgb[0], rgb[1], rgb[2])\n\n      Vector difference = body[i] - oldBody[i]\n      if difference.x == game.width * game.resolution.x - game.resolution.x\n        difference = Vector(-game.resolution.x, 0)\n      if difference.x == -game.width * game.resolution.x + game.resolution.x\n        difference = Vector(game.resolution.x, 0)\n      if difference.y == game.height * game.resolution.y - game.resolution.y\n        difference = Vector(0, -game.resolution.y)\n      if difference.y == -game.height * game.resolution.y + game.resolution.y\n        difference = Vector(0, game.resolution.y)\n\n      difference.x = (int)(difference.x * game.delta)\n      difference.y = (int)(difference.y * game.delta)\n\n      Vector position = oldBody[i] + difference\n      circle(position.x + game.resolution.x / 2, position.y + game.resolution.y / 2, game.resolution.x / 2)\n\nclass Apple\n  Vector position\n  float hue\n\n  void __init__(int x, int y)\n    position = Vector(x, y)\n\n  void update()\n    if position == game.snake.body[0]\n      int randomX = (int)((game.width - 1) * random()) * game.resolution.x\n      int randomY = (int)((game.height - 1) * random()) * game.resolution.y\n      \n      position.x = randomX\n      position.y = randomY\n      hue += 0.05\n\n  void draw()\n    int[] rgb = game.hsvToRgb(hue, 1.0, 1.0)\n    fill(rgb[0], rgb[1], rgb[2])\n    circle(position.x + game.resolution.x / 2, position.y + game.resolution.y / 2, game.resolution.x / 2)\n\nclass Vector\n  int x\n  int y\n\n  void __init__(int x, int y)\n    this.x = x\n    this.y = y\n\n  Vector __add__(Vector other)\n    return Vector(x + other.x, y + other.y)\n\n  Vector __sub__(Vector other)\n    return Vector(x - other.x, y - other.y)\n\n  Vector __mul__(Vector other)\n    return Vector(x * other.x, y * other.y)\n\n  bool __eq__(Vector other)\n    return x == other.x and y == other.y\n\n  Vector clone()\n    return Vector(x, y)`,
+        text: `import "env"\n  float random()\n  void log(string n)\n  void size(int width, int height)\n  void fill(int r, int g, int b)\n  void rect(int x, int y, int width, int height)\n  void circle(int x, int y, int radius)\n  void clear()\n\nGame game = Game(25, 25, 500, 500)\n\nvoid keyPressed(char key)\n  game.input(key)\n\nvoid draw(int time)\n  game.update(time)\n  game.draw()\n\nclass Game\n  float ticksPerSecond\n  float tickLength\n  float delta\n  int deltaTicks\n  int lastTime\n\n  int height\n  int width\n  Vector resolution\n\n  Snake snake\n  Apple apple\n\n  void __init__(int width, int height, int windowWidth, int windowHeight)\n    this.ticksPerSecond = 10.0\n    this.tickLength = 1000.0 / ticksPerSecond\n\n    this.width = width\n    this.height = height\n    this.resolution = Vector(windowWidth / width, windowHeight / height)\n\n    this.snake = Snake(width / 2 * resolution.x, (height - 1) * resolution.y)\n    this.apple = Apple(width / 2 * resolution.x, height / 2 * resolution.y)\n\n    size(windowWidth, windowHeight)\n\n  void update(int time)\n    delta += (float)(time - lastTime) / tickLength\n    deltaTicks = (int)delta\n    delta -= (float)deltaTicks\n    lastTime = time\n\n    for int i = 0; i < deltaTicks; i += 1\n      snake.update()\n      apple.update()\n\n  void draw()\n    fill(0, 0, 0)\n    clear()\n\n    for int x = 0; x < width; x += 1\n      for int y = 0; y < height; y += 1\n        int color = 30\n        if (x + y) % 2 == 0\n          color = 20\n\n        fill(color, color, color)\n        rect(x * resolution.x, y * resolution.y, resolution.x, resolution.y)\n\n    apple.draw()\n    snake.draw()\n\n  void input(char key)\n    if snake.dead\n      return\n\n    char up = (char)38\n    char down = (char)40\n    char left = (char)37\n    char right = (char)39\n\n    if key == up and (snake.body.length == 1 or snake.body[0].y <= snake.body[1].y)\n      snake.direction.x = 0\n      snake.direction.y = -1\n    else if key == down and (snake.body.length == 1 or snake.body[0].y >= snake.body[1].y)\n      snake.direction.x = 0\n      snake.direction.y = 1\n    else if key == left and (snake.body.length == 1 or snake.body[0].x <= snake.body[1].x)\n      snake.direction.x = -1\n      snake.direction.y = 0\n    else if key == right and (snake.body.length == 1 or snake.body[0].x >= snake.body[1].x)\n      snake.direction.x = 1\n      snake.direction.y = 0\n\n  int hsvToRgb(float h, float s, float v) \n    float r\n    float g\n    float b\n    \n    int i = (int)(h * 6)\n    float f = h * 6 - i\n    float p = v * (1 - s)\n    float q = v * (1 - f * s)\n    float t = v * (1 - (1 - f) * s)\n\n    i %= 6\n\n    if i == 0\n      r = v\n      g = t\n      b = p\n    else if i == 1\n      r = q\n      g = v\n      b = p\n    else if i == 2\n      r = p\n      g = v\n      b = t\n    else if i == 3\n      r = p\n      g = q\n      b = v\n    else if i == 4\n      r = t\n      g = p\n      b = v\n    else\n      r = v\n      g = p\n      b = q\n\n    int rgb\n    rgb |= (int)(r * 255) << 16\n    rgb |= (int)(g * 255) << 8\n    rgb |= (int)(b * 255)\n\n    return rgb\n\nclass Snake\n  Vector[] body\n  Vector[] oldBody\n\n  Vector direction\n  bool dead\n\n  void __init__(int x, int y)\n    direction = Vector(0, -1)\n    body.push(Vector(x, y))\n    oldBody.push(Vector(x, y))\n\n  void update()\n    if dead\n      body.pop()\n      oldBody.pop()\n\n      if body.length > 1\n        return\n      \n      dead = false\n  \n    for int i = 0; i < body.length; i += 1\n      oldBody[i].x = body[i].x\n      oldBody[i].y = body[i].y\n\n    for int i = body.length - 1; i > 0; i -= 1\n      if body[i] == body[0]\n        game.apple.hue = 0.0\n        dead = true\n        return\n\n    for int i = body.length - 1; i > 0; i -= 1\n      body[i].x = body[i - 1].x\n      body[i].y = body[i - 1].y\n\n    body[0] += direction * game.resolution\n\n    if body[0] == game.apple.position\n      body.push(body[0] + direction * game.resolution)\n      oldBody.push(body[0].clone())\n\n    if body[0].x < 0\n      body[0].x = (game.width - 1) * game.resolution.x\n    else if body[0].x >= game.width * game.resolution.x\n      body[0].x = 0\n    \n    if body[0].y < 0\n      body[0].y = (game.height - 1) * game.resolution.y\n    else if body[0].y >= game.height * game.resolution.y\n      body[0].y = 0\n\n  void draw()\n    for int i = 0; i < body.length; i += 1\n      if dead\n        fill(100, 100, 100)\n      else if i == 0\n        fill(255, 255, 255)\n      else\n        int rgb = game.hsvToRgb((i - 1) * 0.05, 1.0, 1.0)\n        \n        fill(rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF)\n\n      Vector difference = body[i] - oldBody[i]\n      if difference.x == game.width * game.resolution.x - game.resolution.x\n        difference = Vector(-game.resolution.x, 0)\n      if difference.x == -game.width * game.resolution.x + game.resolution.x\n        difference = Vector(game.resolution.x, 0)\n      if difference.y == game.height * game.resolution.y - game.resolution.y\n        difference = Vector(0, -game.resolution.y)\n      if difference.y == -game.height * game.resolution.y + game.resolution.y\n        difference = Vector(0, game.resolution.y)\n\n      difference.x = (int)(difference.x * game.delta)\n      difference.y = (int)(difference.y * game.delta)\n\n      Vector position = oldBody[i] + difference\n      circle(position.x + game.resolution.x / 2, position.y + game.resolution.y / 2, game.resolution.x / 2)\n\nclass Apple\n  Vector position\n  float hue\n\n  void __init__(int x, int y)\n    position = Vector(x, y)\n\n  void update()\n    if position == game.snake.body[0]\n      int randomX = (int)((game.width - 1) * random()) * game.resolution.x\n      int randomY = (int)((game.height - 1) * random()) * game.resolution.y\n      \n      position.x = randomX\n      position.y = randomY\n      hue += 0.05\n\n  void draw()\n    int rgb = game.hsvToRgb(hue, 1.0, 1.0)\n\n    fill(rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF)\n    circle(position.x + game.resolution.x / 2, position.y + game.resolution.y / 2, game.resolution.x / 2)\n\nclass Vector\n  int x\n  int y\n\n  void __init__(int x, int y)\n    this.x = x\n    this.y = y\n\n  Vector __add__(Vector other)\n    return Vector(x + other.x, y + other.y)\n\n  Vector __sub__(Vector other)\n    return Vector(x - other.x, y - other.y)\n\n  Vector __mul__(Vector other)\n    return Vector(x * other.x, y * other.y)\n\n  bool __eq__(Vector other)\n    return x == other.x and y == other.y\n\n  Vector clone()\n    return Vector(x, y)`,
       });
       this.tabs.push({
         name: "prospero",
@@ -412,213 +412,203 @@ class EditorTabs {
 }
 
 class Editor {
-  constructor() {
-    require.config({
-      paths: {
-        vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.21.2/min/vs",
-      },
-    });
-  }
-
   init() {
     Module._set_error_callback(
       Module.addFunction(this.onError.bind(this), "viiiii")
     );
 
-    require(["vs/editor/editor.main"], () => {
-      monaco.languages.register({ id: "cyth" });
-      monaco.languages.setLanguageConfiguration("cyth", {
-        surroundingPairs: [
-          { open: "{", close: "}" },
-          { open: "(", close: ")" },
-          { open: "[", close: "]" },
-        ],
-        autoClosingPairs: [
-          { open: "{", close: "}" },
-          { open: "(", close: ")" },
-          { open: "[", close: "]" },
-        ],
-        brackets: [
-          ["{", "}"],
-          ["(", ")"],
-          ["[", "]"],
-        ],
-        comments: { lineComment: "#" },
-      });
-
-      monaco.languages.setMonarchTokensProvider("cyth", {
-        types: [
-          "import",
-          "string",
-          "int",
-          "any",
-          "float",
-          "bool",
-          "char",
-          "class",
-          "void",
-          "null",
-          "true",
-          "false",
-          "this",
-          "and",
-          "or",
-          "not",
-          "inf",
-          "nan",
-        ],
-        keywords: ["return", "for", "while", "break", "continue", "if", "else"],
-        operators: [
-          "=",
-          ">",
-          "<",
-          "!",
-          "~",
-          "?",
-          ":",
-          "==",
-          "<=",
-          ">=",
-          "!=",
-          "&&",
-          "||",
-          "++",
-          "--",
-          "+",
-          "-",
-          "*",
-          "/",
-          "&",
-          "|",
-          "^",
-          "%",
-          "<<",
-          ">>",
-          ">>>",
-          "+=",
-          "-=",
-          "*=",
-          "/=",
-          "&=",
-          "|=",
-          "^=",
-          "%=",
-          "<<=",
-          ">>=",
-          ">>>=",
-        ],
-        symbols: /[=><!~?:&|+\-*\/\^%]+/,
-        escapes: /\\(?:[abfnrt0\\"']|x[0-9A-Fa-f]{1,2})/,
-
-        tokenizer: {
-          root: [
-            [/#.*/, "comment"],
-            [/\d+\.[fF]/, "number"],
-            [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, "number"],
-            [/0[xX][0-9a-fA-F]+[uU]/, "number"],
-            [/0[xX][0-9a-fA-F]+/, "number"],
-            [/\d+[uU]/, "number"],
-            [/\d+/, "number"],
-            [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
-            [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, [
-              {
-                cases: {
-                  "@types": "types",
-                  "@default": "function",
-                },
-              }, "default"]],
-            [
-              /[a-zA-Z_$][\w$]*/,
-              {
-                cases: {
-                  "@keywords": "keyword",
-                  "@types": "types",
-                  "@default": "identifier",
-                },
-              },
-            ],
-            [/[{}()\[\]]/, "default"],
-            [/[;,.]/, "default"],
-            [
-              /@symbols/,
-              {
-                cases: {
-                  "@operators": "operator",
-                  "@default": "",
-                },
-              },
-            ],
-            { include: "@whitespace" },
-
-            [/"/, { token: "string.quote", bracket: "@open", next: "@string" }],
-            [/'[^\\']'/, "string"],
-            [/(')(@escapes)(')/, ["string", "string.escape", "string"]],
-            [/'/, "string.invalid"],
-          ],
-
-          string: [
-            [/[^\\"]+/, "string"],
-            [/@escapes/, "string.escape"],
-            [/\\./, "string.escape.invalid"],
-            [/"/, { token: "string.quote", bracket: "@close", next: "@pop" }],
-          ],
-
-          whitespace: [[/[ \t\r\n]+/, "white"]],
-        },
-      });
-
-      monaco.editor.defineTheme("cyth", {
-        base: "vs-dark",
-        inherit: true,
-        rules: [
-          { token: "keyword", foreground: "f7a8ff" },
-          { token: "types", foreground: "00c4ff" },
-          { token: "identifier", foreground: "9cdcfe" },
-          { token: "number", foreground: "adfd84" },
-          { token: "function", foreground: "fde3a1" },
-          { token: "comment", foreground: "00af1b" },
-          { token: "operator", foreground: "c0c0c0" },
-          { token: "class", foreground: "92ffc7" },
-          { token: "default", foreground: "909090" },
-          { token: "string.escape", foreground: "f9c684" },
-        ],
-        colors: {
-          "editor.background": "#000000",
-          "editorLineNumber.foreground": "#858585",
-          "scrollbar.shadow": "#00000000",
-        },
-      });
-
-      this.errors = [];
-      this.model = monaco.editor.createModel("", "cyth");
-      this.model.updateOptions({ tabSize: 2 });
-      this.encoder = new TextEncoder();
-
-      this.editorDeltaDecorationsList = [];
-      this.editorElement = document.getElementById("editor");
-      this.editor = monaco.editor.create(this.editorElement, {
-        theme: "cyth",
-        lineNumbers: "on",
-        model: this.model,
-        automaticLayout: true,
-        scrollBeyondLastLine: true,
-        minimap: { enabled: false },
-        fixedOverflowWidgets: true,
-        accessibilitySupport: "off",
-      });
-
-      this.editorTabs = new EditorTabs(this);
-      this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);
-
-      this.editor.layout();
-      this.editor.addCommand(
-        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-        () => { }
-      );
-      this.editor.onDidChangeModelContent(() => this.onInput());
-
-      this.editorTabs.load();
+    monaco.languages.register({ id: "cyth" });
+    monaco.languages.setLanguageConfiguration("cyth", {
+      surroundingPairs: [
+        { open: "{", close: "}" },
+        { open: "(", close: ")" },
+        { open: "[", close: "]" },
+      ],
+      autoClosingPairs: [
+        { open: "{", close: "}" },
+        { open: "(", close: ")" },
+        { open: "[", close: "]" },
+      ],
+      brackets: [
+        ["{", "}"],
+        ["(", ")"],
+        ["[", "]"],
+      ],
+      comments: { lineComment: "#" },
     });
+
+    monaco.languages.setMonarchTokensProvider("cyth", {
+      types: [
+        "import",
+        "string",
+        "int",
+        "any",
+        "float",
+        "bool",
+        "char",
+        "class",
+        "void",
+        "null",
+        "true",
+        "false",
+        "this",
+        "and",
+        "or",
+        "not",
+        "inf",
+        "nan",
+      ],
+      keywords: ["return", "for", "while", "break", "continue", "if", "else"],
+      operators: [
+        "=",
+        ">",
+        "<",
+        "!",
+        "~",
+        "?",
+        ":",
+        "==",
+        "<=",
+        ">=",
+        "!=",
+        "&&",
+        "||",
+        "++",
+        "--",
+        "+",
+        "-",
+        "*",
+        "/",
+        "&",
+        "|",
+        "^",
+        "%",
+        "<<",
+        ">>",
+        ">>>",
+        "+=",
+        "-=",
+        "*=",
+        "/=",
+        "&=",
+        "|=",
+        "^=",
+        "%=",
+        "<<=",
+        ">>=",
+        ">>>=",
+      ],
+      symbols: /[=><!~?:&|+\-*\/\^%]+/,
+      escapes: /\\(?:[abfnrt0\\"']|x[0-9A-Fa-f]{1,2})/,
+
+      tokenizer: {
+        root: [
+          [/#.*/, "comment"],
+          [/\d+\.[fF]/, "number"],
+          [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, "number"],
+          [/0[xX][0-9a-fA-F]+[uU]/, "number"],
+          [/0[xX][0-9a-fA-F]+/, "number"],
+          [/\d+[uU]/, "number"],
+          [/\d+/, "number"],
+          [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
+          [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, [
+            {
+              cases: {
+                "@types": "types",
+                "@default": "function",
+              },
+            }, "default"]],
+          [
+            /[a-zA-Z_$][\w$]*/,
+            {
+              cases: {
+                "@keywords": "keyword",
+                "@types": "types",
+                "@default": "identifier",
+              },
+            },
+          ],
+          [/[{}()\[\]]/, "default"],
+          [/[;,.]/, "default"],
+          [
+            /@symbols/,
+            {
+              cases: {
+                "@operators": "operator",
+                "@default": "",
+              },
+            },
+          ],
+          { include: "@whitespace" },
+
+          [/"/, { token: "string.quote", bracket: "@open", next: "@string" }],
+          [/'[^\\']'/, "string"],
+          [/(')(@escapes)(')/, ["string", "string.escape", "string"]],
+          [/'/, "string.invalid"],
+        ],
+
+        string: [
+          [/[^\\"]+/, "string"],
+          [/@escapes/, "string.escape"],
+          [/\\./, "string.escape.invalid"],
+          [/"/, { token: "string.quote", bracket: "@close", next: "@pop" }],
+        ],
+
+        whitespace: [[/[ \t\r\n]+/, "white"]],
+      },
+    });
+
+    monaco.editor.defineTheme("cyth", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "keyword", foreground: "f7a8ff" },
+        { token: "types", foreground: "00c4ff" },
+        { token: "identifier", foreground: "9cdcfe" },
+        { token: "number", foreground: "adfd84" },
+        { token: "function", foreground: "fde3a1" },
+        { token: "comment", foreground: "00af1b" },
+        { token: "operator", foreground: "c0c0c0" },
+        { token: "class", foreground: "92ffc7" },
+        { token: "default", foreground: "909090" },
+        { token: "string.escape", foreground: "f9c684" },
+      ],
+      colors: {
+        "editor.background": "#000000",
+        "editorLineNumber.foreground": "#858585",
+        "scrollbar.shadow": "#00000000",
+      },
+    });
+
+    this.errors = [];
+    this.model = monaco.editor.createModel("", "cyth");
+    this.model.updateOptions({ tabSize: 2 });
+    this.encoder = new TextEncoder();
+
+    this.editorDeltaDecorationsList = [];
+    this.editorElement = document.getElementById("editor");
+    this.editor = monaco.editor.create(this.editorElement, {
+      theme: "cyth",
+      lineNumbers: "on",
+      model: this.model,
+      automaticLayout: true,
+      scrollBeyondLastLine: true,
+      minimap: { enabled: false },
+      fixedOverflowWidgets: true,
+      accessibilitySupport: "off",
+    });
+
+    this.editorTabs = new EditorTabs(this);
+    this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);
+
+    this.editor.layout();
+    this.editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
+      () => { }
+    );
+    this.editor.onDidChangeModelContent(() => this.onInput());
+
+    this.editorTabs.load();
   }
 
   goto(lineNumber, column) {

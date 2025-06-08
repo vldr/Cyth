@@ -181,8 +181,8 @@ class EditorConsole {
   print(text, isTextOnly) {
     const shouldScrollToBottom =
       this.consoleOutput.scrollTop +
-      this.consoleOutput.clientHeight -
-      this.consoleOutput.scrollHeight >=
+        this.consoleOutput.clientHeight -
+        this.consoleOutput.scrollHeight >=
       -5;
 
     if (isTextOnly) this.consoleOutput.textContent += text;
@@ -419,34 +419,55 @@ class Editor {
 
     monaco.languages.register({ id: "cyth" });
     monaco.languages.setLanguageConfiguration("cyth", {
-      surroundingPairs: [
-        { open: "{", close: "}" },
-        { open: "(", close: ")" },
-        { open: "[", close: "]" },
+      comments: { lineComment: "#" },
+      brackets: [
+        ["{", "}"],
+        ["(", ")"],
+        ["[", "]"],
       ],
       autoClosingPairs: [
         { open: "{", close: "}" },
         { open: "(", close: ")" },
         { open: "[", close: "]" },
       ],
-      brackets: [
-        ["{", "}"],
-        ["(", ")"],
-        ["[", "]"],
+      surroundingPairs: [
+        { open: "{", close: "}" },
+        { open: "[", close: "]" },
+        { open: "(", close: ")" },
+        { open: '"', close: '"' },
+        { open: "'", close: "'" },
       ],
-      comments: { lineComment: "#" },
+      onEnterRules: [
+        {
+          beforeText: /^\s*(return|break|continue)\b.*$/,
+          action: { indentAction: monaco.languages.IndentAction.None },
+        },
+        {
+          beforeText:
+            /^\s*[a-zA-Z_][a-zA-Z_0-9]*\s+[a-zA-Z_][a-zA-Z_0-9]*\(.*\)\s*$/,
+          action: { indentAction: monaco.languages.IndentAction.Indent },
+        },
+        {
+          beforeText: /^\s*(class|for|while|if|import)\s+.*$/,
+          action: { indentAction: monaco.languages.IndentAction.Indent },
+        },
+        {
+          beforeText: /^\s*(else\s*|else\s+if(\s+|\().*)$/,
+          action: { indentAction: monaco.languages.IndentAction.Indent },
+        },
+      ],
     });
 
     monaco.languages.setMonarchTokensProvider("cyth", {
       types: [
         "import",
+        "class",
         "string",
         "int",
         "any",
         "float",
         "bool",
         "char",
-        "class",
         "void",
         "null",
         "true",
@@ -511,13 +532,18 @@ class Editor {
           [/\d+[uU]/, "number"],
           [/\d+/, "number"],
           [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
-          [/([a-zA-Z_][a-zA-Z_0-9]*)(\()/, [
-            {
-              cases: {
-                "@types": "types",
-                "@default": "function",
+          [
+            /([a-zA-Z_][a-zA-Z_0-9]*)(\()/,
+            [
+              {
+                cases: {
+                  "@types": "types",
+                  "@default": "function",
+                },
               },
-            }, "default"]],
+              "default",
+            ],
+          ],
           [
             /[a-zA-Z_$][\w$]*/,
             {
@@ -581,9 +607,8 @@ class Editor {
     });
 
     this.errors = [];
-    this.model = monaco.editor.createModel("", "cyth");
-    this.model.updateOptions({ tabSize: 2 });
     this.encoder = new TextEncoder();
+    this.model = monaco.editor.createModel("", "cyth");
 
     this.editorDeltaDecorationsList = [];
     this.editorElement = document.getElementById("editor");
@@ -596,6 +621,7 @@ class Editor {
       minimap: { enabled: false },
       fixedOverflowWidgets: true,
       accessibilitySupport: "off",
+      tabSize: 2,
     });
 
     this.editorTabs = new EditorTabs(this);
@@ -604,7 +630,7 @@ class Editor {
     this.editor.layout();
     this.editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-      () => { }
+      () => {}
     );
     this.editor.onDidChangeModelContent(() => this.onInput());
 

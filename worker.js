@@ -131,7 +131,6 @@ onmessage = (event) => {
                 } catch (error) {
                   onerror(error);
                 }
-
               }
 
               requestAnimationFrame(render);
@@ -156,8 +155,14 @@ onmessage = (event) => {
             context.fill();
           },
 
-          sqrt: Math.sqrt,
+          millis: performance.now,
           random: Math.random,
+          sqrt: Math.sqrt,
+          cos: Math.cos,
+          sin: Math.sin,
+          tan: Math.tan,
+          atan: Math.atan,
+          atan2: Math.atan2,
         },
       });
 

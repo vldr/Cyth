@@ -1745,7 +1745,11 @@ static DataType check_call_expression(CallExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    for (int i = 0; i < number_of_arguments; i++)
+    int offset = 0;
+    if (callee_data_type.type == TYPE_FUNCTION_INTERNAL && callee_data_type.function_internal.this)
+      offset = 1;
+
+    for (int i = offset; i < number_of_arguments; i++)
     {
       Expr* argument = expression->arguments.elems[i];
 

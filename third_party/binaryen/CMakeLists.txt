@@ -16,45 +16,20 @@ add_library(binaryen src/binaryen-c.cpp src/ir/ExpressionAnalyzer.cpp src/ir/Exp
                      src/ir/module-splitting.cpp src/asmjs/asm_v_wasm.cpp src/asmjs/asmangle.cpp
                      src/asmjs/shared-constants.cpp src/cfg/Relooper.cpp src/emscripten-optimizer/optimizer-shared.cpp
                      src/emscripten-optimizer/parser.cpp src/emscripten-optimizer/simple_ast.cpp src/passes/param-utils.cpp
-                     src/passes/pass.cpp src/passes/test_passes.cpp src/passes/AbstractTypeRefining.cpp src/passes/AlignmentLowering.cpp
-                     src/passes/Asyncify.cpp src/passes/AvoidReinterprets.cpp src/passes/CoalesceLocals.cpp src/passes/CodePushing.cpp
-                     src/passes/CodeFolding.cpp src/passes/ConstantFieldPropagation.cpp src/passes/ConstHoisting.cpp
-                     src/passes/DataFlowOpts.cpp src/passes/DeadArgumentElimination.cpp src/passes/DeadCodeElimination.cpp
-                     src/passes/DeAlign.cpp src/passes/DebugLocationPropagation.cpp src/passes/DeNaN.cpp src/passes/Directize.cpp
-                     src/passes/DuplicateImportElimination.cpp src/passes/DuplicateFunctionElimination.cpp src/passes/DWARF.cpp
-                     src/passes/EncloseWorld.cpp src/passes/ExtractFunction.cpp src/passes/Flatten.cpp src/passes/FuncCastEmulation.cpp
-                     src/passes/GenerateDynCalls.cpp src/passes/GlobalEffects.cpp src/passes/GlobalRefining.cpp
-                     src/passes/GlobalStructInference.cpp src/passes/GlobalTypeOptimization.cpp src/passes/GUFA.cpp
-                     src/passes/hash-stringify-walker.cpp src/passes/Outlining.cpp src/passes/Heap2Local.cpp
-                     src/passes/HeapStoreOptimization.cpp src/passes/I64ToI32Lowering.cpp src/passes/Inlining.cpp
-                     src/passes/InstrumentLocals.cpp src/passes/InstrumentMemory.cpp src/passes/Intrinsics.cpp
-                     src/passes/J2CLItableMerging.cpp src/passes/J2CLOpts.cpp src/passes/JSPI.cpp
-                     src/passes/LegalizeJSInterface.cpp src/passes/LimitSegments.cpp src/passes/LLVMMemoryCopyFillLowering.cpp
-                     src/passes/LocalCSE.cpp src/passes/LocalSubtyping.cpp src/passes/LogExecution.cpp
-                     src/passes/LoopInvariantCodeMotion.cpp src/passes/Memory64Lowering.cpp src/passes/MemoryPacking.cpp
-                     src/passes/MergeBlocks.cpp src/passes/MergeSimilarFunctions.cpp src/passes/MergeLocals.cpp
-                     src/passes/Metrics.cpp src/passes/MinifyImportsAndExports.cpp src/passes/MinimizeRecGroups.cpp
-                     src/passes/Monomorphize.cpp src/passes/MultiMemoryLowering.cpp src/passes/NameList.cpp
-                     src/passes/NameTypes.cpp src/passes/NoInline.cpp src/passes/LLVMNontrappingFPToIntLowering.cpp
-                     src/passes/OnceReduction.cpp src/passes/OptimizeAddedConstants.cpp src/passes/OptimizeCasts.cpp
-                     src/passes/OptimizeInstructions.cpp src/passes/OptimizeForJS.cpp src/passes/PickLoadSigns.cpp
-                     src/passes/Poppify.cpp src/passes/PostEmscripten.cpp src/passes/Precompute.cpp src/passes/Print.cpp
-                     src/passes/PrintCallGraph.cpp src/passes/PrintFeatures.cpp src/passes/PrintFunctionMap.cpp
-                     src/passes/RoundTrip.cpp src/passes/SetGlobals.cpp src/passes/SignaturePruning.cpp
-                     src/passes/SignatureRefining.cpp src/passes/SignExtLowering.cpp src/passes/StringLowering.cpp
-                     src/passes/Strip.cpp src/passes/StripTargetFeatures.cpp src/passes/TraceCalls.cpp
-                     src/passes/RedundantSetElimination.cpp src/passes/RemoveImports.cpp src/passes/RemoveMemory.cpp
-                     src/passes/RemoveNonJSOps.cpp src/passes/RemoveUnusedBrs.cpp src/passes/RemoveUnusedNames.cpp
-                     src/passes/RemoveUnusedModuleElements.cpp src/passes/RemoveUnusedTypes.cpp src/passes/ReorderFunctions.cpp
-                     src/passes/ReorderGlobals.cpp src/passes/ReorderLocals.cpp src/passes/ReReloop.cpp src/passes/TrapMode.cpp
-                     src/passes/TypeGeneralizing.cpp src/passes/TypeRefining.cpp src/passes/TypeMerging.cpp
-                     src/passes/TypeSSA.cpp src/passes/SafeHeap.cpp src/passes/SeparateDataSegments.cpp
-                     src/passes/SimplifyGlobals.cpp src/passes/SimplifyLocals.cpp src/passes/Souperify.cpp
-                     src/passes/SpillPointers.cpp src/passes/StackCheck.cpp src/passes/StripEH.cpp
-                     src/passes/SSAify.cpp src/passes/TupleOptimization.cpp src/passes/TranslateEH.cpp
-                     src/passes/TypeFinalizing.cpp src/passes/Unsubtyping.cpp src/passes/Untee.cpp
-                     src/passes/Vacuum.cpp src/passes/WasmIntrinsics.cpp src/parser/context-decls.cpp
-                     src/parser/context-defs.cpp src/parser/lexer.cpp src/parser/parse-1-decls.cpp
+                     
+                     src/passes/pass.cpp src/passes/Print.cpp src/passes/PrintCallGraph.cpp src/passes/PrintFeatures.cpp
+                     src/passes/PrintFunctionMap.cpp src/passes/CoalesceLocals.cpp src/passes/CodePushing.cpp
+                     src/passes/CodeFolding.cpp src/passes/DeadArgumentElimination.cpp src/passes/DeadCodeElimination.cpp 
+                     src/passes/Directize.cpp src/passes/DuplicateImportElimination.cpp src/passes/DuplicateFunctionElimination.cpp
+                     src/passes/GlobalRefining.cpp src/passes/Heap2Local.cpp src/passes/HeapStoreOptimization.cpp src/passes/Inlining.cpp
+                     src/passes/LocalCSE.cpp src/passes/LocalSubtyping.cpp src/passes/MemoryPacking.cpp src/passes/MergeBlocks.cpp
+                     src/passes/OnceReduction.cpp src/passes/OptimizeCasts.cpp src/passes/OptimizeInstructions.cpp
+                     src/passes/PickLoadSigns.cpp src/passes/Precompute.cpp src/passes/RemoveUnusedBrs.cpp 
+                     src/passes/RemoveUnusedModuleElements.cpp src/passes/RemoveUnusedNames.cpp src/passes/ReorderGlobals.cpp 
+                     src/passes/ReorderLocals.cpp src/passes/RedundantSetElimination.cpp src/passes/SimplifyGlobals.cpp 
+                     src/passes/SimplifyLocals.cpp src/passes/SSAify.cpp src/passes/Vacuum.cpp
+                     
+                     src/parser/context-decls.cpp src/parser/context-defs.cpp src/parser/lexer.cpp src/parser/parse-1-decls.cpp
                      src/parser/parse-2-typedefs.cpp src/parser/parse-3-implicit-types.cpp src/parser/parse-4-module-types.cpp
                      src/parser/parse-5-defs.cpp src/parser/wat-parser.cpp src/support/suffix_tree.cpp
                      src/support/suffix_tree_node.cpp src/support/archive.cpp src/support/bits.cpp

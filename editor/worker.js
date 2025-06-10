@@ -155,7 +155,10 @@ onmessage = (event) => {
             context.fill();
           },
 
-          millis: performance.now,
+          millis: function () {
+            return performance.now();
+          },
+
           random: Math.random,
           sqrt: Math.sqrt,
           cos: Math.cos,

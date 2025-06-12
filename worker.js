@@ -166,6 +166,7 @@ onmessage = (event) => {
           tan: Math.tan,
           atan: Math.atan,
           atan2: Math.atan2,
+          pow: Math.pow,
         },
       });
 

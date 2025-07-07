@@ -331,7 +331,9 @@ static Expr* primary(void)
     advance();
 
     expr->type = EXPR_LITERAL;
-    expr->literal.data_type = DATA_TYPE(TYPE_OBJECT);
+    expr->literal.data_type = DATA_TYPE(TYPE_NULL);
+    expr->literal.data_type.null_function = ALLOC(bool);
+    *expr->literal.data_type.null_function = false;
 
     break;
   case TOKEN_INTEGER:

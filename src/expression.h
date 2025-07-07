@@ -49,6 +49,7 @@ typedef struct _DATA_TYPE
   enum
   {
     TYPE_VOID,
+    TYPE_NULL,
     TYPE_ANY,
     TYPE_BOOL,
     TYPE_CHAR,
@@ -70,6 +71,7 @@ typedef struct _DATA_TYPE
     struct _CLASS_STMT* class;
     struct _CLASS_TEMPLATE_STMT* class_template;
     struct _FUNC_STMT* function;
+    bool* null_function;
 
     struct
     {

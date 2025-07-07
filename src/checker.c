@@ -264,9 +264,10 @@ static void error_no_return(Token token)
   checker_error(token, "Non-void function must return a value.");
 }
 
-static void error_cannot_duduce_conflicting_type(Token token)
+static void error_cannot_duduce_conflicting_type(Token token, DataType expected, DataType got)
 {
-  checker_error(token, "This type conflicts with the other deduced types.");
+  checker_error(token, memory_sprintf("The array deduced type is '%s' here but got '%s'.",
+                                      data_type_to_string(expected), data_type_to_string(got)));
 }
 
 static void error_array_type_is_uninferred(Token token)
@@ -285,6 +286,8 @@ const char* data_type_to_string(DataType data_type)
   {
   case TYPE_VOID:
     return "void";
+  case TYPE_NULL:
+    return "null";
   case TYPE_ANY:
     return "any";
   case TYPE_BOOL:
@@ -300,7 +303,7 @@ const char* data_type_to_string(DataType data_type)
   case TYPE_ALIAS:
     return data_type_to_string(*data_type.alias.data_type);
   case TYPE_OBJECT:
-    return data_type.class ? data_type.class->name.lexeme : "null";
+    return data_type.class->name.lexeme;
   case TYPE_PROTOTYPE:
     return memory_sprintf("class %s", data_type.class->name.lexeme);
   case TYPE_PROTOTYPE_TEMPLATE: {
@@ -420,11 +423,10 @@ void expand_function_data_type(DataType data_type, DataType* return_data_type,
 
 bool equal_data_type(DataType left, DataType right)
 {
-  if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT && left.class && right.class)
+  if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT)
     return left.class == right.class;
 
-  if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY && left.array.data_type &&
-      right.array.data_type)
+  if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY)
     return left.array.count == right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
 
@@ -460,7 +462,23 @@ bool equal_data_type(DataType left, DataType right)
 bool assignable_data_type(DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
-    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY;
+    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
+           source.type == TYPE_NULL;
+
+  if (destination.type == TYPE_ARRAY && source.type == TYPE_ARRAY &&
+      destination.array.count == source.array.count)
+    return assignable_data_type(array_data_type_element(destination),
+                                array_data_type_element(source));
+
+  if (destination.type == TYPE_OBJECT)
+    return source.type == TYPE_NULL;
+
+  if (destination.type == TYPE_NULL)
+    return source.type == TYPE_OBJECT || source.type == TYPE_ANY;
+
+  if (destination.type == TYPE_FUNCTION || destination.type == TYPE_FUNCTION_INTERNAL ||
+      destination.type == TYPE_FUNCTION_MEMBER || destination.type == TYPE_FUNCTION_POINTER)
+    return source.type == TYPE_NULL;
 
   return false;
 }
@@ -484,26 +502,29 @@ DataType array_data_type_element(DataType array_data_type)
   }
 }
 
-static void array_data_type_inference(DataType* source, DataType* target)
+static void data_type_inference(DataType* source, DataType* target)
 {
-  if (source->type != TYPE_ARRAY || target->type != TYPE_ARRAY)
+  if (source->type == TYPE_ARRAY && target->type == TYPE_ARRAY)
   {
-    return;
-  }
-
-  if (source->array.data_type->type == TYPE_VOID ||
-      source->array.data_type->type == target->array.data_type->type)
-  {
-    if (source->array.list)
+    if (source->array.data_type->type == TYPE_VOID ||
+        assignable_data_type(*target->array.data_type, *source->array.data_type) ||
+        source->array.data_type->type == target->array.data_type->type)
     {
-      LiteralArrayExpr* expression;
-      array_foreach(source->array.list, expression)
+      if (source->array.list)
       {
-        expression->data_type.array.data_type->type = target->array.data_type->type;
+        LiteralArrayExpr* expression;
+        array_foreach(source->array.list, expression)
+        {
+          *expression->data_type.array.data_type = *target->array.data_type;
+        }
       }
-    }
 
-    source->array.data_type->type = target->array.data_type->type;
+      *source->array.data_type = *target->array.data_type;
+    }
+  }
+  else if (source->type == TYPE_NULL && target->type == TYPE_FUNCTION_POINTER)
+  {
+    *source->null_function = true;
   }
 }
 
@@ -814,7 +835,9 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
-  if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_INTEGER)
+  if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_ANY ||
+      data_type.type == TYPE_INTEGER || data_type.type == TYPE_NULL ||
+      data_type.type == TYPE_FUNCTION_POINTER)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
@@ -835,12 +858,12 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   Expr** target;
   DataType* target_type;
 
-  if (equal_data_type(*left, from) && equal_data_type(*right, to))
+  if (left->type == from.type && right->type == to.type)
   {
     target_type = left;
     target = &expression->left;
   }
-  else if (equal_data_type(*left, to) && equal_data_type(*right, from))
+  else if (left->type == to.type && right->type == from.type)
   {
     target_type = right;
     target = &expression->right;
@@ -1294,6 +1317,29 @@ static DataType check_binary_expression(BinaryExpr* expression)
   DataType left = check_expression(expression->left);
   DataType right = check_expression(expression->right);
 
+  if ((op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL) &&
+      (left.type == TYPE_NULL || right.type == TYPE_NULL))
+  {
+    Expr* expr;
+
+    if (left.type == TYPE_NULL)
+      expr = cast_to_bool(expression->right, right);
+    else
+      expr = cast_to_bool(expression->left, left);
+
+    expression->left = expr;
+
+    expression->right = EXPR();
+    expression->right->type = EXPR_LITERAL;
+    expression->right->literal.data_type = DATA_TYPE(TYPE_BOOL);
+    expression->right->literal.boolean = false;
+
+    expression->operand_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->return_data_type = DATA_TYPE(TYPE_BOOL);
+
+    return DATA_TYPE(TYPE_BOOL);
+  }
+
   if (left.type == TYPE_OBJECT)
   {
     ClassStmt* class = left.class;
@@ -1368,7 +1414,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
     }
 
     FuncStmt* function = variable->data_type.function_member.function;
-    if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type))
+    if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type) &&
+        !assignable_data_type(array_at(&function->parameters, 1)->data_type, right))
     {
       error_type_mismatch(op, array_at(&function->parameters, 1)->data_type, right);
       return DATA_TYPE(TYPE_VOID);
@@ -1390,7 +1437,8 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_BOOL)) &&
-        !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)))
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_NULL), DATA_TYPE(TYPE_BOOL)))
     {
       error_type_mismatch(expression->op, left, right);
     }
@@ -1511,7 +1559,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
-  array_data_type_inference(&value_data_type, &target_data_type);
+  data_type_inference(&value_data_type, &target_data_type);
 
   if (!equal_data_type(target_data_type, value_data_type) &&
       !assignable_data_type(target_data_type, value_data_type))
@@ -1659,7 +1707,7 @@ static DataType check_call_expression(CallExpr* expression)
       DataType argument_data_type = check_expression(argument);
       DataType parameter_data_type = parameter->data_type;
 
-      array_data_type_inference(&argument_data_type, &parameter_data_type);
+      data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
@@ -1695,7 +1743,7 @@ static DataType check_call_expression(CallExpr* expression)
       DataType argument_data_type = check_expression(argument);
       DataType parameter_data_type = parameter->data_type;
 
-      array_data_type_inference(&argument_data_type, &parameter_data_type);
+      data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
@@ -1756,7 +1804,7 @@ static DataType check_call_expression(CallExpr* expression)
       DataType argument_data_type = check_expression(argument);
       DataType parameter_data_type = callee_data_type.function_internal.parameter_types.elems[i];
 
-      array_data_type_inference(&argument_data_type, &parameter_data_type);
+      data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
@@ -1784,7 +1832,9 @@ static DataType check_call_expression(CallExpr* expression)
 
     Expr* argument = EXPR();
     argument->type = EXPR_LITERAL;
-    argument->literal.data_type = DATA_TYPE(TYPE_OBJECT);
+    argument->literal.data_type = DATA_TYPE(TYPE_NULL);
+    argument->literal.data_type.null_function = ALLOC(bool);
+    *argument->literal.data_type.null_function = false;
 
     ArrayExpr arguments;
     array_init(&arguments);
@@ -1823,7 +1873,7 @@ static DataType check_call_expression(CallExpr* expression)
         DataType argument_data_type = check_expression(argument);
         DataType parameter_data_type = parameter->data_type;
 
-        array_data_type_inference(&argument_data_type, &parameter_data_type);
+        data_type_inference(&argument_data_type, &parameter_data_type);
 
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
             !assignable_data_type(parameter_data_type, argument_data_type))
@@ -2200,9 +2250,10 @@ NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* express
       value_data_type.array.data_type->type = element_data_type.array.data_type->type;
     }
 
-    if (!equal_data_type(element_data_type, value_data_type))
+    if (!equal_data_type(element_data_type, value_data_type) &&
+        !assignable_data_type(element_data_type, value_data_type))
     {
-      error_cannot_duduce_conflicting_type(token);
+      error_cannot_duduce_conflicting_type(token, element_data_type, value_data_type);
       data_type = DATA_TYPE(TYPE_VOID);
 
       goto finish;
@@ -2287,7 +2338,7 @@ static void check_return_statement(ReturnStmt* statement)
     }
 
     DataType data_type = check_expression(statement->expr);
-    array_data_type_inference(&data_type, &checker.function->data_type);
+    data_type_inference(&data_type, &checker.function->data_type);
 
     if (!equal_data_type(checker.function->data_type, data_type) &&
         !assignable_data_type(checker.function->data_type, data_type))
@@ -2409,7 +2460,7 @@ static void check_variable_declaration(VarStmt* statement)
   {
     DataType initializer_data_type = check_expression(statement->initializer);
 
-    array_data_type_inference(&initializer_data_type, &statement->data_type);
+    data_type_inference(&initializer_data_type, &statement->data_type);
 
     if (!equal_data_type(statement->data_type, initializer_data_type) &&
         !assignable_data_type(statement->data_type, initializer_data_type))

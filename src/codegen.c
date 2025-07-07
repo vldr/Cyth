@@ -834,6 +834,8 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
 
     return BinaryenTypeFromHeapType(generate_function_ref(NULL, &subtypes, data_type), true);
   }
+  case TYPE_NULL:
+    return *data_type.null_function ? BinaryenTypeNullFuncref() : BinaryenTypeAnyref();
   case TYPE_ANY:
     return BinaryenTypeAnyref();
   case TYPE_BOOL:
@@ -1370,8 +1372,8 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(expression->floating));
   case TYPE_BOOL:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->boolean));
-  case TYPE_OBJECT:
-    return BinaryenRefNull(codegen.module, BinaryenTypeNullref());
+  case TYPE_NULL:
+    return BinaryenRefNull(codegen.module, data_type_to_binaryen_type(expression->data_type));
   case TYPE_CHAR:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->string.data[0]));
   case TYPE_STRING:
@@ -1798,7 +1800,10 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_INTEGER:
       return BinaryenBinary(codegen.module, BinaryenNeInt32(), value,
                             BinaryenConst(codegen.module, BinaryenLiteralInt32(0)));
+    case TYPE_ANY:
+    case TYPE_NULL:
     case TYPE_OBJECT:
+    case TYPE_FUNCTION_POINTER:
       return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
                            BinaryenRefIsNull(codegen.module, value));
     default:

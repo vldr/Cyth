@@ -459,25 +459,22 @@ bool equal_data_type(DataType left, DataType right)
   return left.type == right.type;
 }
 
+bool nullable_data_type(DataType data_type)
+{
+  return data_type.type == TYPE_ANY || data_type.type == TYPE_OBJECT ||
+         data_type.type == TYPE_NULL || data_type.type == TYPE_FUNCTION_POINTER;
+}
+
 bool assignable_data_type(DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
     return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
            source.type == TYPE_NULL;
 
-  if (destination.type == TYPE_ARRAY && source.type == TYPE_ARRAY &&
-      destination.array.count == source.array.count)
-    return assignable_data_type(array_data_type_element(destination),
-                                array_data_type_element(source));
-
   if (destination.type == TYPE_OBJECT)
     return source.type == TYPE_NULL;
 
-  if (destination.type == TYPE_NULL)
-    return source.type == TYPE_OBJECT || source.type == TYPE_ANY;
-
-  if (destination.type == TYPE_FUNCTION || destination.type == TYPE_FUNCTION_INTERNAL ||
-      destination.type == TYPE_FUNCTION_MEMBER || destination.type == TYPE_FUNCTION_POINTER)
+  if (destination.type == TYPE_FUNCTION_POINTER)
     return source.type == TYPE_NULL;
 
   return false;
@@ -837,7 +834,7 @@ static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
   if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_ANY ||
       data_type.type == TYPE_INTEGER || data_type.type == TYPE_NULL ||
-      data_type.type == TYPE_FUNCTION_POINTER)
+      data_type.type == TYPE_BOOL || data_type.type == TYPE_FUNCTION_POINTER)
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
@@ -884,6 +881,17 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   *target_type = to;
 
   return true;
+}
+
+bool upcast_nullable_to_bool(BinaryExpr* expression, DataType* left, DataType* right, DataType from)
+{
+  if (expression->op.type != TOKEN_AND && expression->op.type != TOKEN_OR)
+    return false;
+
+  if (!nullable_data_type(*left) && !nullable_data_type(*right))
+    return false;
+
+  return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
 static void init_function_declaration(FuncStmt* statement)
@@ -1317,8 +1325,11 @@ static DataType check_binary_expression(BinaryExpr* expression)
   DataType left = check_expression(expression->left);
   DataType right = check_expression(expression->right);
 
+  bool left_nullable = left.type == TYPE_NULL && nullable_data_type(right);
+  bool right_nullable = right.type == TYPE_NULL && nullable_data_type(left);
+
   if ((op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL) &&
-      (left.type == TYPE_NULL || right.type == TYPE_NULL))
+      (left_nullable || right_nullable))
   {
     Expr* expr;
 
@@ -1436,9 +1447,10 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
-        !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_BOOL)) &&
-        !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_BOOL)) &&
-        !upcast(expression, &left, &right, DATA_TYPE(TYPE_NULL), DATA_TYPE(TYPE_BOOL)))
+
+        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
+        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_OBJECT)) &&
+        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_NULL)))
     {
       error_type_mismatch(expression->op, left, right);
     }

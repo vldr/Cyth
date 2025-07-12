@@ -1069,8 +1069,8 @@ static const char* generate_array_reserve_function(DataType this_data_type)
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define AMOUNT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
 #define COUNTER()                                                                                  \
-  (BinaryenLocalGet(codegen.module, this_data_type.array.count + 1, BinaryenTypeInt32()))
-#define SUBTHIS() (BinaryenLocalGet(codegen.module, this_data_type.array.count + 2, element_type))
+  (BinaryenLocalGet(codegen.module, *this_data_type.array.count + 1, BinaryenTypeInt32()))
+#define SUBTHIS() (BinaryenLocalGet(codegen.module, *this_data_type.array.count + 2, element_type))
 
 #define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
@@ -1086,7 +1086,7 @@ static const char* generate_array_reserve_function(DataType this_data_type)
   {
     BinaryenExpressionRef loop;
 
-    if (this_data_type.array.count > 1)
+    if (*this_data_type.array.count > 1)
     {
       const char* block_name = "array.reserve.block";
       const char* loop_name = "array.reserve.loop";
@@ -1095,7 +1095,7 @@ static const char* generate_array_reserve_function(DataType this_data_type)
       array_init(&operands);
       array_add(&operands, SUBTHIS());
 
-      for (int i = 2; i <= this_data_type.array.count; i++)
+      for (int i = 2; i <= *this_data_type.array.count; i++)
         array_add(&operands, BinaryenLocalGet(codegen.module, i, BinaryenTypeInt32()));
 
       BinaryenExpressionRef reserve =
@@ -1107,7 +1107,7 @@ static const char* generate_array_reserve_function(DataType this_data_type)
                       BinaryenBinary(codegen.module, BinaryenGeSInt32(), COUNTER(), AMOUNT()),
                       NULL),
 
-        BinaryenLocalSet(codegen.module, this_data_type.array.count + 2,
+        BinaryenLocalSet(codegen.module, *this_data_type.array.count + 2,
                          generate_default_initialization(element_data_type)),
 
         reserve,
@@ -1115,7 +1115,7 @@ static const char* generate_array_reserve_function(DataType this_data_type)
         BinaryenArraySet(codegen.module, ARRAY(), COUNTER(), SUBTHIS()),
 
         BinaryenLocalSet(
-          codegen.module, this_data_type.array.count + 1,
+          codegen.module, *this_data_type.array.count + 1,
           BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
 
         BinaryenBreak(codegen.module, loop_name, NULL, NULL)
@@ -1152,7 +1152,7 @@ static const char* generate_array_reserve_function(DataType this_data_type)
     array_init(&params_list);
     array_add(&params_list, this_type);
 
-    for (int i = 0; i < this_data_type.array.count; i++)
+    for (int i = 0; i < *this_data_type.array.count; i++)
       array_add(&params_list, BinaryenTypeInt32());
 
     BinaryenType params = BinaryenTypeCreate(params_list.elems, params_list.size);

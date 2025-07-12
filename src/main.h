@@ -19,12 +19,6 @@
   } while (0)
 #endif
 
-#ifdef EMSCRIPTEN
-#define NO_OPTIMIZATION __attribute__((optnone))
-#else
-#define NO_OPTIMIZATION
-#endif
-
 void error(int start_line, int start_column, int end_line, int end_column, const char* message);
 
 #endif

@@ -22,8 +22,6 @@ static struct
   ClassStmt* class;
   ClassTemplateStmt* class_template;
   WhileStmt* loop;
-
-  ArrayLiteralArrayExpr* array;
 } checker;
 
 static void check_statement(Stmt* statement, bool synchronize);
@@ -264,15 +262,9 @@ static void error_no_return(Token token)
   checker_error(token, "Non-void function must return a value.");
 }
 
-static void error_cannot_duduce_conflicting_type(Token token, DataType expected, DataType got)
+static void error_array_type_is_unresolved(Token token)
 {
-  checker_error(token, memory_sprintf("The array deduced type is '%s' here but got '%s'.",
-                                      data_type_to_string(expected), data_type_to_string(got)));
-}
-
-static void error_array_type_is_uninferred(Token token)
-{
-  checker_error(token, "The array type is uninferred so it cannot be used here.");
+  checker_error(token, "The array type is unresolved; add a cast to declare its type.");
 }
 
 ArrayVarStmt global_locals(void)
@@ -381,7 +373,7 @@ const char* data_type_to_string(DataType data_type)
     while (*c)
       array_add(&string, *c++);
 
-    for (int i = 0; i < data_type.array.count; i++)
+    for (int i = 0; i < *data_type.array.count; i++)
     {
       array_add(&string, '[');
       array_add(&string, ']');
@@ -427,7 +419,7 @@ bool equal_data_type(DataType left, DataType right)
     return left.class == right.class;
 
   if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY)
-    return left.array.count == right.array.count &&
+    return *left.array.count == *right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
 
   if ((left.type == TYPE_FUNCTION || left.type == TYPE_FUNCTION_MEMBER ||
@@ -483,9 +475,9 @@ bool assignable_data_type(DataType destination, DataType source)
 DataType array_data_type_element(DataType array_data_type)
 {
   assert(array_data_type.type == TYPE_ARRAY);
-  assert(array_data_type.array.count >= 1);
+  assert(*array_data_type.array.count >= 1);
 
-  if (array_data_type.array.count == 1)
+  if (*array_data_type.array.count == 1)
   {
     return *array_data_type.array.data_type;
   }
@@ -493,7 +485,8 @@ DataType array_data_type_element(DataType array_data_type)
   {
     DataType element_data_type = DATA_TYPE(TYPE_ARRAY);
     element_data_type.array.data_type = array_data_type.array.data_type;
-    element_data_type.array.count = array_data_type.array.count - 1;
+    element_data_type.array.count = ALLOC(unsigned char);
+    *element_data_type.array.count = *array_data_type.array.count - 1;
 
     return element_data_type;
   }
@@ -501,22 +494,33 @@ DataType array_data_type_element(DataType array_data_type)
 
 static void data_type_inference(DataType* source, DataType* target)
 {
-  if (source->type == TYPE_ARRAY && target->type == TYPE_ARRAY)
+  if (source->type == TYPE_ARRAY && source->array.data_type->type == TYPE_VOID)
   {
-    if (source->array.data_type->type == TYPE_VOID ||
-        assignable_data_type(*target->array.data_type, *source->array.data_type) ||
-        source->array.data_type->type == target->array.data_type->type)
+    if (target->type != TYPE_ARRAY)
     {
-      if (source->array.list)
-      {
-        LiteralArrayExpr* expression;
-        array_foreach(source->array.list, expression)
-        {
-          *expression->data_type.array.data_type = *target->array.data_type;
-        }
-      }
+      error_array_type_is_unresolved(source->array.token);
+      return;
+    }
 
-      *source->array.data_type = *target->array.data_type;
+    *source->array.data_type = *target->array.data_type;
+    *source->array.count = *target->array.count;
+
+    DataType element_data_type = array_data_type_element(*source);
+
+    for (unsigned int i = 0; i < source->array.values.size; i++)
+    {
+      Expr* value = source->array.values.elems[i];
+      Token token = source->array.tokens.elems[i];
+
+      DataType data_type = check_expression(value);
+
+      data_type_inference(&data_type, &element_data_type);
+
+      if (!equal_data_type(element_data_type, data_type) &&
+          !assignable_data_type(element_data_type, data_type))
+      {
+        error_type_mismatch(token, element_data_type, data_type);
+      }
     }
   }
   else if (source->type == TYPE_NULL && target->type == TYPE_FUNCTION_POINTER)
@@ -783,7 +787,8 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
   case DATA_TYPE_TOKEN_ARRAY: {
     DataType data_type = DATA_TYPE(TYPE_ARRAY);
     data_type.array.data_type = ALLOC(DataType);
-    data_type.array.count = data_type_token.array.count;
+    data_type.array.count = ALLOC(unsigned char);
+    *data_type.array.count = data_type_token.array.count;
 
     DataType element_data_type = data_type_token_to_data_type(*data_type_token.array.type);
     if (element_data_type.type == TYPE_VOID)
@@ -794,7 +799,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
     if (element_data_type.type == TYPE_ARRAY)
     {
-      data_type.array.count += element_data_type.array.count;
+      *data_type.array.count += *element_data_type.array.count;
       *data_type.array.data_type = *element_data_type.array.data_type;
     }
     else
@@ -1142,8 +1147,9 @@ static DataType check_cast_expression(CastExpr* expression)
     expression->from_data_type = check_expression(expression->expr);
     expression->to_data_type = data_type_token_to_data_type(expression->type);
 
-    bool valid = false;
+    data_type_inference(&expression->from_data_type, &expression->to_data_type);
 
+    bool valid = false;
     switch (expression->from_data_type.type)
     {
     case TYPE_CHAR:
@@ -1662,6 +1668,11 @@ static DataType check_call_expression(CallExpr* expression)
       .types = expression->types,
     };
 
+    class_type.token.start_line = expression->callee_token.start_line;
+    class_type.token.start_column = expression->callee_token.start_column;
+    class_type.token.end_line = expression->callee_token.end_line;
+    class_type.token.end_column = expression->callee_token.end_column;
+
     ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
     if (!class_statement)
     {
@@ -1961,7 +1972,7 @@ static DataType check_access_expression(AccessExpr* expression)
   {
     if (data_type.array.data_type->type == TYPE_VOID)
     {
-      error_array_type_is_uninferred(expression->expr_token);
+      error_array_type_is_unresolved(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -2019,7 +2030,7 @@ static DataType check_access_expression(AccessExpr* expression)
       array_init(&expression->data_type.function_internal.parameter_types);
       array_add(&expression->data_type.function_internal.parameter_types, data_type);
 
-      for (int i = 0; i < data_type.array.count; i++)
+      for (int i = 0; i < *data_type.array.count; i++)
       {
         array_add(&expression->data_type.function_internal.parameter_types,
                   DATA_TYPE(TYPE_INTEGER));
@@ -2173,7 +2184,7 @@ static DataType check_index_expression(IndexExpr* expression)
 
     if (expr_data_type.array.data_type->type == TYPE_VOID)
     {
-      error_array_type_is_uninferred(expression->expr_token);
+      error_array_type_is_unresolved(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -2211,88 +2222,18 @@ static DataType check_index_expression(IndexExpr* expression)
   return DATA_TYPE(TYPE_VOID);
 }
 
-NO_OPTIMIZATION static DataType check_array_expression(LiteralArrayExpr* expression)
+static DataType check_array_expression(LiteralArrayExpr* expression)
 {
-  DataType data_type = DATA_TYPE(TYPE_ARRAY);
-  DataType element_data_type = DATA_TYPE(TYPE_VOID);
-  bool initializer = false;
+  expression->data_type = DATA_TYPE(TYPE_ARRAY);
+  expression->data_type.array.data_type = ALLOC(DataType);
+  expression->data_type.array.count = ALLOC(unsigned char);
+  expression->data_type.array.token = expression->token;
+  expression->data_type.array.values = expression->values;
+  expression->data_type.array.tokens = expression->tokens;
 
-  if (!checker.array)
-  {
-    checker.array = ALLOC(ArrayLiteralArrayExpr);
-    initializer = true;
+  *expression->data_type.array.count = 1;
+  *expression->data_type.array.data_type = DATA_TYPE(TYPE_VOID);
 
-    array_init(checker.array);
-  }
-
-  array_add(checker.array, expression);
-
-  for (unsigned int i = 0; i < expression->values.size; i++)
-  {
-    Expr* value = expression->values.elems[i];
-    Token token = expression->tokens.elems[i];
-
-    DataType value_data_type = check_expression(value);
-    if (value_data_type.type == TYPE_VOID)
-    {
-      error_type_cannot_be_void(token);
-      data_type = DATA_TYPE(TYPE_VOID);
-
-      goto finish;
-    }
-
-    if (element_data_type.type == TYPE_VOID)
-    {
-      element_data_type = value_data_type;
-    }
-
-    if (value_data_type.type == TYPE_ARRAY && element_data_type.type == TYPE_ARRAY &&
-        value_data_type.array.data_type->type != TYPE_VOID &&
-        element_data_type.array.data_type->type == TYPE_VOID &&
-        element_data_type.array.count == value_data_type.array.count)
-    {
-      element_data_type.array.data_type->type = value_data_type.array.data_type->type;
-    }
-
-    if (element_data_type.type == TYPE_ARRAY && value_data_type.type == TYPE_ARRAY &&
-        element_data_type.array.data_type->type != TYPE_VOID &&
-        value_data_type.array.data_type->type == TYPE_VOID &&
-        value_data_type.array.count == element_data_type.array.count)
-    {
-      value_data_type.array.data_type->type = element_data_type.array.data_type->type;
-    }
-
-    if (!equal_data_type(element_data_type, value_data_type) &&
-        !assignable_data_type(element_data_type, value_data_type))
-    {
-      error_cannot_duduce_conflicting_type(token, element_data_type, value_data_type);
-      data_type = DATA_TYPE(TYPE_VOID);
-
-      goto finish;
-    }
-  }
-
-  if (element_data_type.type == TYPE_ARRAY)
-  {
-    data_type.array.count = element_data_type.array.count + 1;
-    data_type.array.data_type = element_data_type.array.data_type;
-    data_type.array.list = checker.array;
-  }
-  else
-  {
-    data_type.array.count = 1;
-    data_type.array.data_type = ALLOC(DataType);
-    *data_type.array.data_type = element_data_type;
-    data_type.array.list = checker.array;
-  }
-
-finish:
-  if (initializer)
-  {
-    checker.array = NULL;
-  }
-
-  expression->data_type = data_type;
   return expression->data_type;
 }
 
@@ -2793,7 +2734,6 @@ void checker_init(ArrayStmt statements)
   checker.function = NULL;
   checker.class = NULL;
   checker.loop = NULL;
-  checker.array = NULL;
   checker.statements = statements;
 
   checker.environment = environment_init(NULL);

@@ -11,11 +11,11 @@ class Object
         this.data = data
 
 set(0, Object(12))
-set(1, [22, 44, 66])
+set(1, (int[]) [22, 44, 66])
 set(2, "hello world")
 
 set(3, (any) Object(12))
-set(4, (any) [22, 44, 66])
+set(4, (any) (int[]) [22, 44, 66])
 set(5, (any) "hello world")
 
 Object a = (Object) get(0)

@@ -399,8 +399,8 @@ static Expr* primary(void)
     }
 
     break;
-  case TOKEN_LEFT_BRACKET:
-    advance();
+  case TOKEN_LEFT_BRACKET: {
+    Token start_token = advance();
 
     ArrayToken tokens;
     ArrayExpr values;
@@ -429,13 +429,22 @@ static Expr* primary(void)
       } while (match(TOKEN_COMMA));
     }
 
-    consume(TOKEN_RIGHT_BRACKET, "Expected ']' at the end of list.");
+    Token end_token = consume(TOKEN_RIGHT_BRACKET, "Expected ']' at the end of list.");
 
     expr->type = EXPR_ARRAY;
     expr->array.values = values;
     expr->array.tokens = tokens;
+    expr->array.token = (Token){
+      .type = TOKEN_IDENTIFIER,
+      .start_line = start_token.start_line,
+      .start_column = start_token.start_column,
+      .end_line = end_token.end_line,
+      .end_column = end_token.end_column,
+      .lexeme = "",
+    };
 
     break;
+  }
   case TOKEN_IDENTIFIER:
     advance();
 

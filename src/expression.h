@@ -60,6 +60,7 @@ typedef struct _DATA_TYPE
     TYPE_FUNCTION_MEMBER,
     TYPE_FUNCTION_INTERNAL,
     TYPE_FUNCTION_POINTER,
+    TYPE_FUNCTION_TEMPLATE,
     TYPE_PROTOTYPE,
     TYPE_PROTOTYPE_TEMPLATE,
     TYPE_OBJECT,
@@ -77,6 +78,12 @@ typedef struct _DATA_TYPE
       DataTypeToken token;
       struct _DATA_TYPE* data_type;
     } alias;
+
+    struct
+    {
+      struct _FUNC_TEMPLATE_STMT* function;
+      struct _EXPR* this;
+    } function_template;
 
     struct
     {

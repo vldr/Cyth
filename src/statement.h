@@ -12,6 +12,7 @@ array_def(struct _STMT*, Stmt);
 array_def(struct _VAR_STMT*, VarStmt);
 array_def(struct _CLASS_STMT*, ClassStmt);
 array_def(struct _FUNC_STMT*, FuncStmt);
+array_def(struct _FUNC_TEMPLATE_STMT*, FuncTemplateStmt);
 
 typedef struct _EXPR_STMT
 {
@@ -66,6 +67,23 @@ typedef struct _FUNC_STMT
   ArrayStmt body;
 } FuncStmt;
 
+typedef struct _FUNC_TEMPLATE_STMT
+{
+  DataTypeToken type;
+  Token name;
+
+  int offset;
+  int count;
+
+  struct _CLASS_STMT* class;
+  struct _FUNC_STMT* function;
+  struct _WHILE_STMT* loop;
+  struct _ENVIRONMENT* environment;
+
+  ArrayToken types;
+  ArrayFuncStmt functions;
+} FuncTemplateStmt;
+
 typedef struct _VAR_STMT
 {
   DataType data_type;
@@ -90,6 +108,7 @@ typedef struct _CLASS_STMT
   MapVarStmt* members;
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
+  ArrayFuncTemplateStmt function_templates;
 
   uintptr_t ref;
   void* initializer_function;
@@ -123,6 +142,7 @@ struct _STMT
     STMT_IF,
     STMT_WHILE,
     STMT_FUNCTION_DECL,
+    STMT_FUNCTION_TEMPLATE_DECL,
     STMT_VARIABLE_DECL,
     STMT_CLASS_DECL,
     STMT_CLASS_TEMPLATE_DECL,
@@ -132,6 +152,7 @@ struct _STMT
   union {
     ExprStmt expr;
     FuncStmt func;
+    FuncTemplateStmt func_template;
     VarStmt var;
     ReturnStmt ret;
     IfStmt cond;

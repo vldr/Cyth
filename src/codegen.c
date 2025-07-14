@@ -2440,6 +2440,17 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   return NULL;
 }
 
+static BinaryenExpressionRef generate_function_template_declaration(FuncTemplateStmt* statement)
+{
+  FuncStmt* function_declaration;
+  array_foreach(&statement->functions, function_declaration)
+  {
+    generate_function_declaration(function_declaration);
+  }
+
+  return NULL;
+}
+
 static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapType heap_type)
 {
   BinaryenType previous_class = codegen.class;
@@ -2457,6 +2468,12 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
       initializer_function = function;
 
     generate_function_declaration(function);
+  }
+
+  FuncTemplateStmt* function_template;
+  array_foreach(&statement->function_templates, function_template)
+  {
+    generate_function_template_declaration(function_template);
   }
 
   VarStmt* variable;
@@ -2683,6 +2700,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_import_declaration(&statement->import);
   case STMT_CLASS_TEMPLATE_DECL:
     return generate_class_template_declaration(&statement->class_template);
+  case STMT_FUNCTION_TEMPLATE_DECL:
+    return generate_function_template_declaration(&statement->func_template);
   case STMT_CLASS_DECL: {
     ArrayTypeBuilderSubtype subtypes;
     array_init(&subtypes);

@@ -27,6 +27,9 @@ static struct
 static void check_statement(Stmt* statement, bool synchronize);
 static DataType check_expression(Expr* expression);
 
+static void init_function_declaration(FuncStmt* statement);
+static void check_function_declaration(FuncStmt* statement);
+
 static void init_class_declaration(ClassStmt* statement);
 static void init_class_declaration_body(ClassStmt* statement);
 
@@ -577,7 +580,7 @@ static DataType token_to_data_type(Token token)
   }
 }
 
-static ClassStmt* template_to_data_type(DataType template, DataTypeToken template_type)
+static ClassStmt* class_template_to_data_type(DataType template, DataTypeToken template_type)
 {
   const char* name = data_type_token_to_string(template_type, NULL);
   VarStmt* variable = environment_get_variable(checker.environment, name);
@@ -653,6 +656,72 @@ static ClassStmt* template_to_data_type(DataType template, DataTypeToken templat
   array_add(&template.class_template->classes, class_statement);
 
   return class_statement;
+}
+
+static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken function_type)
+{
+  const char* name = data_type_token_to_string(function_type, NULL);
+  VarStmt* variable = environment_get_variable(checker.environment, name);
+
+  if (variable && variable->data_type.type == TYPE_FUNCTION)
+  {
+    return variable->data_type.function;
+  }
+
+  Stmt* statement = parser_parse_function_declaration_statement(
+    template.function_template.function->offset, template.function_template.function->type,
+    template.function_template.function->name);
+
+  FuncStmt* function_statement = &statement->func;
+  function_statement->name.lexeme = name;
+  function_statement->name.start_line = function_type.token.start_line;
+  function_statement->name.end_line = function_type.token.end_line;
+  function_statement->name.start_column = function_type.token.start_column;
+  function_statement->name.end_column = function_type.token.end_column;
+
+  ClassStmt* previous_class = checker.class;
+  FuncStmt* previous_function = checker.function;
+  WhileStmt* previous_loop = checker.loop;
+  Environment* previous_environment = checker.environment;
+
+  checker.class = template.function_template.function->class;
+  checker.function = template.function_template.function->function;
+  checker.loop = template.function_template.function->loop;
+  checker.environment = environment_init(template.function_template.function->environment);
+
+  for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
+  {
+    Token name = template.function_template.function->types.elems[i];
+    DataTypeToken actual_data_type_token = array_at(&function_type.types, i);
+
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = name;
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type.type = TYPE_ALIAS;
+    variable->data_type.alias.token = actual_data_type_token;
+    variable->data_type.alias.data_type = ALLOC(DataType);
+    *variable->data_type.alias.data_type = data_type_token_to_data_type(actual_data_type_token);
+
+    environment_set_variable(checker.environment, variable->name.lexeme, variable);
+  }
+
+  if (previous_environment == checker.global_environment)
+    init_function_declaration(function_statement);
+
+  check_function_declaration(function_statement);
+
+  checker.class = previous_class;
+  checker.function = previous_function;
+  checker.loop = previous_loop;
+  checker.environment = previous_environment;
+
+  array_add(&template.function_template.function->functions, function_statement);
+
+  return function_statement;
 }
 
 static const char* data_type_token_to_string(DataTypeToken data_type_token, ArrayChar* string)
@@ -772,7 +841,8 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
       data_type_token_unalias(types);
 
-      ClassStmt* class_statement = template_to_data_type(variable->data_type, data_type_token);
+      ClassStmt* class_statement =
+        class_template_to_data_type(variable->data_type, data_type_token);
       if (!class_statement)
       {
         return DATA_TYPE(TYPE_VOID);
@@ -910,14 +980,13 @@ static void init_function_declaration(FuncStmt* statement)
   if (checker.function)
   {
     statement->name.lexeme =
-      memory_sprintf("%s.%s<%d:%d>", checker.function->name.lexeme, statement->name.lexeme,
+      memory_sprintf("%s.%s:%d:%d", checker.function->name.lexeme, statement->name.lexeme,
                      statement->name.start_line, statement->name.start_column);
   }
   else if (checker.loop)
   {
-    statement->name.lexeme =
-      memory_sprintf("%s<%d:%d>", statement->name.lexeme, statement->name.start_line,
-                     statement->name.start_column);
+    statement->name.lexeme = memory_sprintf(
+      "%s:%d:%d", statement->name.lexeme, statement->name.start_line, statement->name.start_column);
   }
 
   if (checker.class)
@@ -1020,6 +1089,48 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
   environment_set_variable(checker.environment, name, variable);
 }
 
+static void init_function_template_declaration(FuncTemplateStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+  if (environment_check_variable(checker.environment, name))
+  {
+    error_name_already_exists(statement->name, name);
+  }
+
+  statement->function = checker.function;
+  statement->class = checker.class;
+  statement->loop = checker.loop;
+  statement->environment = checker.environment;
+
+  MapSInt type_set;
+  map_init_sint(&type_set, 0, 0);
+
+  Token type;
+  array_foreach(&statement->types, type)
+  {
+    if (map_get_sint(&type_set, type.lexeme))
+      error_name_already_exists(type, type.lexeme);
+    else
+      map_put_sint(&type_set, type.lexeme, true);
+  }
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = (DataTypeToken){
+    .type = DATA_TYPE_TOKEN_PRIMITIVE,
+    .token = statement->name,
+  };
+  variable->initializer = NULL;
+  variable->function = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_FUNCTION_TEMPLATE);
+  variable->data_type.function_template.function = statement;
+  variable->data_type.function_template.this = NULL;
+
+  environment_set_variable(checker.environment, name, variable);
+}
+
 static void init_class_declaration(ClassStmt* statement)
 {
   const char* name = statement->name.lexeme;
@@ -1115,6 +1226,17 @@ static void init_class_declaration_body(ClassStmt* statement)
     const char* function_name = function_statement->name.lexeme;
 
     function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
+  }
+
+  FuncTemplateStmt* function_template;
+  array_foreach(&statement->function_templates, function_template)
+  {
+    init_function_template_declaration(function_template);
+
+    const char* class_name = statement->name.lexeme;
+    const char* function_name = function_template->name.lexeme;
+
+    function_template->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
   }
 
   int count = 0;
@@ -1645,42 +1767,82 @@ static DataType check_call_expression(CallExpr* expression)
 
   if (array_size(&expression->types))
   {
-    if (callee_data_type.type != TYPE_PROTOTYPE_TEMPLATE)
+    if (callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
+    {
+      int expected = array_size(&callee_data_type.class_template->types);
+      int got = array_size(&expression->types);
+
+      if (expected != got)
+      {
+        error_invalid_template_arity(expression->callee_token, expected, got);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      data_type_token_unalias(&expression->types);
+
+      DataTypeToken class_type = {
+        .type = DATA_TYPE_TOKEN_PRIMITIVE,
+        .token = callee_data_type.class_template->name,
+        .types = expression->types,
+      };
+
+      class_type.token.start_line = expression->callee_token.start_line;
+      class_type.token.start_column = expression->callee_token.start_column;
+      class_type.token.end_line = expression->callee_token.end_line;
+      class_type.token.end_column = expression->callee_token.end_column;
+
+      ClassStmt* class_statement = class_template_to_data_type(callee_data_type, class_type);
+      if (!class_statement)
+      {
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      callee_data_type.type = TYPE_PROTOTYPE;
+      callee_data_type.class = class_statement;
+    }
+    else if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE)
+    {
+      int expected = array_size(&callee_data_type.function_template.function->types);
+      int got = array_size(&expression->types);
+
+      if (expected != got)
+      {
+        error_invalid_template_arity(expression->callee_token, expected, got);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      data_type_token_unalias(&expression->types);
+
+      DataTypeToken function_type = {
+        .type = DATA_TYPE_TOKEN_PRIMITIVE,
+        .token = callee_data_type.function_template.function->name,
+        .types = expression->types,
+      };
+
+      FuncStmt* function_statement =
+        function_template_to_data_type(callee_data_type, function_type);
+      if (!function_statement)
+      {
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      if (callee_data_type.function_template.function->class)
+      {
+        callee_data_type.type = TYPE_FUNCTION_MEMBER;
+        callee_data_type.function_member.this = callee_data_type.function_template.this;
+        callee_data_type.function_member.function = function_statement;
+      }
+      else
+      {
+        callee_data_type.type = TYPE_FUNCTION;
+        callee_data_type.function = function_statement;
+      }
+    }
+    else
     {
       error_not_a_template_type(expression->callee_token, data_type_to_string(callee_data_type));
       return DATA_TYPE(TYPE_VOID);
     }
-
-    int expected = array_size(&callee_data_type.class_template->types);
-    int got = array_size(&expression->types);
-
-    if (expected != got)
-    {
-      error_invalid_template_arity(expression->callee_token, expected, got);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    data_type_token_unalias(&expression->types);
-
-    DataTypeToken class_type = {
-      .type = DATA_TYPE_TOKEN_PRIMITIVE,
-      .token = callee_data_type.class_template->name,
-      .types = expression->types,
-    };
-
-    class_type.token.start_line = expression->callee_token.start_line;
-    class_type.token.start_column = expression->callee_token.start_column;
-    class_type.token.end_line = expression->callee_token.end_line;
-    class_type.token.end_column = expression->callee_token.end_column;
-
-    ClassStmt* class_statement = template_to_data_type(callee_data_type, class_type);
-    if (!class_statement)
-    {
-      return DATA_TYPE(TYPE_VOID);
-    }
-
-    callee_data_type.type = TYPE_PROTOTYPE;
-    callee_data_type.class = class_statement;
   }
 
   if (callee_data_type.type == TYPE_FUNCTION_MEMBER)
@@ -1965,6 +2127,9 @@ static DataType check_access_expression(AccessExpr* expression)
 
     if (expression->data_type.type == TYPE_FUNCTION_MEMBER)
       expression->data_type.function_member.this = expression->expr;
+    else if (expression->data_type.type == TYPE_FUNCTION_TEMPLATE &&
+             expression->data_type.function_template.function->class)
+      expression->data_type.function_template.this = expression->expr;
 
     return expression->data_type;
   }
@@ -2681,6 +2846,11 @@ static void check_statement(Stmt* statement, bool synchronize)
     check_import_declaration(&statement->import);
     break;
 
+  case STMT_FUNCTION_TEMPLATE_DECL:
+    if (checker.environment != checker.global_environment)
+      init_function_template_declaration(&statement->func_template);
+    break;
+
   case STMT_CLASS_TEMPLATE_DECL:
     break;
 
@@ -2709,6 +2879,7 @@ static bool analyze_statement(Stmt* statement)
   case STMT_CLASS_DECL:
   case STMT_IMPORT_DECL:
   case STMT_CLASS_TEMPLATE_DECL:
+  case STMT_FUNCTION_TEMPLATE_DECL:
     return false;
 
   default:
@@ -2757,6 +2928,9 @@ void checker_validate(void)
       break;
     case STMT_CLASS_TEMPLATE_DECL:
       init_class_template_declaration(&statement->class_template);
+      break;
+    case STMT_FUNCTION_TEMPLATE_DECL:
+      init_function_template_declaration(&statement->func_template);
       break;
 
     default:

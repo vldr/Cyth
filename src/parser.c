@@ -925,6 +925,70 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
   return stmt;
 }
 
+static Stmt* function_template_declaration_statement(DataTypeToken type, Token name)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_FUNCTION_TEMPLATE_DECL;
+  stmt->func_template.type = type;
+  stmt->func_template.name = name;
+  stmt->func_template.class = NULL;
+  stmt->func_template.function = NULL;
+  stmt->func_template.loop = NULL;
+  stmt->func_template.environment = NULL;
+
+  array_init(&stmt->func_template.types);
+  array_init(&stmt->func_template.functions);
+
+  Token start_token = consume(TOKEN_LESS, "Expected a '<'.");
+
+  if (!check(TOKEN_GREATER))
+  {
+    do
+    {
+      array_add(&stmt->func_template.types, consume(TOKEN_IDENTIFIER, "Expected an identifier."));
+    } while (match(TOKEN_COMMA));
+  }
+
+  Token end_token = consume(TOKEN_GREATER, "Expected a '>'.");
+
+  if (!array_size(&stmt->func_template.types))
+  {
+    Token types_token = (Token){
+      TOKEN_IDENTIFIER,
+      start_token.start_line,
+      start_token.start_column,
+      end_token.end_line,
+      end_token.end_column,
+      0,
+      "",
+    };
+
+    parser_error(types_token, "The types list cannot be empty.");
+  }
+
+  stmt->func_template.count = 0;
+  stmt->func_template.offset = parser.current;
+
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+
+  if (!check(TOKEN_RIGHT_PAREN))
+  {
+    do
+    {
+      consume_data_type("Expected a type after '('");
+      consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.");
+  consume(TOKEN_NEWLINE, "Expected a newline after ')'.");
+
+  if (check(TOKEN_INDENT))
+    statements();
+
+  return stmt;
+}
+
 static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool newline)
 {
   Stmt* stmt = STMT();
@@ -1004,7 +1068,9 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
     array_foreach(&body_statements, body_statement)
     {
-      if (body_statement->type != STMT_FUNCTION_DECL && body_statement->type != STMT_VARIABLE_DECL)
+      if (body_statement->type != STMT_FUNCTION_DECL &&
+          body_statement->type != STMT_FUNCTION_TEMPLATE_DECL &&
+          body_statement->type != STMT_VARIABLE_DECL)
       {
         parser_error(keyword,
                      "Only functions and variables can appear inside 'class' declarations.");
@@ -1027,6 +1093,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
 
   array_init(&stmt->class.variables);
   array_init(&stmt->class.functions);
+  array_init(&stmt->class.function_templates);
 
   consume(TOKEN_NEWLINE, "Expected a newline.");
 
@@ -1040,6 +1107,10 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
       if (body_statement->type == STMT_FUNCTION_DECL)
       {
         array_add(&stmt->class.functions, &body_statement->func);
+      }
+      else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)
+      {
+        array_add(&stmt->class.function_templates, &body_statement->func_template);
       }
       else if (body_statement->type == STMT_VARIABLE_DECL)
       {
@@ -1272,6 +1343,8 @@ static Stmt* statement(void)
     {
     case TOKEN_LEFT_PAREN:
       return function_declaration_statement(type, name);
+    case TOKEN_LESS:
+      return function_template_declaration_statement(type, name);
     default:
       return variable_declaration_statement(type, name, true);
     }
@@ -1367,4 +1440,11 @@ Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token 
   seek(offset);
 
   return class_declaration_statement(keyword, name);
+}
+
+Stmt* parser_parse_function_declaration_statement(int offset, DataTypeToken type, Token name)
+{
+  seek(offset);
+
+  return function_declaration_statement(type, name);
 }

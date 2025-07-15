@@ -2061,14 +2061,8 @@ static DataType check_call_expression(CallExpr* expression)
 
     expression->arguments = arguments;
 
-    if (variable)
+    if (variable && variable->data_type.type == TYPE_FUNCTION_MEMBER)
     {
-      if (variable->data_type.type != TYPE_FUNCTION_MEMBER)
-      {
-        error_not_a_function(expression->callee_token);
-        return DATA_TYPE(TYPE_VOID);
-      }
-
       FuncStmt* function = variable->data_type.function_member.function;
       int number_of_arguments = array_size(&expression->arguments);
       int expected_number_of_arguments = array_size(&function->parameters);

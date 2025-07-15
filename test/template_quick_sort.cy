@@ -2,7 +2,7 @@ import "env"
     void log(string n)
 
 class QuickSort<T>
-    void sort(T[] array)
+    void sort(T[] array, bool(T, T) comparator)
         int low = 0
         int high = array.length - 1
         
@@ -17,7 +17,7 @@ class QuickSort<T>
             high = stack.pop()
             low = stack.pop()
 
-            int p = partition(array, low, high)
+            int p = partition(array, low, high, comparator)
 
             if p - 1 > low
                 stack.push(low)
@@ -29,12 +29,12 @@ class QuickSort<T>
 
         return
 
-    int partition(T[] array, int low, int high)
+    int partition(T[] array, int low, int high, bool(T, T) comparator)
         T pivot = array[high]
         int i = low - 1
 
         for int j = low; j < high; j = j + 1
-            if array[j] <= pivot
+            if (comparator and comparator(array[j], pivot)) or array[j] <= pivot
                 i += 1
                 
                 swap(array, i, j)
@@ -50,8 +50,11 @@ class QuickSort<T>
 int[] a = [3, 5, 8, 1, 20, 1]
 float[] b = [3.0, 5.0, 8.0, 1.0, 20.0, 1.0]
 
-QuickSort<int>().sort(a)
-QuickSort<float>().sort(b)
+bool comparator(int a, int b)
+    return a < b
+
+QuickSort<int>().sort(a, comparator)
+QuickSort<float>().sort(b, null)
 
 for int i = 0; i < a.length; i += 1
     log((string)a[i])

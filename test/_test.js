@@ -91,23 +91,31 @@ for await (const path of glob.scan(".")) {
     Module._run(encodeText(text), true);
 
     if (errors.length === 0) {
+      function log(output) {
+        if (typeof output === "object") {
+          const at = result.instance.exports["string.at"];
+          const length = result.instance.exports["string.length"];
+
+          const array = new Uint8Array(length(output));
+          for (let i = 0; i < array.byteLength; i++) {
+            array[i] = at(output, i);
+          }
+
+          logs.push(decoder.decode(array));
+        } else {
+          logs.push(String(output));
+        }
+      }
+
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
-          log: (output) => {
-            if (typeof output === "object") {
-              const at = result.instance.exports["string.at"];
-              const length = result.instance.exports["string.length"];
+          "log": log,
+          "log<bool>": log,
+          "log<int>": log,
+          "log<float>": log,
+          "log<string>": log,
+          "log<char>": log,
 
-              const array = new Uint8Array(length(output));
-              for (let i = 0; i < array.byteLength; i++) {
-                array[i] = at(output, i);
-              }
-
-              logs.push(decoder.decode(array));
-            } else {
-              logs.push(String(output));
-            }
-          },
           set: (key, value) => { kv[key] = value; },
           get: (key) => { return kv[key]; },
         },

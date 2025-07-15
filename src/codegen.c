@@ -2412,10 +2412,9 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
   BinaryenType results = data_type_to_binaryen_type(statement->data_type);
 
-  if (statement->import.type == TOKEN_STRING)
+  if (statement->import)
   {
-    BinaryenAddFunctionImport(codegen.module, name, statement->import.lexeme, name, params,
-                              results);
+    BinaryenAddFunctionImport(codegen.module, name, statement->import, name, params, results);
 
     if (parameters_contain_string)
       generate_string_export_functions();

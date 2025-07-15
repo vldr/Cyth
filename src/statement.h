@@ -60,7 +60,7 @@ typedef struct _FUNC_STMT
   DataTypeToken type;
 
   Token name;
-  Token import;
+  const char* import;
 
   ArrayVarStmt variables;
   ArrayVarStmt parameters;
@@ -79,6 +79,8 @@ typedef struct _FUNC_TEMPLATE_STMT
   struct _FUNC_STMT* function;
   struct _WHILE_STMT* loop;
   struct _ENVIRONMENT* environment;
+
+  const char* import;
 
   ArrayToken types;
   ArrayFuncStmt functions;

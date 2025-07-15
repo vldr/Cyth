@@ -886,9 +886,9 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
 {
   Stmt* stmt = STMT();
   stmt->type = STMT_FUNCTION_DECL;
-  stmt->func.import = TOKEN_EMPTY();
   stmt->func.type = type;
   stmt->func.name = name;
+  stmt->func.import = NULL;
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);
@@ -935,6 +935,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   stmt->func_template.function = NULL;
   stmt->func_template.loop = NULL;
   stmt->func_template.environment = NULL;
+  stmt->func_template.import = NULL;
 
   array_init(&stmt->func_template.types);
   array_init(&stmt->func_template.functions);
@@ -1146,7 +1147,12 @@ static Stmt* import_declaration_statement(void)
     {
       if (body_statement->type == STMT_FUNCTION_DECL)
       {
-        body_statement->func.import = import;
+        body_statement->func.import = import.lexeme;
+        array_add(&stmt->import.body, body_statement);
+      }
+      else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)
+      {
+        body_statement->func_template.import = import.lexeme;
         array_add(&stmt->import.body, body_statement);
       }
       else

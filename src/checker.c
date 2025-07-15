@@ -94,6 +94,11 @@ static void error_name_already_exists(Token token, const char* name)
   checker_error(token, memory_sprintf("The name '%s' already exists.", name));
 }
 
+static void error_missing_template_types(Token token)
+{
+  checker_error(token, "Missing template types here.");
+}
+
 static void error_type_cannot_be_void(Token token)
 {
   checker_error(token, "The type cannot be void here.");
@@ -678,6 +683,7 @@ static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken
   function_statement->name.end_line = function_type.token.end_line;
   function_statement->name.start_column = function_type.token.start_column;
   function_statement->name.end_column = function_type.token.end_column;
+  function_statement->import = template.function_template.function->import;
 
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
@@ -709,7 +715,7 @@ static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
 
-  if (previous_environment == checker.global_environment)
+  if (!checker.function && !checker.loop)
     init_function_declaration(function_statement);
 
   check_function_declaration(function_statement);
@@ -1259,6 +1265,8 @@ static void init_import_declaration(ImportStmt* statement)
   {
     if (body_statement->type == STMT_FUNCTION_DECL)
       init_function_declaration(&body_statement->func);
+    else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)
+      init_function_template_declaration(&body_statement->func_template);
   }
 }
 
@@ -1373,6 +1381,17 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_STRING:
       case TYPE_ARRAY:
       case TYPE_OBJECT:
+        valid = true;
+
+      default:
+        break;
+      }
+
+      break;
+    case TYPE_FUNCTION_POINTER:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_BOOL:
         valid = true;
 
       default:
@@ -1576,8 +1595,10 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
 
+        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_POINTER)) &&
         !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
         !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_OBJECT)) &&
+        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_ANY)) &&
         !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_NULL)))
     {
       error_type_mismatch(expression->op, left, right);
@@ -1841,6 +1862,15 @@ static DataType check_call_expression(CallExpr* expression)
     else
     {
       error_not_a_template_type(expression->callee_token, data_type_to_string(callee_data_type));
+      return DATA_TYPE(TYPE_VOID);
+    }
+  }
+  else
+  {
+    if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE ||
+        callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
+    {
+      error_missing_template_types(expression->callee_token);
       return DATA_TYPE(TYPE_VOID);
     }
   }
@@ -2646,7 +2676,7 @@ static void check_function_declaration(FuncStmt* statement)
     init_function_declaration(statement);
   }
 
-  if (statement->body.size && statement->import.type == TOKEN_STRING)
+  if (statement->body.size && statement->import)
   {
     error_imported_functions_cannot_have_bodies(statement->name);
     return;
@@ -2677,7 +2707,7 @@ static void check_function_declaration(FuncStmt* statement)
     environment_set_variable(checker.environment, name, parameter);
   }
 
-  if (statement->import.type != TOKEN_STRING && statement->data_type.type != TYPE_VOID &&
+  if (statement->import == NULL && statement->data_type.type != TYPE_VOID &&
       !analyze_statements(statement->body))
   {
     error_no_return(statement->name);
@@ -2847,8 +2877,9 @@ static void check_statement(Stmt* statement, bool synchronize)
     break;
 
   case STMT_FUNCTION_TEMPLATE_DECL:
-    if (checker.environment != checker.global_environment)
+    if (checker.function || checker.loop)
       init_function_template_declaration(&statement->func_template);
+
     break;
 
   case STMT_CLASS_TEMPLATE_DECL:

@@ -306,27 +306,44 @@ const char* data_type_to_string(DataType data_type)
     return data_type.class->name.lexeme;
   case TYPE_PROTOTYPE:
     return memory_sprintf("class %s", data_type.class->name.lexeme);
+  case TYPE_FUNCTION_TEMPLATE:
   case TYPE_PROTOTYPE_TEMPLATE: {
     ArrayChar string;
     array_init(&string);
 
-    const char* c = "class ";
+    ArrayToken types;
+    const char* name;
+    const char* prefix;
+    if (data_type.type == TYPE_PROTOTYPE_TEMPLATE)
+    {
+      types = data_type.class_template->types;
+      name = data_type.class_template->name.lexeme;
+      prefix = "class ";
+    }
+    else
+    {
+      types = data_type.function_template.function->types;
+      name = "";
+      prefix = data_type_token_to_string(data_type.function_template.function->type, NULL);
+    }
+
+    const char* c = prefix;
     while (*c)
       array_add(&string, *c++);
 
-    c = data_type.class_template->name.lexeme;
+    c = name;
     while (*c)
       array_add(&string, *c++);
 
     array_add(&string, '<');
 
-    for (unsigned i = 0; i < data_type.class_template->types.size; i++)
+    for (unsigned i = 0; i < types.size; i++)
     {
-      const char* c = data_type.class_template->types.elems[i].lexeme;
+      const char* c = types.elems[i].lexeme;
       while (*c)
         array_add(&string, *c++);
 
-      if (i < data_type.class_template->types.size - 1)
+      if (i < types.size - 1)
       {
         array_add(&string, ',');
         array_add(&string, ' ');
@@ -334,6 +351,28 @@ const char* data_type_to_string(DataType data_type)
     }
 
     array_add(&string, '>');
+
+    if (data_type.type == TYPE_FUNCTION_TEMPLATE)
+    {
+      array_add(&string, '(');
+
+      DataTypeToken data_type_token;
+      array_foreach(&data_type.function_template.function->parameters, data_type_token)
+      {
+        const char* c = data_type_token_to_string(data_type_token, NULL);
+        while (*c)
+          array_add(&string, *c++);
+
+        if (_i + 1 != data_type.function_template.function->parameters.size)
+        {
+          array_add(&string, ',');
+          array_add(&string, ' ');
+        }
+      }
+
+      array_add(&string, ')');
+    }
+
     array_add(&string, '\0');
 
     return string.elems;

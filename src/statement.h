@@ -70,6 +70,8 @@ typedef struct _FUNC_STMT
 typedef struct _FUNC_TEMPLATE_STMT
 {
   DataTypeToken type;
+  ArrayDataTypeToken parameters;
+
   Token name;
 
   int offset;

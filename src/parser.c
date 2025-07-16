@@ -525,7 +525,8 @@ static Expr* call(void)
       }
     }
 
-    if (match(TOKEN_LEFT_PAREN))
+    if ((types.size > 0 && consume(TOKEN_LEFT_PAREN, "Expected a '(' after types.").type) ||
+        match(TOKEN_LEFT_PAREN))
     {
       ArrayToken argument_tokens;
       array_init(&argument_tokens);
@@ -938,6 +939,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   stmt->func_template.import = NULL;
 
   array_init(&stmt->func_template.types);
+  array_init(&stmt->func_template.parameters);
   array_init(&stmt->func_template.functions);
 
   Token start_token = consume(TOKEN_LESS, "Expected a '<'.");
@@ -976,8 +978,10 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   {
     do
     {
-      consume_data_type("Expected a type after '('");
+      DataTypeToken type = consume_data_type("Expected a type after '('");
       consume(TOKEN_IDENTIFIER, "Expected a parameter name after type.");
+
+      array_add(&stmt->func_template.parameters, type);
     } while (match(TOKEN_COMMA));
   }
 

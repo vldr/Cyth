@@ -314,6 +314,7 @@ const char* data_type_to_string(DataType data_type)
     ArrayToken types;
     const char* name;
     const char* prefix;
+
     if (data_type.type == TYPE_PROTOTYPE_TEMPLATE)
     {
       types = data_type.class_template->types;
@@ -705,7 +706,8 @@ static ClassStmt* class_template_to_data_type(DataType template, DataTypeToken t
 static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken function_type)
 {
   const char* name = data_type_token_to_string(function_type, NULL);
-  VarStmt* variable = environment_get_variable(checker.environment, name);
+  VarStmt* variable =
+    environment_get_variable(template.function_template.function->environment, name);
 
   if (variable && variable->data_type.type == TYPE_FUNCTION)
   {
@@ -732,7 +734,7 @@ static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken
   checker.class = template.function_template.function->class;
   checker.function = template.function_template.function->function;
   checker.loop = template.function_template.function->loop;
-  checker.environment = environment_init(template.function_template.function->environment);
+  checker.environment = template.function_template.function->environment;
 
   for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
   {
@@ -1145,7 +1147,7 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
   statement->function = checker.function;
   statement->class = checker.class;
   statement->loop = checker.loop;
-  statement->environment = checker.environment;
+  statement->environment = environment_init(checker.environment);
 
   MapSInt type_set;
   map_init_sint(&type_set, 0, 0);

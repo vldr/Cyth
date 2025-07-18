@@ -625,21 +625,21 @@ static DataType token_to_data_type(Token token)
   }
 }
 
-static ClassStmt* class_template_to_data_type(DataType template, DataTypeToken template_type)
+static DataType class_template_to_data_type(DataType template, DataTypeToken template_type)
 {
   const char* name = data_type_token_to_string(template_type, NULL);
   VarStmt* variable = environment_get_variable(checker.environment, name);
 
   if (variable && variable->data_type.type == TYPE_PROTOTYPE)
   {
-    return variable->data_type.class;
+    return variable->data_type;
   }
 
   static const int RECURSION_LIMIT = 32;
   if (template.class_template->count >= RECURSION_LIMIT)
   {
     error_recursive_template_type(template_type.token, name);
-    return NULL;
+    return DATA_TYPE(TYPE_VOID);
   }
 
   template.class_template->count++;
@@ -700,18 +700,22 @@ static ClassStmt* class_template_to_data_type(DataType template, DataTypeToken t
 
   array_add(&template.class_template->classes, class_statement);
 
-  return class_statement;
+  variable = environment_get_variable(checker.environment, name);
+  assert(variable && variable->data_type.type == TYPE_PROTOTYPE);
+
+  return variable->data_type;
 }
 
-static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken function_type)
+static DataType function_template_to_data_type(DataType template, DataTypeToken function_type)
 {
   const char* name = data_type_token_to_string(function_type, NULL);
   VarStmt* variable =
     environment_get_variable(template.function_template.function->environment, name);
 
-  if (variable && variable->data_type.type == TYPE_FUNCTION)
+  if (variable && (variable->data_type.type == TYPE_FUNCTION ||
+                   variable->data_type.type == TYPE_FUNCTION_MEMBER))
   {
-    return variable->data_type.function;
+    return variable->data_type;
   }
 
   Stmt* statement = parser_parse_function_declaration_statement(
@@ -768,7 +772,11 @@ static FuncStmt* function_template_to_data_type(DataType template, DataTypeToken
 
   array_add(&template.function_template.function->functions, function_statement);
 
-  return function_statement;
+  variable = environment_get_variable(template.function_template.function->environment, name);
+  assert(variable && (variable->data_type.type == TYPE_FUNCTION ||
+                      variable->data_type.type == TYPE_FUNCTION_MEMBER));
+
+  return variable->data_type;
 }
 
 static const char* data_type_token_to_string(DataTypeToken data_type_token, ArrayChar* string)
@@ -888,14 +896,8 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
       data_type_token_unalias(types);
 
-      ClassStmt* class_statement =
-        class_template_to_data_type(variable->data_type, data_type_token);
-      if (!class_statement)
-      {
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      token.lexeme = class_statement->name.lexeme;
+      DataType data_type = class_template_to_data_type(variable->data_type, data_type_token);
+      token.lexeme = data_type.class->name.lexeme;
     }
 
     return token_to_data_type(token);
@@ -1047,15 +1049,7 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
     class_type.token.end_line = name.end_line;
     class_type.token.end_column = name.end_column;
 
-    ClassStmt* class_statement = class_template_to_data_type(*data_type, class_type);
-    if (!class_statement)
-    {
-      *data_type = DATA_TYPE(TYPE_VOID);
-      return;
-    }
-
-    data_type->type = TYPE_PROTOTYPE;
-    data_type->class = class_statement;
+    *data_type = class_template_to_data_type(*data_type, class_type);
   }
   else if (data_type->type == TYPE_FUNCTION_TEMPLATE)
   {
@@ -1078,24 +1072,7 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
       .types = *types,
     };
 
-    FuncStmt* function_statement = function_template_to_data_type(*data_type, function_type);
-    if (!function_statement)
-    {
-      *data_type = DATA_TYPE(TYPE_VOID);
-      return;
-    }
-
-    if (data_type->function_template.function->class)
-    {
-      data_type->type = TYPE_FUNCTION_MEMBER;
-      data_type->function_member.this = data_type->function_template.this;
-      data_type->function_member.function = function_statement;
-    }
-    else
-    {
-      data_type->type = TYPE_FUNCTION;
-      data_type->function = function_statement;
-    }
+    *data_type = function_template_to_data_type(*data_type, function_type);
   }
   else
   {
@@ -2200,13 +2177,10 @@ static DataType check_access_expression(AccessExpr* expression)
     expression->data_type = variable->data_type;
     expression->expr_data_type = data_type;
 
+    expand_template_types(expression->template_types, &expression->data_type, expression->name);
+
     if (expression->data_type.type == TYPE_FUNCTION_MEMBER)
       expression->data_type.function_member.this = expression->expr;
-    else if (expression->data_type.type == TYPE_FUNCTION_TEMPLATE &&
-             expression->data_type.function_template.function->class)
-      expression->data_type.function_template.this = expression->expr;
-
-    expand_template_types(expression->template_types, &expression->data_type, expression->name);
 
     return expression->data_type;
   }

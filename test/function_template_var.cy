@@ -19,6 +19,10 @@ class A
         return func(this, 10, 2)
 
 A().run_my_func<int>(A().functor<int>)
+A().functor<int>
+A().functor<int>
+A().run_my_func<int>
+A().run_my_func<int>
 
 # functor 10 2
 # functor 10 2

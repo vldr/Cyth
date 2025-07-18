@@ -51,7 +51,6 @@ function encodeText(text) {
   return offset;
 }
 
-
 const files = await fs.readdir(import.meta.dirname);
 const scripts = files.filter((f) => f.endsWith(".cy"));
 

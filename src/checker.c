@@ -1016,6 +1016,96 @@ bool upcast_nullable_to_bool(BinaryExpr* expression, DataType* left, DataType* r
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
+static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type, Token name)
+{
+  if (!types)
+    return;
+
+  if (data_type->type == TYPE_PROTOTYPE_TEMPLATE)
+  {
+    int expected = array_size(&data_type->class_template->types);
+    int got = array_size(types);
+
+    if (expected != got)
+    {
+      error_invalid_template_arity(name, expected, got);
+
+      *data_type = DATA_TYPE(TYPE_VOID);
+      return;
+    }
+
+    data_type_token_unalias(types);
+
+    DataTypeToken class_type = {
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
+      .token = data_type->class_template->name,
+      .types = *types,
+    };
+
+    class_type.token.start_line = name.start_line;
+    class_type.token.start_column = name.start_column;
+    class_type.token.end_line = name.end_line;
+    class_type.token.end_column = name.end_column;
+
+    ClassStmt* class_statement = class_template_to_data_type(*data_type, class_type);
+    if (!class_statement)
+    {
+      *data_type = DATA_TYPE(TYPE_VOID);
+      return;
+    }
+
+    data_type->type = TYPE_PROTOTYPE;
+    data_type->class = class_statement;
+  }
+  else if (data_type->type == TYPE_FUNCTION_TEMPLATE)
+  {
+    int expected = array_size(&data_type->function_template.function->types);
+    int got = array_size(types);
+
+    if (expected != got)
+    {
+      error_invalid_template_arity(name, expected, got);
+
+      *data_type = DATA_TYPE(TYPE_VOID);
+      return;
+    }
+
+    data_type_token_unalias(types);
+
+    DataTypeToken function_type = {
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
+      .token = data_type->function_template.function->name,
+      .types = *types,
+    };
+
+    FuncStmt* function_statement = function_template_to_data_type(*data_type, function_type);
+    if (!function_statement)
+    {
+      *data_type = DATA_TYPE(TYPE_VOID);
+      return;
+    }
+
+    if (data_type->function_template.function->class)
+    {
+      data_type->type = TYPE_FUNCTION_MEMBER;
+      data_type->function_member.this = data_type->function_template.this;
+      data_type->function_member.function = function_statement;
+    }
+    else
+    {
+      data_type->type = TYPE_FUNCTION;
+      data_type->function = function_statement;
+    }
+  }
+  else
+  {
+    error_not_a_template_type(name, data_type_to_string(*data_type));
+
+    *data_type = DATA_TYPE(TYPE_VOID);
+    return;
+  }
+}
+
 static void init_function_declaration(FuncStmt* statement)
 {
   const char* name = statement->name.lexeme;
@@ -1745,6 +1835,8 @@ static DataType check_variable_expression(VarExpr* expression)
   expression->variable = variable;
   expression->data_type = variable->data_type;
 
+  expand_template_types(expression->template_types, &expression->data_type, expression->name);
+
   return expression->data_type;
 }
 
@@ -1827,96 +1919,13 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
-  if (array_size(&expression->types))
+  if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE ||
+      callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
   {
-    if (callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
-    {
-      int expected = array_size(&callee_data_type.class_template->types);
-      int got = array_size(&expression->types);
-
-      if (expected != got)
-      {
-        error_invalid_template_arity(expression->callee_token, expected, got);
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      data_type_token_unalias(&expression->types);
-
-      DataTypeToken class_type = {
-        .type = DATA_TYPE_TOKEN_PRIMITIVE,
-        .token = callee_data_type.class_template->name,
-        .types = expression->types,
-      };
-
-      class_type.token.start_line = expression->callee_token.start_line;
-      class_type.token.start_column = expression->callee_token.start_column;
-      class_type.token.end_line = expression->callee_token.end_line;
-      class_type.token.end_column = expression->callee_token.end_column;
-
-      ClassStmt* class_statement = class_template_to_data_type(callee_data_type, class_type);
-      if (!class_statement)
-      {
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      callee_data_type.type = TYPE_PROTOTYPE;
-      callee_data_type.class = class_statement;
-    }
-    else if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE)
-    {
-      int expected = array_size(&callee_data_type.function_template.function->types);
-      int got = array_size(&expression->types);
-
-      if (expected != got)
-      {
-        error_invalid_template_arity(expression->callee_token, expected, got);
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      data_type_token_unalias(&expression->types);
-
-      DataTypeToken function_type = {
-        .type = DATA_TYPE_TOKEN_PRIMITIVE,
-        .token = callee_data_type.function_template.function->name,
-        .types = expression->types,
-      };
-
-      FuncStmt* function_statement =
-        function_template_to_data_type(callee_data_type, function_type);
-      if (!function_statement)
-      {
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      if (callee_data_type.function_template.function->class)
-      {
-        callee_data_type.type = TYPE_FUNCTION_MEMBER;
-        callee_data_type.function_member.this = callee_data_type.function_template.this;
-        callee_data_type.function_member.function = function_statement;
-      }
-      else
-      {
-        callee_data_type.type = TYPE_FUNCTION;
-        callee_data_type.function = function_statement;
-      }
-    }
-    else
-    {
-      error_not_a_template_type(expression->callee_token, data_type_to_string(callee_data_type));
-      return DATA_TYPE(TYPE_VOID);
-    }
+    error_missing_template_types(expression->callee_token);
+    return DATA_TYPE(TYPE_VOID);
   }
-  else
-  {
-    if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE ||
-        callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
-    {
-      error_missing_template_types(expression->callee_token);
-      return DATA_TYPE(TYPE_VOID);
-    }
-  }
-
-  if (callee_data_type.type == TYPE_FUNCTION_MEMBER)
+  else if (callee_data_type.type == TYPE_FUNCTION_MEMBER)
   {
     FuncStmt* function = callee_data_type.function_member.function;
     Expr* argument;
@@ -1931,6 +1940,7 @@ static DataType check_call_expression(CallExpr* expression)
       argument->type = EXPR_VAR;
       argument->var.name = (Token){ .lexeme = "this" };
       argument->var.variable = array_at(&function->parameters, 0);
+      argument->var.template_types = NULL;
       argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
       argument->var.data_type.class = checker.class;
     }
@@ -2195,6 +2205,8 @@ static DataType check_access_expression(AccessExpr* expression)
     else if (expression->data_type.type == TYPE_FUNCTION_TEMPLATE &&
              expression->data_type.function_template.function->class)
       expression->data_type.function_template.this = expression->expr;
+
+    expand_template_types(expression->template_types, &expression->data_type, expression->name);
 
     return expression->data_type;
   }

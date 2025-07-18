@@ -168,6 +168,7 @@ typedef struct _VAR_EXPR
 
   Token name;
   VarStmt* variable;
+  ArrayDataTypeToken* template_types;
 } VarExpr;
 
 typedef struct _ASSIGN_EXPR
@@ -190,8 +191,6 @@ typedef struct _CALL_EXPR
   Token callee_token;
   ArrayExpr arguments;
   ArrayToken argument_tokens;
-
-  ArrayDataTypeToken types;
 } CallExpr;
 
 typedef struct _CAST_EXPR
@@ -214,6 +213,7 @@ typedef struct _ACCESS_EXPR
   Token name;
 
   VarStmt* variable;
+  ArrayDataTypeToken* template_types;
 } AccessExpr;
 
 typedef struct _INDEX_EXPR

@@ -1,3 +1,6 @@
+import "env"
+    void log(int n)
+
 log<string>
 
-#! 1:12-1:13 Expected a '(' after types.
+#! 4:1-4:4 'void(int)' is not a template type.

@@ -1,36 +1,39 @@
-import { expect, test } from "bun:test";
-import { Glob } from "bun";
-import Module from "../editor/cyth.js";
+import test from "node:test";
+import assert from "assert";
+import path from "path";
+import fs from "fs/promises";
+import cyth from "../editor/cyth.js";
 
-await new Promise((resolve) => (Module["onRuntimeInitialized"] = resolve));
+Error.stackTraceLimit = Infinity;
+
+await new Promise((resolve) => (cyth["onRuntimeInitialized"] = resolve));
 
 let errors = [];
 let logs = [];
 let bytecode;
 
-Module._set_result_callback(
-  Module.addFunction(
+cyth._set_result_callback(
+  cyth.addFunction(
     (size, data, sourceMapSize, sourceMap) =>
-      (bytecode = Module.HEAPU8.subarray(data, data + size)),
+      (bytecode = cyth.HEAPU8.subarray(data, data + size)),
     "viiii"
   )
 );
 
-Module._set_error_callback(
-  Module.addFunction(
+cyth._set_error_callback(
+  cyth.addFunction(
     (startLineNumber, startColumn, endLineNumber, endColumn, message) =>
       errors.push({
         startLineNumber,
         startColumn,
         endLineNumber,
         endColumn,
-        message: Module.UTF8ToString(message),
+        message: cyth.UTF8ToString(message),
       }),
     "viiiii"
   )
 );
 
-const glob = new Glob(import.meta.dir + "/*.cy");
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8");
 
@@ -38,23 +41,24 @@ let lastEncodedText;
 
 function encodeText(text) {
   const data = encoder.encode(text);
-  const offset = Module._memory_alloc(data.byteLength + 1);
-  Module.HEAPU8.set(data, offset);
-  Module.HEAPU8[offset + data.byteLength] = 0;
+  const offset = cyth._memory_alloc(data.byteLength + 1);
+  cyth.HEAPU8.set(data, offset);
+  cyth.HEAPU8[offset + data.byteLength] = 0;
 
-  if (lastEncodedText) expect(lastEncodedText).toEqual(offset);
-
+  if (lastEncodedText) assert.strictEqual(offset, lastEncodedText);
   lastEncodedText = offset;
 
   return offset;
 }
 
-for await (const path of glob.scan(".")) {
-  const kv = {};
 
-  test(path, async () => {
-    const file = Bun.file(path);
-    const text = await file.text();
+const files = await fs.readdir(import.meta.dirname);
+const scripts = files.filter((f) => f.endsWith(".cy"));
+
+for (const filename of scripts) {
+  await test(filename, async () => {
+    const fullPath = path.join(import.meta.dirname, filename);
+    const text = await fs.readFile(fullPath, "utf-8");
     const expectedLogs = text
       .split("\n")
       .filter((line) => line.startsWith("#") && !line.startsWith("#!"))
@@ -88,7 +92,7 @@ for await (const path of glob.scan(".")) {
     errors.length = 0;
     logs.length = 0;
 
-    Module._run(encodeText(text), true);
+    cyth._run(encodeText(text), true);
 
     if (errors.length === 0) {
       function log(output) {
@@ -107,6 +111,7 @@ for await (const path of glob.scan(".")) {
         }
       }
 
+      const kv = {};
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log": log,
@@ -124,7 +129,7 @@ for await (const path of glob.scan(".")) {
       result.instance.exports["<start>"]();
     }
 
-    expect(errors).toEqual(expectedErrors);
-    expect(logs).toEqual(expectedLogs);
+    assert.deepStrictEqual(errors, expectedErrors);
+    assert.deepStrictEqual(logs, expectedLogs);
   });
 }

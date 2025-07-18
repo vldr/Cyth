@@ -273,6 +273,56 @@ static DataTypeToken consume_data_type(const char* message)
   return data_type_token;
 }
 
+static ArrayDataTypeToken* consume_template_types(void)
+{
+  ArrayDataTypeToken* template_types = NULL;
+
+  if (check(TOKEN_LESS))
+  {
+    ArrayDataTypeToken types;
+    array_init(&types);
+
+    bool error = false;
+    bool right_shift = false;
+
+    int current = parser.current;
+    advance();
+
+    do
+    {
+      DataTypeToken data_type_token = data_type_array_function(&right_shift);
+
+      if (data_type_token.type)
+      {
+        array_add(&types, data_type_token);
+      }
+      else
+      {
+        error = true;
+        break;
+      }
+
+    } while (match(TOKEN_COMMA));
+
+    if (!match(TOKEN_GREATER) && !(right_shift && match(TOKEN_GREATER_GREATER)))
+    {
+      error = true;
+    }
+
+    if (error)
+    {
+      seek(current);
+    }
+    else
+    {
+      template_types = ALLOC(ArrayDataTypeToken);
+      *template_types = types;
+    }
+  }
+
+  return template_types;
+}
+
 static void synchronize(void)
 {
   while (!eof())
@@ -451,6 +501,7 @@ static Expr* primary(void)
     expr->type = EXPR_VAR;
     expr->var.name = token;
     expr->var.variable = NULL;
+    expr->var.template_types = consume_template_types();
 
     break;
   case TOKEN_INFINITY:
@@ -486,47 +537,7 @@ static Expr* call(void)
   {
     Token end_token = previous();
 
-    ArrayDataTypeToken types;
-    array_init(&types);
-
-    if (check(TOKEN_LESS))
-    {
-      bool error = false;
-      bool right_shift = false;
-
-      int current = parser.current;
-      advance();
-
-      do
-      {
-        DataTypeToken data_type_token = data_type_array_function(&right_shift);
-
-        if (data_type_token.type)
-        {
-          array_add(&types, data_type_token);
-        }
-        else
-        {
-          error = true;
-          break;
-        }
-
-      } while (match(TOKEN_COMMA));
-
-      if (!match(TOKEN_GREATER) && !(right_shift && match(TOKEN_GREATER_GREATER)))
-      {
-        error = true;
-      }
-
-      if (error)
-      {
-        array_clear(&types);
-        seek(current);
-      }
-    }
-
-    if ((types.size > 0 && consume(TOKEN_LEFT_PAREN, "Expected a '(' after types.").type) ||
-        match(TOKEN_LEFT_PAREN))
+    if (match(TOKEN_LEFT_PAREN))
     {
       ArrayToken argument_tokens;
       array_init(&argument_tokens);
@@ -560,7 +571,6 @@ static Expr* call(void)
 
       Expr* call = EXPR();
       call->type = EXPR_CALL;
-      call->call.types = types;
       call->call.arguments = arguments;
       call->call.argument_tokens = argument_tokens;
       call->call.callee = expr;
@@ -582,6 +592,7 @@ static Expr* call(void)
       access->type = EXPR_ACCESS;
       access->access.name = consume(TOKEN_IDENTIFIER, "Expected an identifier.");
       access->access.variable = NULL;
+      access->access.template_types = consume_template_types();
       access->access.expr = expr;
       access->access.expr_token = (Token){
         TOKEN_IDENTIFIER,

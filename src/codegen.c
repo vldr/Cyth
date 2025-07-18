@@ -1720,7 +1720,7 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
 {
   BinaryenExpressionRef value = generate_expression(expression->expr);
 
-  if (expression->from_data_type.type == expression->to_data_type.type)
+  if (equal_data_type(expression->from_data_type, expression->to_data_type))
   {
     return value;
   }

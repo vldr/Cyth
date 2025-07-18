@@ -255,9 +255,10 @@ static void error_invalid_arity(Token token, int expected, int got)
   checker_error(token, memory_sprintf("Expected %d parameter(s) but got %d.", expected, got));
 }
 
-static void error_invalid_type_conversion(Token token)
+static void error_invalid_type_conversion(Token token, DataType from, DataType to)
 {
-  checker_error(token, "Invalid type conversion.");
+  checker_error(token, memory_sprintf("Invalid type conversion from '%s' to '%s'.",
+                                      data_type_to_string(from), data_type_to_string(to)));
 }
 
 static void error_imported_functions_cannot_have_bodies(Token token)
@@ -1397,6 +1398,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_INTEGER:
       case TYPE_STRING:
         valid = true;
+        break;
 
       default:
         break;
@@ -1412,6 +1414,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_STRING:
       case TYPE_CHAR:
         valid = true;
+        break;
 
       default:
         break;
@@ -1426,6 +1429,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_INTEGER:
       case TYPE_STRING:
         valid = true;
+        break;
 
       default:
         break;
@@ -1440,6 +1444,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_INTEGER:
       case TYPE_STRING:
         valid = true;
+        break;
 
       default:
         break;
@@ -1452,6 +1457,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_STRING:
       case TYPE_ANY:
         valid = true;
+        break;
 
       default:
         break;
@@ -1462,8 +1468,11 @@ static DataType check_cast_expression(CastExpr* expression)
       switch (expression->to_data_type.type)
       {
       case TYPE_ARRAY:
+        valid = equal_data_type(expression->from_data_type, expression->to_data_type);
+        break;
       case TYPE_ANY:
         valid = true;
+        break;
 
       default:
         break;
@@ -1474,8 +1483,11 @@ static DataType check_cast_expression(CastExpr* expression)
       switch (expression->to_data_type.type)
       {
       case TYPE_OBJECT:
+        valid = equal_data_type(expression->from_data_type, expression->to_data_type);
+        break;
       case TYPE_ANY:
         valid = true;
+        break;
 
       default:
         break;
@@ -1490,6 +1502,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_ARRAY:
       case TYPE_OBJECT:
         valid = true;
+        break;
 
       default:
         break;
@@ -1501,6 +1514,7 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_BOOL:
         valid = true;
+        break;
 
       default:
         break;
@@ -1513,7 +1527,8 @@ static DataType check_cast_expression(CastExpr* expression)
 
     if (!valid)
     {
-      error_invalid_type_conversion(expression->type.token);
+      error_invalid_type_conversion(expression->type.token, expression->from_data_type,
+                                    expression->to_data_type);
     }
   }
 

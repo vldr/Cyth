@@ -1303,7 +1303,6 @@ static void init_variable_declaration(VarStmt* statement)
   if (environment_check_variable(environment, name))
   {
     error_name_already_exists(statement->name, name);
-    return;
   }
 
   statement->data_type = data_type_token_to_data_type(statement->type);
@@ -1311,7 +1310,6 @@ static void init_variable_declaration(VarStmt* statement)
   if (statement->data_type.type == TYPE_VOID)
   {
     error_type_cannot_be_void(statement->type.token);
-    return;
   }
 
   if (checker.function)
@@ -2966,6 +2964,127 @@ static bool analyze_statements(ArrayStmt statements)
   return false;
 }
 
+void checker_init_globals(void)
+{
+  {
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = TOKEN_EMPTY();
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+    variable->data_type.function_internal.name = "alloc";
+    variable->data_type.function_internal.this = NULL;
+    variable->data_type.function_internal.return_type = ALLOC(DataType);
+    variable->data_type.function_internal.return_type->type = TYPE_INTEGER;
+
+    array_init(&variable->data_type.function_internal.parameter_types);
+    array_add(&variable->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_INTEGER));
+
+    environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                             variable);
+  }
+
+  {
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = TOKEN_EMPTY();
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+    variable->data_type.function_internal.name = "allocReset";
+    variable->data_type.function_internal.this = NULL;
+    variable->data_type.function_internal.return_type = ALLOC(DataType);
+    variable->data_type.function_internal.return_type->type = TYPE_VOID;
+
+    array_init(&variable->data_type.function_internal.parameter_types);
+
+    environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                             variable);
+  }
+
+  const char* writers[] = {
+    "writeInt",
+    "writeFloat",
+    "writeChar",
+    "writeBool",
+  };
+  DataType writer_param_types[] = {
+    DATA_TYPE(TYPE_INTEGER),
+    DATA_TYPE(TYPE_FLOAT),
+    DATA_TYPE(TYPE_CHAR),
+    DATA_TYPE(TYPE_BOOL),
+  };
+
+  for (unsigned int i = 0; i < sizeof(writers) / sizeof_ptr(writers); i++)
+  {
+    const char* name = writers[i];
+    DataType param_type = writer_param_types[i];
+
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = TOKEN_EMPTY();
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+    variable->data_type.function_internal.name = name;
+    variable->data_type.function_internal.this = NULL;
+    variable->data_type.function_internal.return_type = ALLOC(DataType);
+    variable->data_type.function_internal.return_type->type = TYPE_VOID;
+
+    array_init(&variable->data_type.function_internal.parameter_types);
+    array_add(&variable->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_INTEGER));
+    array_add(&variable->data_type.function_internal.parameter_types, param_type);
+
+    environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                             variable);
+  }
+
+  const char* readers[] = {
+    "readInt",
+    "readFloat",
+    "readChar",
+    "readBool",
+  };
+  DataType reader_return_types[] = {
+    DATA_TYPE(TYPE_INTEGER),
+    DATA_TYPE(TYPE_FLOAT),
+    DATA_TYPE(TYPE_CHAR),
+    DATA_TYPE(TYPE_BOOL),
+  };
+
+  for (unsigned int i = 0; i < sizeof(readers) / sizeof_ptr(readers); i++)
+  {
+    const char* name = readers[i];
+    DataType return_type = reader_return_types[i];
+
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = TOKEN_EMPTY();
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+    variable->data_type.function_internal.name = name;
+    variable->data_type.function_internal.this = NULL;
+    variable->data_type.function_internal.return_type = ALLOC(DataType);
+    *variable->data_type.function_internal.return_type = return_type;
+
+    array_init(&variable->data_type.function_internal.parameter_types);
+    array_add(&variable->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_INTEGER));
+
+    environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                             variable);
+  }
+}
+
 void checker_init(ArrayStmt statements)
 {
   checker.error = false;
@@ -2978,6 +3097,8 @@ void checker_init(ArrayStmt statements)
   checker.global_environment = checker.environment;
 
   array_init(&checker.global_locals);
+
+  checker_init_globals();
 }
 
 void checker_validate(void)

@@ -2996,6 +2996,26 @@ void checker_init_globals(void)
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
     variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+    variable->data_type.function_internal.name = "memory";
+    variable->data_type.function_internal.this = NULL;
+    variable->data_type.function_internal.return_type = ALLOC(DataType);
+    variable->data_type.function_internal.return_type->type = TYPE_INTEGER;
+
+    array_init(&variable->data_type.function_internal.parameter_types);
+
+    environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                             variable);
+  }
+
+  {
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = TOKEN_EMPTY();
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->function = NULL;
+    variable->initializer = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
     variable->data_type.function_internal.name = "allocReset";
     variable->data_type.function_internal.this = NULL;
     variable->data_type.function_internal.return_type = ALLOC(DataType);

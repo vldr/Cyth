@@ -1325,6 +1325,8 @@ static const char* generate_alloc_function(void)
 {
 #define SIZE() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
 #define RESULT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define PAGES() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define COUNTER() (BinaryenGlobalGet(codegen.module, counter_name, BinaryenTypeInt32()))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   const char* name = "alloc";
@@ -1339,14 +1341,27 @@ static const char* generate_alloc_function(void)
                        BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), CONSTANT(3)),
                        CONSTANT(-4))),
 
-      BinaryenLocalSet(codegen.module, 1,
-                       BinaryenGlobalGet(codegen.module, counter_name, BinaryenTypeInt32())),
+      BinaryenLocalSet(codegen.module, 1, COUNTER()),
+      BinaryenGlobalSet(codegen.module, counter_name,
+                        BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), SIZE())),
 
-      BinaryenGlobalSet(
-        codegen.module, counter_name,
-        BinaryenBinary(codegen.module, BinaryenAddInt32(),
-                       BinaryenGlobalGet(codegen.module, counter_name, BinaryenTypeInt32()),
-                       SIZE())),
+      BinaryenLocalSet(codegen.module, 2,
+                       BinaryenBinary(codegen.module, BinaryenDivUInt32(),
+                                      BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(),
+                                                     CONSTANT(65535)),
+                                      CONSTANT(65536))),
+
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGtSInt32(), PAGES(),
+                                BinaryenMemorySize(codegen.module, "0", false)),
+                 BinaryenDrop(codegen.module,
+                              BinaryenMemoryGrow(
+                                codegen.module,
+                                BinaryenBinary(codegen.module, BinaryenSubInt32(), PAGES(),
+                                               BinaryenMemorySize(codegen.module, "0", false)),
+                                "0", false)),
+
+                 NULL),
 
       RESULT()
     };
@@ -1362,7 +1377,7 @@ static const char* generate_alloc_function(void)
     BinaryenType results =
       BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
 
-    BinaryenType vars_list[] = { BinaryenTypeInt32() };
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32() };
 
     BinaryenAddFunction(codegen.module, name, params, results, vars_list,
                         sizeof(vars_list) / sizeof_ptr(vars_list), body);
@@ -1372,6 +1387,8 @@ static const char* generate_alloc_function(void)
 
 #undef SIZE
 #undef RESULT
+#undef PAGES
+#undef COUNTER
 #undef CONSTANT
 }
 
@@ -1404,6 +1421,27 @@ static const char* generate_alloc_reset_function(void)
 
 #undef SIZE
 #undef RESULT
+}
+
+static const char* generate_memory_function(void)
+{
+  generate_memory();
+
+  const char* name = "memory";
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = { BinaryenMemorySize(codegen.module, "0", false) };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params = BinaryenTypeNone();
+    BinaryenType results = BinaryenTypeInt32();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
 }
 
 static const char* generate_write_function(const char* name, BinaryenType type, unsigned int bytes)
@@ -1494,6 +1532,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_alloc_function();
   else if (strcmp(name, "allocReset") == 0)
     return generate_alloc_reset_function();
+  else if (strcmp(name, "memory") == 0)
+    return generate_memory_function();
 
   else if (strcmp(name, "writeInt") == 0)
     return generate_write_function(name, BinaryenTypeInt32(), 4);

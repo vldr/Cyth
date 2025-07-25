@@ -1,6 +1,22 @@
 import "env"
     void log<T>(T n)
 
+alloc(65536)
+alloc(1)
+
+writeChar(65535, 'a')
+writeChar(65536, 'b')
+
+log<char>(readChar(65535))
+log<char>(readChar(65536))
+log<int>(memory())
+
+allocReset()
+
+# 97
+# 98
+# 2
+
 int a = alloc(11)
 
 writeInt(a, 10)

@@ -2979,7 +2979,7 @@ void codegen_init(ArrayStmt statements)
   map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
 }
 
-Codegen codegen_generate(void)
+Codegen codegen_generate(bool logging)
 {
   Codegen result = { 0 };
   BinaryenExpressionRef body = generate_statements(&codegen.statements);
@@ -3020,8 +3020,9 @@ Codegen codegen_generate(void)
     result.source_map_size = strlen(binaryen_result.sourceMap);
   }
 
-  BinaryenModulePrint(codegen.module);
-  BinaryenModuleDispose(codegen.module);
+  if (logging)
+    BinaryenModulePrint(codegen.module);
 
+  BinaryenModuleDispose(codegen.module);
   return result;
 }

@@ -13,6 +13,6 @@ typedef struct
 } Codegen;
 
 void codegen_init(ArrayStmt statements);
-Codegen codegen_generate(void);
+Codegen codegen_generate(bool logging);
 
 #endif

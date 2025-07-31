@@ -9,6 +9,11 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
                                  const char* message);
 typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_size,
@@ -17,12 +22,19 @@ typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_siz
 static struct
 {
   bool error;
+  bool logging;
+
   const char* input_path;
   const char* output_path;
 
   error_callback_t error_callback;
   result_callback_t result_callback;
 } cyth;
+
+void set_logging(bool logging)
+{
+  cyth.logging = logging;
+}
 
 void set_error_callback(error_callback_t callback)
 {
@@ -65,9 +77,7 @@ void run(char* source, bool codegen)
   if (codegen)
   {
     codegen_init(statements);
-    Codegen codegen = codegen_generate();
-
-    printf("Build date: %s %s\n", __DATE__, __TIME__);
+    Codegen codegen = codegen_generate(cyth.logging);
 
     cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
   }
@@ -78,7 +88,28 @@ clean_up:
 
 static void run_file(void)
 {
-  FILE* file = fopen(cyth.input_path, "rb");
+#ifdef _WIN32
+  int result = setmode(fileno(stdin), O_BINARY);
+  if (result == -1)
+  {
+    fprintf(stderr, "Could set 'stdin' mode to binary\n");
+    return;
+  }
+
+  result = setmode(fileno(stdout), O_BINARY);
+  if (result == -1)
+  {
+    fprintf(stderr, "Could set 'stdout' mode to binary\n");
+    return;
+  }
+#endif
+
+  FILE* file;
+  if (cyth.input_path)
+    file = fopen(cyth.input_path, "rb");
+  else
+    file = stdin;
+
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
@@ -115,12 +146,16 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
 {
   (void)source_map_size;
 
-  if (!cyth.output_path)
-  {
+  if (cyth.input_path && !cyth.output_path)
     goto clean_up;
-  }
 
-  FILE* file = fopen(cyth.output_path, "wb");
+  FILE* file;
+
+  if (cyth.input_path)
+    file = fopen(cyth.output_path, "wb");
+  else
+    file = stdout;
+
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.output_path);
@@ -145,12 +180,9 @@ clean_up:
 int main(int argc, char* argv[])
 {
   if (argc < 2)
-  {
-    fprintf(stderr, "Usage: cyth <input_path> [output_path]\n");
-    return -1;
-  }
-
-  cyth.input_path = argv[1];
+    cyth.input_path = NULL;
+  else
+    cyth.input_path = argv[1];
 
   if (argc < 3)
     cyth.output_path = NULL;
@@ -159,6 +191,7 @@ int main(int argc, char* argv[])
 
   set_error_callback(handle_error);
   set_result_callback(handle_result);
+  set_logging(cyth.input_path && !cyth.output_path);
 
   run_file();
   memory_free();

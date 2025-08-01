@@ -89,21 +89,30 @@ clean_up:
 static void run_file(void)
 {
 #ifdef _WIN32
-  if (setmode(fileno(stdout), O_BINARY) == -1)
+  int result = setmode(fileno(stdin), O_BINARY);
+  if (result == -1)
+  {
+    fprintf(stderr, "Could set 'stdin' mode to binary\n");
+    return;
+  }
+
+  result = setmode(fileno(stdout), O_BINARY);
+  if (result == -1)
   {
     fprintf(stderr, "Could set 'stdout' mode to binary\n");
-
-    cyth.error = true;
     return;
   }
 #endif
 
-  FILE* file = fopen(cyth.input_path, "rb");
+  FILE* file;
+  if (cyth.input_path)
+    file = fopen(cyth.input_path, "rb");
+  else
+    file = stdin;
+
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
-
-    cyth.error = true;
     return;
   }
 
@@ -117,8 +126,6 @@ static void run_file(void)
   if (file_size != bytes_read)
   {
     fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
-
-    cyth.error = true;
     return;
   }
 
@@ -139,20 +146,19 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
 {
   (void)source_map_size;
 
-  if (!cyth.output_path)
+  if (cyth.input_path && !cyth.output_path)
     goto clean_up;
 
   FILE* file;
-  if (strcmp(cyth.output_path, "stdout") == 0)
-    file = stdout;
-  else
+
+  if (cyth.input_path)
     file = fopen(cyth.output_path, "wb");
+  else
+    file = stdout;
 
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.output_path);
-
-    cyth.error = true;
     goto clean_up;
   }
 
@@ -160,8 +166,6 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
   if (size != bytes_written)
   {
     fprintf(stderr, "Could not write file: %s\n", cyth.output_path);
-
-    cyth.error = true;
     goto clean_up_fd;
   }
 
@@ -176,14 +180,9 @@ clean_up:
 int main(int argc, char* argv[])
 {
   if (argc < 2)
-  {
-    fprintf(stderr, "Usage: cyth <input_path> [output_path]\n");
-
-    cyth.error = true;
-    goto exit;
-  }
-
-  cyth.input_path = argv[1];
+    cyth.input_path = NULL;
+  else
+    cyth.input_path = argv[1];
 
   if (argc < 3)
     cyth.output_path = NULL;
@@ -192,12 +191,10 @@ int main(int argc, char* argv[])
 
   set_error_callback(handle_error);
   set_result_callback(handle_result);
-  set_logging(cyth.output_path == NULL);
+  set_logging(cyth.input_path && !cyth.output_path);
 
   run_file();
   memory_free();
 
-exit:
-
-  return cyth.error ? -1 : 0;
+  return 0;
 }

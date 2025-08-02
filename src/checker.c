@@ -20,6 +20,7 @@ static struct
 
   FuncStmt* function;
   ClassStmt* class;
+  IfStmt* cond;
   ClassTemplateStmt* class_template;
   WhileStmt* loop;
 } checker;
@@ -659,11 +660,13 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
   WhileStmt* previous_loop = checker.loop;
+  IfStmt* previous_cond = checker.cond;
   Environment* previous_environment = checker.environment;
 
   checker.class = NULL;
   checker.function = NULL;
   checker.loop = NULL;
+  checker.cond = NULL;
   checker.environment = checker.global_environment;
 
   init_class_declaration(class_statement);
@@ -697,6 +700,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.class = previous_class;
   checker.function = previous_function;
   checker.loop = previous_loop;
+  checker.cond = previous_cond;
   checker.environment = previous_environment;
 
   array_add(&template.class_template->classes, class_statement);
@@ -734,11 +738,14 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
   WhileStmt* previous_loop = checker.loop;
+  IfStmt* previous_cond = checker.cond;
+
   Environment* previous_environment = checker.environment;
 
   checker.class = template.function_template.function->class;
   checker.function = template.function_template.function->function;
   checker.loop = template.function_template.function->loop;
+  checker.cond = template.function_template.function->cond;
   checker.environment = template.function_template.function->environment;
 
   for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
@@ -761,7 +768,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
 
-  if (!checker.function && !checker.loop)
+  if (!checker.function && !checker.loop && !checker.cond)
     init_function_declaration(function_statement);
 
   check_function_declaration(function_statement);
@@ -769,6 +776,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.class = previous_class;
   checker.function = previous_function;
   checker.loop = previous_loop;
+  checker.cond = previous_cond;
   checker.environment = previous_environment;
 
   array_add(&template.function_template.function->functions, function_statement);
@@ -1098,7 +1106,7 @@ static void init_function_declaration(FuncStmt* statement)
       memory_sprintf("%s.%s:%d:%d", checker.function->name.lexeme, statement->name.lexeme,
                      statement->name.start_line, statement->name.start_column);
   }
-  else if (checker.loop)
+  else if (checker.loop || checker.cond)
   {
     statement->name.lexeme = memory_sprintf(
       "%s:%d:%d", statement->name.lexeme, statement->name.start_line, statement->name.start_column);
@@ -1215,6 +1223,7 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
   statement->function = checker.function;
   statement->class = checker.class;
   statement->loop = checker.loop;
+  statement->cond = checker.cond;
   statement->environment = environment_init(checker.environment);
 
   MapSInt type_set;
@@ -2567,7 +2576,10 @@ static void check_if_statement(IfStmt* statement)
       error_condition_is_not_bool(statement->keyword);
   }
 
+  IfStmt* previous_cond = checker.cond;
+
   checker.environment = environment_init(checker.environment);
+  checker.cond = statement;
 
   Stmt* body_statement;
   array_foreach(&statement->then_branch, body_statement)
@@ -2589,6 +2601,8 @@ static void check_if_statement(IfStmt* statement)
 
     checker.environment = checker.environment->parent;
   }
+
+  checker.cond = previous_cond;
 }
 
 static void check_while_statement(WhileStmt* statement)
@@ -2705,7 +2719,7 @@ static void check_binary_overload_function_declaration(FuncStmt* function, const
 
 static void check_function_declaration(FuncStmt* statement)
 {
-  if (checker.function || checker.loop)
+  if (checker.function || checker.loop || checker.cond)
   {
     init_function_declaration(statement);
   }
@@ -2813,7 +2827,7 @@ static void check_set_get_function_declarations(ClassStmt* statement)
 
 static void check_class_declaration(ClassStmt* statement)
 {
-  if (checker.function || checker.loop || checker.class)
+  if (checker.function || checker.loop || checker.class || checker.cond)
   {
     error_unexpected_class(statement->name);
     return;
@@ -2859,7 +2873,7 @@ static void check_class_template_declaration(ClassTemplateStmt* statement)
 
 static void check_import_declaration(ImportStmt* statement)
 {
-  if (checker.function || checker.loop || checker.class)
+  if (checker.function || checker.loop || checker.class || checker.cond)
   {
     error_unexpected_import(statement->keyword);
     return;
@@ -2911,7 +2925,7 @@ static void check_statement(Stmt* statement, bool synchronize)
     break;
 
   case STMT_FUNCTION_TEMPLATE_DECL:
-    if (checker.function || checker.loop)
+    if (checker.function || checker.loop || checker.cond)
       init_function_template_declaration(&statement->func_template);
 
     break;
@@ -3111,6 +3125,7 @@ void checker_init(ArrayStmt statements)
   checker.function = NULL;
   checker.class = NULL;
   checker.loop = NULL;
+  checker.cond = NULL;
   checker.statements = statements;
 
   checker.environment = environment_init(NULL);

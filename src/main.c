@@ -93,6 +93,8 @@ static void run_file(void)
   if (result == -1)
   {
     fprintf(stderr, "Could set 'stdin' mode to binary\n");
+
+    cyth.error = true;
     return;
   }
 
@@ -100,6 +102,8 @@ static void run_file(void)
   if (result == -1)
   {
     fprintf(stderr, "Could set 'stdout' mode to binary\n");
+
+    cyth.error = true;
     return;
   }
 #endif
@@ -113,6 +117,8 @@ static void run_file(void)
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
+
+    cyth.error = true;
     return;
   }
 
@@ -126,6 +132,8 @@ static void run_file(void)
   if (file_size != bytes_read)
   {
     fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
+
+    cyth.error = true;
     return;
   }
 
@@ -159,6 +167,8 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
   if (!file)
   {
     fprintf(stderr, "Could not open file: %s\n", cyth.output_path);
+
+    cyth.error = true;
     goto clean_up;
   }
 
@@ -166,6 +176,8 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
   if (size != bytes_written)
   {
     fprintf(stderr, "Could not write file: %s\n", cyth.output_path);
+
+    cyth.error = true;
     goto clean_up_fd;
   }
 
@@ -196,5 +208,5 @@ int main(int argc, char* argv[])
   run_file();
   memory_free();
 
-  return 0;
+  return cyth.error ? -1 : 0;
 }

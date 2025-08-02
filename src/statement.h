@@ -80,6 +80,7 @@ typedef struct _FUNC_TEMPLATE_STMT
   struct _CLASS_STMT* class;
   struct _FUNC_STMT* function;
   struct _WHILE_STMT* loop;
+  struct _IF_STMT* cond;
   struct _ENVIRONMENT* environment;
 
   const char* import;

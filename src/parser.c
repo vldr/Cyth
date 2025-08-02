@@ -946,6 +946,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   stmt->func_template.class = NULL;
   stmt->func_template.function = NULL;
   stmt->func_template.loop = NULL;
+  stmt->func_template.cond = NULL;
   stmt->func_template.environment = NULL;
   stmt->func_template.import = NULL;
 

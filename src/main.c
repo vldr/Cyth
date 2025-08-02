@@ -1,4 +1,5 @@
 #include "main.h"
+#include "array.h"
 #include "checker.h"
 #include "codegen.h"
 #include "lexer.h"
@@ -108,39 +109,50 @@ static void run_file(void)
   }
 #endif
 
-  FILE* file;
   if (cyth.input_path)
-    file = fopen(cyth.input_path, "rb");
+  {
+    FILE* file = fopen(cyth.input_path, "rb");
+    if (!file)
+    {
+      fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
+
+      cyth.error = true;
+      return;
+    }
+
+    fseek(file, 0L, SEEK_END);
+    size_t file_size = ftell(file);
+    rewind(file);
+
+    char* source = memory_alloc(file_size + 1);
+    size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
+
+    if (file_size != bytes_read)
+    {
+      fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
+
+      cyth.error = true;
+      return;
+    }
+
+    fclose(file);
+    source[file_size] = '\0';
+
+    run(source, true);
+  }
   else
-    file = stdin;
-
-  if (!file)
   {
-    fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
+    ArrayChar source;
+    array_init(&source);
 
-    cyth.error = true;
-    return;
+    char c;
+    while ((c = getchar()) != EOF)
+    {
+      array_add(&source, c);
+    }
+
+    run(source.elems, true);
   }
-
-  fseek(file, 0L, SEEK_END);
-  size_t file_size = ftell(file);
-  rewind(file);
-
-  char* source = memory_alloc(file_size + 1);
-  size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
-
-  if (file_size != bytes_read)
-  {
-    fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
-
-    cyth.error = true;
-    return;
-  }
-
-  fclose(file);
-  source[file_size] = '\0';
-
-  run(source, true);
 }
 
 static void handle_error(int start_line, int start_column, int end_line, int end_column,

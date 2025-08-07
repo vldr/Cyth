@@ -50,6 +50,7 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
                                                         TypeBuilderRef type_builder_ref,
                                                         ArrayTypeBuilderSubtype* subtypes);
 
+static BinaryenPackedType data_type_to_binaryen_packed_type(DataType data_type);
 static BinaryenType data_type_to_binaryen_type(DataType data_type);
 static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_builder_ref,
                                                          ArrayTypeBuilderSubtype* subtypes,
@@ -704,7 +705,8 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
       offset = 0;
     }
 
-    BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
+    BinaryenPackedType packed_type =
+      data_type_to_binaryen_packed_type(array_data_type_element(data_type));
     bool mutable = true;
 
     TypeBuilderSetArrayType(type_builder, offset, element_data_type, packed_type, mutable);
@@ -892,6 +894,19 @@ static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_bui
   }
 }
 
+static BinaryenPackedType data_type_to_binaryen_packed_type(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_CHAR:
+  case TYPE_BOOL:
+    return BinaryenPackedTypeInt8();
+
+  default:
+    return BinaryenPackedTypeNotPacked();
+  }
+}
+
 static BinaryenExpressionRef generate_default_initialization(DataType data_type)
 {
   switch (data_type.type)
@@ -1064,6 +1079,39 @@ static const char* generate_array_pop_function(DataType this_data_type)
 #undef CONSTANT
 }
 
+static const char* generate_array_clear_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("array.clear.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenStructSet(codegen.module, 1, THIS(), CONSTANT(0)),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    BinaryenType params_list[] = { this_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results = BinaryenTypeNone();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef CONSTANT
+}
+
 static const char* generate_array_reserve_function(DataType this_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
@@ -1171,6 +1219,56 @@ static const char* generate_array_reserve_function(DataType this_data_type)
 #undef COUNTER
 #undef SUBTHIS
 #undef ARRAY
+#undef CONSTANT
+}
+
+static const char* generate_array_to_string_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define RESULT() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("array.to_string.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef struct_ref = THIS();
+    BinaryenExpressionRef array_ref =
+      BinaryenStructGet(codegen.module, 0, struct_ref, BinaryenTypeAuto(), false);
+    BinaryenExpressionRef length =
+      BinaryenStructGet(codegen.module, 1, struct_ref, BinaryenTypeInt32(), false);
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenLocalSet(codegen.module, 1,
+                       BinaryenArrayNew(codegen.module, codegen.string_heap_type, length, NULL)),
+
+      BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), array_ref, CONSTANT(0),
+                        BinaryenExpressionCopy(length, codegen.module)),
+
+      RESULT()
+    };
+
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    codegen.string_type);
+
+    BinaryenType params_list[] = { this_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { codegen.string_type };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, &codegen.string_type, 1, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef RESULT
 #undef CONSTANT
 }
 
@@ -1516,8 +1614,13 @@ static const char* generate_function_internal(DataType data_type)
                                         array_at(&data_type.function_internal.parameter_types, 1));
   else if (strcmp(name, "array.pop") == 0)
     return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.clear") == 0)
+    return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.reserve") == 0)
     return generate_array_reserve_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.to_string") == 0)
+    return generate_array_to_string_function(
       array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();

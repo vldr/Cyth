@@ -60,6 +60,11 @@ static void error_type_mismatch(Token token, DataType expected, DataType got)
                                       data_type_to_string(expected), data_type_to_string(got)));
 }
 
+static void error_should_not_return_value_in_top_level(Token token)
+{
+  checker_error(token, "Should not return a value here.");
+}
+
 static void error_should_not_return_value(Token token, const char* function_name)
 {
   checker_error(token,
@@ -200,11 +205,6 @@ static void error_unexpected_class(Token token)
 static void error_unexpected_import(Token token)
 {
   checker_error(token, "An import declaration is not allowed here.");
-}
-
-static void error_unexpected_return(Token token)
-{
-  checker_error(token, "A return statement can only appear inside a function.");
 }
 
 static void error_unexpected_continue(Token token)
@@ -2562,7 +2562,12 @@ static void check_return_statement(ReturnStmt* statement)
 {
   if (!checker.function)
   {
-    error_unexpected_return(statement->keyword);
+    if (statement->expr)
+    {
+      error_should_not_return_value_in_top_level(statement->keyword);
+      return;
+    }
+
     return;
   }
 

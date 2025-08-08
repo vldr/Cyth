@@ -159,14 +159,22 @@ static void error_not_an_object(Token token)
   checker_error(token, "The expression is not an object.");
 }
 
-static void error_not_indexable(Token token)
+static void error_not_indexable(Token token, DataType data_type)
 {
-  checker_error(token, "The expression cannot be indexed.");
+  checker_error(token,
+                memory_sprintf("Cannot index into type '%s'.", data_type_to_string(data_type)));
 }
 
 static void error_not_indexable_missing_overload(Token token)
 {
   checker_error(token, "The object cannot be indexed, missing '__get__' method.");
+}
+
+static void error_indexable_type_mismatch(Token token, DataType expected, DataType got)
+{
+  checker_error(token,
+                memory_sprintf("The '__get__' method expects index type '%s' but got '%s' instead.",
+                               data_type_to_string(expected), data_type_to_string(got)));
 }
 
 static void error_not_indexable_and_assignable_missing_overload(Token token)
@@ -2483,8 +2491,8 @@ static DataType check_index_expression(IndexExpr* expression)
     FuncStmt* function = variable->data_type.function_member.function;
     if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
     {
-      error_type_mismatch(expression->index_token, index_data_type,
-                          array_at(&function->parameters, 1)->data_type);
+      error_indexable_type_mismatch(expression->index_token,
+                                    array_at(&function->parameters, 1)->data_type, index_data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
@@ -2494,7 +2502,7 @@ static DataType check_index_expression(IndexExpr* expression)
     return expression->data_type;
   }
 
-  error_not_indexable(expression->expr_token);
+  error_not_indexable(expression->expr_token, expr_data_type);
   return DATA_TYPE(TYPE_VOID);
 }
 
@@ -2685,6 +2693,12 @@ static void check_while_statement(WhileStmt* statement)
 
 static void check_variable_declaration(VarStmt* statement)
 {
+  DataType initializer_data_type;
+  if (statement->initializer)
+  {
+    initializer_data_type = check_expression(statement->initializer);
+  }
+
   if (statement->scope == SCOPE_NONE)
   {
     init_variable_declaration(statement);
@@ -2692,8 +2706,6 @@ static void check_variable_declaration(VarStmt* statement)
 
   if (statement->initializer)
   {
-    DataType initializer_data_type = check_expression(statement->initializer);
-
     data_type_inference(&initializer_data_type, &statement->data_type);
 
     if (!equal_data_type(statement->data_type, initializer_data_type) &&

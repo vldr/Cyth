@@ -163,6 +163,55 @@ static DataTypeToken data_type_template(bool* skip_greater_greater)
   return data_type_token;
 }
 
+static Expr* cast_to_array(DataTypeToken type, Expr* expr)
+{
+  while (expr->type == EXPR_GROUP)
+  {
+    expr = expr->group.expr;
+  }
+
+  if (expr->type == EXPR_ARRAY)
+  {
+    Expr* cast = EXPR();
+    cast->type = EXPR_CAST;
+    cast->cast.expr = expr;
+    cast->cast.to_data_type = DATA_TYPE(TYPE_VOID);
+    cast->cast.from_data_type = DATA_TYPE(TYPE_VOID);
+    cast->cast.type = type;
+
+    if (cast->cast.type.type != DATA_TYPE_TOKEN_ARRAY)
+    {
+      cast->cast.type.type = DATA_TYPE_TOKEN_ARRAY;
+      cast->cast.type.array.type = ALLOC(DataTypeToken);
+      *cast->cast.type.array.type = type;
+      cast->cast.type.array.count = 1;
+    }
+    else
+    {
+      cast->cast.type.array.count += 1;
+    }
+
+    return cast;
+  }
+  else
+  {
+    return expr;
+  }
+}
+
+static Token combine_tokens(Token start_token, Token end_token)
+{
+  return (Token){
+    TOKEN_IDENTIFIER,
+    start_token.start_line,
+    start_token.start_column,
+    end_token.end_line,
+    end_token.end_column,
+    0,
+    "",
+  };
+}
+
 static DataTypeToken data_type_array_function(bool* skip_greater_greater)
 {
   DataTypeToken data_type_token = data_type_template(skip_greater_greater);
@@ -464,15 +513,7 @@ static Expr* primary(void)
         Token start_token = peek();
         Expr* value = expression();
         Token end_token = previous();
-
-        Token token = {
-          .type = TOKEN_IDENTIFIER,
-          .start_line = start_token.start_line,
-          .start_column = start_token.start_column,
-          .end_line = end_token.end_line,
-          .end_column = end_token.end_column,
-          .lexeme = "",
-        };
+        Token token = combine_tokens(start_token, end_token);
 
         array_add(&values, value);
         array_add(&tokens, token);
@@ -484,14 +525,7 @@ static Expr* primary(void)
     expr->type = EXPR_ARRAY;
     expr->array.values = values;
     expr->array.tokens = tokens;
-    expr->array.token = (Token){
-      .type = TOKEN_IDENTIFIER,
-      .start_line = start_token.start_line,
-      .start_column = start_token.start_column,
-      .end_line = end_token.end_line,
-      .end_column = end_token.end_column,
-      .lexeme = "",
-    };
+    expr->array.token = combine_tokens(start_token, end_token);
 
     break;
   }
@@ -554,13 +588,7 @@ static Expr* call(void)
           array_add(&arguments, expression());
 
           Token end_token = previous();
-          Token argument_token = (Token){ TOKEN_IDENTIFIER,
-                                          start_token.start_line,
-                                          start_token.start_column,
-                                          end_token.end_line,
-                                          end_token.end_column,
-                                          0,
-                                          "" };
+          Token argument_token = combine_tokens(start_token, end_token);
 
           array_add(&argument_tokens, argument_token);
 
@@ -574,15 +602,7 @@ static Expr* call(void)
       call->call.arguments = arguments;
       call->call.argument_tokens = argument_tokens;
       call->call.callee = expr;
-      call->call.callee_token = (Token){
-        TOKEN_IDENTIFIER,
-        start_token.start_line,
-        start_token.start_column,
-        end_token.end_line,
-        end_token.end_column,
-        0,
-        "",
-      };
+      call->call.callee_token = combine_tokens(start_token, end_token);
 
       expr = call;
     }
@@ -594,15 +614,7 @@ static Expr* call(void)
       access->access.variable = NULL;
       access->access.template_types = consume_template_types();
       access->access.expr = expr;
-      access->access.expr_token = (Token){
-        TOKEN_IDENTIFIER,
-        start_token.start_line,
-        start_token.start_column,
-        end_token.end_line,
-        end_token.end_column,
-        0,
-        "",
-      };
+      access->access.expr_token = combine_tokens(start_token, end_token);
 
       expr = access;
     }
@@ -617,26 +629,10 @@ static Expr* call(void)
       Expr* index = EXPR();
       index->type = EXPR_INDEX;
       index->index.index = index_expr;
-      index->index.index_token = (Token){
-        TOKEN_IDENTIFIER,
-        start_index_token.start_line,
-        start_index_token.start_column,
-        end_index_token.end_line,
-        end_index_token.end_column,
-        0,
-        "",
-      };
+      index->index.index_token = combine_tokens(start_index_token, end_index_token);
 
       index->index.expr = expr;
-      index->index.expr_token = (Token){
-        TOKEN_IDENTIFIER,
-        start_token.start_line,
-        start_token.start_column,
-        end_token.end_line,
-        end_token.end_column,
-        0,
-        "",
-      };
+      index->index.expr_token = combine_tokens(start_token, end_token);
 
       expr = index;
     }
@@ -968,15 +964,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
 
   if (!array_size(&stmt->func_template.types))
   {
-    Token types_token = (Token){
-      TOKEN_IDENTIFIER,
-      start_token.start_line,
-      start_token.start_column,
-      end_token.end_line,
-      end_token.end_column,
-      0,
-      "",
-    };
+    Token types_token = combine_tokens(start_token, end_token);
 
     parser_error(types_token, "The types list cannot be empty.");
   }
@@ -1061,15 +1049,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
   stmt->class_template.offset = parser.current;
 
   Token end_token = previous();
-  Token types_token = (Token){
-    TOKEN_IDENTIFIER,
-    start_token.start_line,
-    start_token.start_column,
-    end_token.end_line,
-    end_token.end_column,
-    0,
-    "",
-  };
+  Token types_token = combine_tokens(start_token, end_token);
 
   if (!array_size(&stmt->class_template.types))
   {
@@ -1291,6 +1271,137 @@ static Stmt* while_statement(void)
   return stmt;
 }
 
+static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
+{
+  int position = parser.current;
+  Token start_token = peek();
+
+  Expr* list_access = cast_to_array(type, expression());
+  seek(position);
+  Expr* list_index = cast_to_array(type, expression());
+
+  Token end_token = previous();
+  Token list_token = combine_tokens(start_token, end_token);
+
+  {
+    Stmt* counter_stmt = STMT();
+    counter_stmt->type = STMT_VARIABLE_DECL;
+    counter_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
+    counter_stmt->var.type.type = DATA_TYPE_TOKEN_PRIMITIVE;
+    counter_stmt->var.type.token = TOKEN_EMPTY();
+    counter_stmt->var.type.token.type = TOKEN_IDENTIFIER_INT;
+    counter_stmt->var.name = name;
+    counter_stmt->var.name.lexeme = "it";
+    counter_stmt->var.name.length = sizeof("it");
+    counter_stmt->var.equals = TOKEN_EMPTY();
+    counter_stmt->var.initializer = NULL;
+    counter_stmt->var.function = NULL;
+    counter_stmt->var.scope = SCOPE_NONE;
+
+    stmt->loop.initializer = counter_stmt;
+  }
+
+  {
+    Expr* counter = EXPR();
+    counter->type = EXPR_VAR;
+    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.variable = NULL;
+    counter->var.template_types = NULL;
+
+    Expr* element_access = EXPR();
+    element_access->type = EXPR_ACCESS;
+    element_access->access.name = list_token;
+    element_access->access.name.lexeme = "length";
+    element_access->access.name.length = sizeof("length") - 1;
+    element_access->access.variable = NULL;
+    element_access->access.template_types = NULL;
+    element_access->access.expr = list_access;
+    element_access->access.expr_token = list_token;
+
+    Token op = TOKEN_EMPTY();
+    op.type = TOKEN_LESS;
+
+    BINARY_EXPR(stmt->loop.condition, op, counter, element_access);
+  }
+
+  {
+    Expr* counter = EXPR();
+    counter->type = EXPR_VAR;
+    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.variable = NULL;
+    counter->var.template_types = NULL;
+
+    Expr* constant = EXPR();
+    constant->type = EXPR_LITERAL;
+    constant->literal.data_type = DATA_TYPE(TYPE_INTEGER);
+    constant->literal.integer = 1;
+
+    Token op = TOKEN_EMPTY();
+    op.type = TOKEN_PLUS;
+
+    Expr* binary;
+    BINARY_EXPR(binary, op, counter, constant);
+
+    Expr* target = EXPR();
+    target->type = EXPR_VAR;
+    target->var.name = stmt->loop.initializer->var.name;
+    target->var.variable = NULL;
+    target->var.template_types = NULL;
+
+    Expr* assignment = EXPR();
+    assignment->type = EXPR_ASSIGN;
+    assignment->assign.op = op;
+    assignment->assign.target = target;
+    assignment->assign.value = binary;
+    assignment->assign.variable = NULL;
+
+    Stmt* incrementer = STMT();
+    incrementer->type = STMT_EXPR;
+    incrementer->expr.expr = assignment;
+
+    stmt->loop.incrementer = incrementer;
+  }
+
+  consume(TOKEN_NEWLINE, "Expected a newline.");
+
+  array_init(&stmt->loop.body);
+  if (check(TOKEN_INDENT))
+    stmt->loop.body = statements();
+
+  {
+    Expr* counter = EXPR();
+    counter->type = EXPR_VAR;
+    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.variable = NULL;
+    counter->var.template_types = NULL;
+
+    Expr* index = EXPR();
+    index->type = EXPR_INDEX;
+    index->index.index = counter;
+    index->index.index_token = list_token;
+    index->index.expr = list_index;
+    index->index.expr_token = list_token;
+
+    Stmt* element_stmt = STMT();
+    element_stmt->type = STMT_VARIABLE_DECL;
+    element_stmt->var.type = type;
+    element_stmt->var.name = name;
+    element_stmt->var.equals = name;
+    element_stmt->var.initializer = index;
+    element_stmt->var.function = NULL;
+    element_stmt->var.scope = SCOPE_NONE;
+
+    array_add(&stmt->loop.body, element_stmt);
+
+    for (unsigned int i = stmt->loop.body.size - 1; i >= 1; i--)
+      stmt->loop.body.elems[i] = stmt->loop.body.elems[i - 1];
+
+    stmt->loop.body.elems[0] = element_stmt;
+  }
+
+  return stmt;
+}
+
 static Stmt* for_statement(void)
 {
   Stmt* stmt = STMT();
@@ -1308,7 +1419,10 @@ static Stmt* for_statement(void)
       DataTypeToken type = consume_data_type("Expected a type.");
       Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
-      stmt->loop.initializer = variable_declaration_statement(type, name, false);
+      if (match(TOKEN_IN))
+        return for_in_statement(type, name, stmt);
+      else
+        stmt->loop.initializer = variable_declaration_statement(type, name, false);
     }
     else
     {

@@ -12,9 +12,9 @@ env:
   NODE_VERSION: 23
 
 jobs:
-  build-web:
-    name: Web
-    concurrency: ci-web-${{ github.ref }}
+  build:
+    name: Linux and Web
+    concurrency: ci-${{ github.ref }}
     runs-on: self-hosted
     steps:
       - name: Check out code
@@ -51,3 +51,17 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: editor
+
+  build-windows:
+    name: Windows
+    concurrency: ci-windows-${{ github.ref }}
+    runs-on: self-hosted
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: |
+          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
+          cd winbuild
+          msbuild

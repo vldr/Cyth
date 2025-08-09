@@ -67,4 +67,4 @@ jobs:
         run: |
           cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
           cd winbuild
-          msbuild
+          msbuild cyth.sln

@@ -60,6 +60,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
+      - name: Add MSBUILD to PATH
+        uses: microsoft/setup-msbuild@v1.1
+
       - name: Build
         run: |
           cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"

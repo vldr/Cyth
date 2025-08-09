@@ -55,7 +55,7 @@ jobs:
   build-windows:
     name: Windows
     concurrency: ci-windows-${{ github.ref }}
-    runs-on: self-hosted
+    runs-on: windows-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2

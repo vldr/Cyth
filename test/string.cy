@@ -8,8 +8,8 @@ int stringIndexOf(string s, string target)
     for int i = 0; i <= s.length - target.length; i += 1
         bool match = true
 
-        for int j = 0; j < target.length; j += 1
-            if s[i + j] != target[j]
+        for char c in target
+            if s[i + it] != c
                 match = false
                 break
 
@@ -41,9 +41,9 @@ string[] stringSplit(string s, char delim)
     string[] result
     char[] current
 
-    for int i = 0; i < s.length; i += 1
-        if s[i] != delim
-            current.push(s[i])
+    for char c in s
+        if c != delim
+            current.push(c)
         else
             result.push(current.toString())
             current.clear()
@@ -57,19 +57,19 @@ string stringJoin(string[] parts, string delim)
     string[] result
     char[] buf
 
-    for int i = 0; i < parts.length; i += 1
-        for int j = 0; j < parts[i].length; j += 1
-            buf.push(parts[i][j])
+    for string part in parts
+        for char c in part
+            buf.push(c)
 
-        if i != parts.length - 1
-            for int j = 0; j < delim.length; j += 1
-                buf.push(delim[j])
+        if it != parts.length - 1
+            for char c in delim
+                buf.push(c)
 
     return buf.toString()
 
 string[] chunks = stringSplit("hello, world, how are you", ',')
-for int i = 0; i < chunks.length; i += 1
-    log(stringTrim(chunks[i]))
+for string chunk in chunks
+    log(stringTrim(chunk))
 
 # hello
 # world
@@ -86,8 +86,8 @@ log("" + stringIndexOf(stringJoin(chunks, ","), ""))
 # 0
 
 chunks = stringSplit("hello |   world   |         how are you", '|')
-for int i = 0; i < chunks.length; i += 1
-    log(stringTrim(chunks[i]))
+for string chunk in chunks
+    log(stringTrim(chunk))
 
 # hello
 # world

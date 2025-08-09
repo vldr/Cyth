@@ -515,6 +515,12 @@ bool nullable_data_type(DataType data_type)
          data_type.type == TYPE_NULL || data_type.type == TYPE_FUNCTION_POINTER;
 }
 
+bool boolable_data_type(DataType data_type)
+{
+  return nullable_data_type(data_type) || data_type.type == TYPE_INTEGER ||
+         data_type.type == TYPE_STRING || data_type.type == TYPE_BOOL;
+}
+
 bool assignable_data_type(DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
@@ -973,9 +979,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
-  if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_ANY ||
-      data_type.type == TYPE_INTEGER || data_type.type == TYPE_NULL ||
-      data_type.type == TYPE_BOOL || data_type.type == TYPE_FUNCTION_POINTER)
+  if (boolable_data_type(data_type))
   {
     Expr* cast_expression = EXPR();
     cast_expression->type = EXPR_CAST;
@@ -1024,12 +1028,12 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   return true;
 }
 
-bool upcast_nullable_to_bool(BinaryExpr* expression, DataType* left, DataType* right, DataType from)
+bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, DataType* right, DataType from)
 {
   if (expression->op.type != TOKEN_AND && expression->op.type != TOKEN_OR)
     return false;
 
-  if (!nullable_data_type(*left) && !nullable_data_type(*right))
+  if (!boolable_data_type(*left) && !boolable_data_type(*right))
     return false;
 
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
@@ -1470,6 +1474,7 @@ static DataType check_cast_expression(CastExpr* expression)
       switch (expression->to_data_type.type)
       {
       case TYPE_STRING:
+      case TYPE_BOOL:
       case TYPE_ANY:
         valid = true;
         break;
@@ -1733,11 +1738,12 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
 
-        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_POINTER)) &&
-        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
-        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_OBJECT)) &&
-        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_ANY)) &&
-        !upcast_nullable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_NULL)))
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_STRING)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_POINTER)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_OBJECT)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_ANY)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_NULL)))
     {
       error_type_mismatch(expression->op, left, right);
     }

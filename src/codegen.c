@@ -1723,7 +1723,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
   switch (expression->op.type)
   {
   case TOKEN_PLUS:
-    if (data_type.type == TYPE_INTEGER)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
       op = BinaryenAddInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenAddFloat32();
@@ -1745,7 +1745,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
 
     break;
   case TOKEN_MINUS:
-    if (data_type.type == TYPE_INTEGER)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
       op = BinaryenSubInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenSubFloat32();
@@ -1761,7 +1761,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
 
     break;
   case TOKEN_STAR:
-    if (data_type.type == TYPE_INTEGER)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
       op = BinaryenMulInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenMulFloat32();
@@ -1777,7 +1777,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
 
     break;
   case TOKEN_SLASH:
-    if (data_type.type == TYPE_INTEGER)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
       op = BinaryenDivSInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenDivFloat32();
@@ -1838,7 +1838,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
-    else if (data_type.type != TYPE_INTEGER)
+    else if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_CHAR)
       UNREACHABLE("Unsupported binary type for %, &, |, ^, <<, >>");
 
     break;
@@ -1908,7 +1908,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_LESS_EQUAL:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenLeSInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenLeFloat32();
@@ -1925,7 +1926,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_GREATER_EQUAL:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenGeSInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenGeFloat32();
@@ -1942,7 +1944,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_LESS:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenLtSInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenLtFloat32();
@@ -1959,7 +1962,8 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     break;
 
   case TOKEN_GREATER:
-    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL)
+    if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_BOOL ||
+        data_type.type == TYPE_CHAR)
       op = BinaryenGtSInt32();
     else if (data_type.type == TYPE_FLOAT)
       op = BinaryenGtFloat32();

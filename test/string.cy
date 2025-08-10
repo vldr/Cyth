@@ -22,6 +22,9 @@ bool stringContains(string s, string target)
     return stringIndexOf(s, target) != -1
 
 string stringTrim(string s)
+    if not s
+        return s
+
     int start = 0
     int end = s.length - 1
 
@@ -66,6 +69,24 @@ string stringJoin(string[] parts, string delim)
                 buf.push(c)
 
     return buf.toString()
+
+log("Empty" + stringTrim(""))
+log("Contains " + stringContains("", ""))
+log("Contains " + stringContains("abc", ""))
+log("Contains " + stringContains("", "abc"))
+log("IndexOf " + stringIndexOf("", ""))
+log("IndexOf " + stringIndexOf("abc", ""))
+log("IndexOf " + stringIndexOf("", "abc"))
+log("Length " + stringSplit("", '\\').length)
+
+# Empty
+# Contains true
+# Contains true
+# Contains false
+# IndexOf 0
+# IndexOf 0
+# IndexOf -1
+# Length 0
 
 string[] chunks = stringSplit("hello, world, how are you", ',')
 for string chunk in chunks

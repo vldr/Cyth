@@ -533,6 +533,9 @@ bool assignable_data_type(DataType destination, DataType source)
   if (destination.type == TYPE_FUNCTION_POINTER)
     return source.type == TYPE_NULL;
 
+  if (destination.type == TYPE_INTEGER)
+    return source.type == TYPE_CHAR;
+
   return false;
 }
 
@@ -1733,6 +1736,7 @@ skip:
   if (!equal_data_type(left, right))
   {
     if (!upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_FLOAT)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_CHAR), DATA_TYPE(TYPE_INTEGER)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_CHAR), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
@@ -1791,20 +1795,25 @@ skip:
   case TOKEN_GREATER_EQUAL:
   case TOKEN_LESS:
   case TOKEN_LESS_EQUAL:
-    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_BOOL)
+    if (left.type != TYPE_CHAR && left.type != TYPE_INTEGER && left.type != TYPE_FLOAT &&
+        left.type != TYPE_BOOL)
       error_operation_not_defined(op, left);
 
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_PLUS:
-    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_STRING)
+    if (left.type == TYPE_CHAR)
+      expression->return_data_type = DATA_TYPE(TYPE_INTEGER);
+    else if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT && left.type != TYPE_STRING)
       error_operation_not_defined(op, left);
 
     break;
   case TOKEN_MINUS:
   case TOKEN_STAR:
   case TOKEN_SLASH:
-    if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT)
+    if (left.type == TYPE_CHAR)
+      expression->return_data_type = DATA_TYPE(TYPE_INTEGER);
+    else if (left.type != TYPE_INTEGER && left.type != TYPE_FLOAT)
       error_operation_not_defined(op, left);
 
     break;
@@ -1815,7 +1824,9 @@ skip:
   case TOKEN_CARET:
   case TOKEN_LESS_LESS:
   case TOKEN_GREATER_GREATER:
-    if (left.type != TYPE_INTEGER)
+    if (left.type == TYPE_CHAR)
+      expression->return_data_type = DATA_TYPE(TYPE_INTEGER);
+    else if (left.type != TYPE_INTEGER)
       error_operation_not_defined(op, left);
 
     break;

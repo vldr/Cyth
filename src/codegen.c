@@ -2631,12 +2631,7 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
   ArrayBinaryenExpressionRef loop_block_list;
   array_init(&loop_block_list);
   array_add(&loop_block_list, continue_block);
-
-  if (statement->incrementer)
-  {
-    array_add(&loop_block_list, generate_statement(statement->incrementer));
-  }
-
+  array_add(&loop_block_list, generate_statements(&statement->incrementer));
   array_add(&loop_block_list, BinaryenBreak(codegen.module, loop_name, NULL, NULL));
 
   BinaryenExpressionRef loop_block = BinaryenBlock(codegen.module, NULL, loop_block_list.elems,
@@ -2648,12 +2643,7 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 
   ArrayBinaryenExpressionRef block_list;
   array_init(&block_list);
-
-  if (statement->initializer)
-  {
-    array_add(&block_list, generate_statement(statement->initializer));
-  }
-
+  array_add(&block_list, generate_statements(&statement->initializer));
   array_add(&block_list, loop);
 
   return BinaryenBlock(codegen.module, break_name, block_list.elems, block_list.size,

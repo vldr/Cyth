@@ -1148,15 +1148,7 @@ static void init_function_declaration(FuncStmt* statement)
     parameter->data_type = DATA_TYPE(TYPE_OBJECT);
     parameter->data_type.class = checker.class;
 
-    ArrayVarStmt parameters;
-    array_init(&parameters);
-    array_add(&parameters, parameter);
-    array_foreach(&statement->parameters, parameter)
-    {
-      array_add(&parameters, parameter);
-    }
-
-    statement->parameters = parameters;
+    array_prepend(&statement->parameters, parameter);
   }
 
   VarStmt* parameter;
@@ -1329,7 +1321,14 @@ static void init_variable_declaration(VarStmt* statement)
     error_name_already_exists(statement->name, name);
   }
 
-  statement->data_type = data_type_token_to_data_type(statement->type);
+  if (statement->type.type == DATA_TYPE_TOKEN_NONE)
+  {
+    statement->data_type = statement->initializer_data_type;
+  }
+  else
+  {
+    statement->data_type = data_type_token_to_data_type(statement->type);
+  }
 
   if (statement->data_type.type == TYPE_VOID)
   {
@@ -1969,15 +1968,7 @@ static DataType check_call_expression(CallExpr* expression)
       argument->var.data_type.class = checker.class;
     }
 
-    ArrayExpr arguments;
-    array_init(&arguments);
-    array_add(&arguments, argument);
-    array_foreach(&expression->arguments, argument)
-    {
-      array_add(&arguments, argument);
-    }
-
-    expression->arguments = arguments;
+    array_prepend(&expression->arguments, argument);
 
     int number_of_arguments = array_size(&expression->arguments);
     int expected_number_of_arguments = array_size(&function->parameters);
@@ -2053,17 +2044,9 @@ static DataType check_call_expression(CallExpr* expression)
   {
     if (callee_data_type.function_internal.this)
     {
-      ArrayExpr arguments;
       Expr* argument = callee_data_type.function_internal.this;
 
-      array_init(&arguments);
-      array_add(&arguments, argument);
-      array_foreach(&expression->arguments, argument)
-      {
-        array_add(&arguments, argument);
-      }
-
-      expression->arguments = arguments;
+      array_prepend(&expression->arguments, argument);
     }
 
     int number_of_arguments = array_size(&expression->arguments);
@@ -2126,15 +2109,7 @@ static DataType check_call_expression(CallExpr* expression)
     argument->literal.data_type.null_function = ALLOC(bool);
     *argument->literal.data_type.null_function = false;
 
-    ArrayExpr arguments;
-    array_init(&arguments);
-    array_add(&arguments, argument);
-    array_foreach(&expression->arguments, argument)
-    {
-      array_add(&arguments, argument);
-    }
-
-    expression->arguments = arguments;
+    array_prepend(&expression->arguments, argument);
 
     if (variable && variable->data_type.type == TYPE_FUNCTION_MEMBER)
     {
@@ -2677,9 +2652,10 @@ static void check_while_statement(WhileStmt* statement)
 {
   checker.environment = environment_init(checker.environment);
 
-  if (statement->initializer)
+  Stmt* initializer_statement;
+  array_foreach(&statement->initializer, initializer_statement)
   {
-    check_statement(statement->initializer, true);
+    check_statement(initializer_statement, true);
   }
 
   DataType data_type = check_expression(statement->condition);
@@ -2705,9 +2681,10 @@ static void check_while_statement(WhileStmt* statement)
   checker.loop = previous_loop;
   checker.environment = checker.environment->parent;
 
-  if (statement->incrementer)
+  Stmt* incrementer_statement;
+  array_foreach(&statement->incrementer, incrementer_statement)
   {
-    check_statement(statement->incrementer, true);
+    check_statement(incrementer_statement, true);
   }
 
   checker.environment = checker.environment->parent;
@@ -2715,10 +2692,9 @@ static void check_while_statement(WhileStmt* statement)
 
 static void check_variable_declaration(VarStmt* statement)
 {
-  DataType initializer_data_type;
   if (statement->initializer)
   {
-    initializer_data_type = check_expression(statement->initializer);
+    statement->initializer_data_type = check_expression(statement->initializer);
   }
 
   if (statement->scope == SCOPE_NONE)
@@ -2728,12 +2704,13 @@ static void check_variable_declaration(VarStmt* statement)
 
   if (statement->initializer)
   {
-    data_type_inference(&initializer_data_type, &statement->data_type);
+    data_type_inference(&statement->initializer_data_type, &statement->data_type);
 
-    if (!equal_data_type(statement->data_type, initializer_data_type) &&
-        !assignable_data_type(statement->data_type, initializer_data_type))
+    if (!equal_data_type(statement->data_type, statement->initializer_data_type) &&
+        !assignable_data_type(statement->data_type, statement->initializer_data_type))
     {
-      error_type_mismatch(statement->equals, statement->data_type, initializer_data_type);
+      error_type_mismatch(statement->equals, statement->data_type,
+                          statement->initializer_data_type);
     }
   }
 }

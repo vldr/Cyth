@@ -56,8 +56,8 @@ for string a in Simon()
     log(a)
 
 # Simon says 1
-# Simon says 1
-# Simon says 1
+# Simon says 2
+# Simon says 3
 
 Simon simon = Simon()
 for string a in simon

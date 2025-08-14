@@ -48,8 +48,8 @@ typedef struct _WHILE_STMT
 {
   Token keyword;
   Expr* condition;
-  Stmt* initializer;
-  Stmt* incrementer;
+  ArrayStmt initializer;
+  ArrayStmt incrementer;
   ArrayStmt body;
 } WhileStmt;
 
@@ -92,6 +92,7 @@ typedef struct _FUNC_TEMPLATE_STMT
 typedef struct _VAR_STMT
 {
   DataType data_type;
+  DataType initializer_data_type;
   DataTypeToken type;
 
   int index;

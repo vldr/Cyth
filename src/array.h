@@ -56,6 +56,17 @@
     (a)->elems[(a)->size++] = k;                                                                   \
   } while (0)
 
+#define array_prepend(a, k)                                                                        \
+  do                                                                                               \
+  {                                                                                                \
+    array_add((a), (k));                                                                           \
+                                                                                                   \
+    for (unsigned int i = (a)->size - 1; i >= 1; i--)                                              \
+      (a)->elems[i] = (a)->elems[i - 1];                                                           \
+                                                                                                   \
+    (a)->elems[0] = (k);                                                                           \
+  } while (0)
+
 #define array_clear(a)                                                                             \
   do                                                                                               \
   {                                                                                                \
@@ -72,7 +83,7 @@
     unsigned int idx = (i);                                                                        \
     assert(idx < (a)->size);                                                                       \
                                                                                                    \
-    const unsigned int _cnt = (a)->size - (idx)-1;                                                 \
+    const unsigned int _cnt = (a)->size - (idx) - 1;                                               \
     if (_cnt > 0)                                                                                  \
     {                                                                                              \
       memmove(&((a)->elems[idx]), &((a)->elems[idx + 1]), _cnt * sizeof(*((a)->elems)));           \

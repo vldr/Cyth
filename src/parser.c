@@ -1017,8 +1017,6 @@ static Stmt* variable_declaration_statement(DataTypeToken type, Token name, bool
 
   if (newline)
     consume(TOKEN_NEWLINE, "Expected a newline after variable declaration.");
-  else
-    consume(TOKEN_SEMICOLON, "Expected a semicolon after variable declaration.");
 
   return stmt;
 }
@@ -1168,8 +1166,6 @@ static Stmt* expression_statement(bool newline)
 
   if (newline)
     consume(TOKEN_NEWLINE, "Expected a newline after an expression.");
-  else
-    consume(TOKEN_SEMICOLON, "Expected a semicolon after an expression.");
 
   Stmt* stmt = STMT();
   stmt->type = STMT_EXPR;
@@ -1258,9 +1254,9 @@ static Stmt* while_statement(void)
   stmt->type = STMT_WHILE;
   stmt->loop.keyword = advance();
   stmt->loop.condition = expression();
-  stmt->loop.initializer = NULL;
-  stmt->loop.incrementer = NULL;
 
+  array_init(&stmt->loop.initializer);
+  array_init(&stmt->loop.incrementer);
   array_init(&stmt->loop.body);
 
   consume(TOKEN_NEWLINE, "Expected a newline after condition.");
@@ -1273,40 +1269,53 @@ static Stmt* while_statement(void)
 
 static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
 {
-  int position = parser.current;
   Token start_token = peek();
-
-  Expr* list_access = cast_to_array(type, expression());
-  seek(position);
-  Expr* list_index = cast_to_array(type, expression());
-
+  Expr* list = cast_to_array(type, expression());
   Token end_token = previous();
   Token list_token = combine_tokens(start_token, end_token);
 
-  {
-    Stmt* counter_stmt = STMT();
-    counter_stmt->type = STMT_VARIABLE_DECL;
-    counter_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
-    counter_stmt->var.type.type = DATA_TYPE_TOKEN_PRIMITIVE;
-    counter_stmt->var.type.token = TOKEN_EMPTY();
-    counter_stmt->var.type.token.type = TOKEN_IDENTIFIER_INT;
-    counter_stmt->var.name = name;
-    counter_stmt->var.name.lexeme = "it";
-    counter_stmt->var.name.length = sizeof("it");
-    counter_stmt->var.equals = TOKEN_EMPTY();
-    counter_stmt->var.initializer = NULL;
-    counter_stmt->var.function = NULL;
-    counter_stmt->var.scope = SCOPE_NONE;
+  Stmt* counter_stmt = STMT();
+  counter_stmt->type = STMT_VARIABLE_DECL;
+  counter_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
+  counter_stmt->var.type.type = DATA_TYPE_TOKEN_PRIMITIVE;
+  counter_stmt->var.type.token = TOKEN_EMPTY();
+  counter_stmt->var.type.token.type = TOKEN_IDENTIFIER_INT;
+  counter_stmt->var.name = name;
+  counter_stmt->var.name.lexeme = "it";
+  counter_stmt->var.name.length = sizeof("it");
+  counter_stmt->var.equals = TOKEN_EMPTY();
+  counter_stmt->var.initializer = NULL;
+  counter_stmt->var.function = NULL;
+  counter_stmt->var.scope = SCOPE_NONE;
 
-    stmt->loop.initializer = counter_stmt;
-  }
+  array_add(&stmt->loop.initializer, counter_stmt);
+
+  Stmt* list_stmt = STMT();
+  list_stmt->type = STMT_VARIABLE_DECL;
+  list_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
+  list_stmt->var.type.token = TOKEN_EMPTY();
+  list_stmt->var.name = name;
+  list_stmt->var.name.lexeme = "";
+  list_stmt->var.name.length = sizeof("");
+  list_stmt->var.equals = TOKEN_EMPTY();
+  list_stmt->var.initializer = list;
+  list_stmt->var.function = NULL;
+  list_stmt->var.scope = SCOPE_NONE;
+
+  array_add(&stmt->loop.initializer, list_stmt);
 
   {
     Expr* counter = EXPR();
     counter->type = EXPR_VAR;
-    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.name = counter_stmt->var.name;
     counter->var.variable = NULL;
     counter->var.template_types = NULL;
+
+    Expr* list = EXPR();
+    list->type = EXPR_VAR;
+    list->var.name = list_stmt->var.name;
+    list->var.variable = NULL;
+    list->var.template_types = NULL;
 
     Expr* element_access = EXPR();
     element_access->type = EXPR_ACCESS;
@@ -1315,7 +1324,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
     element_access->access.name.length = sizeof("length") - 1;
     element_access->access.variable = NULL;
     element_access->access.template_types = NULL;
-    element_access->access.expr = list_access;
+    element_access->access.expr = list;
     element_access->access.expr_token = list_token;
 
     Token op = TOKEN_EMPTY();
@@ -1327,7 +1336,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
   {
     Expr* counter = EXPR();
     counter->type = EXPR_VAR;
-    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.name = counter_stmt->var.name;
     counter->var.variable = NULL;
     counter->var.template_types = NULL;
 
@@ -1344,7 +1353,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
 
     Expr* target = EXPR();
     target->type = EXPR_VAR;
-    target->var.name = stmt->loop.initializer->var.name;
+    target->var.name = counter_stmt->var.name;
     target->var.variable = NULL;
     target->var.template_types = NULL;
 
@@ -1359,7 +1368,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
     incrementer->type = STMT_EXPR;
     incrementer->expr.expr = assignment;
 
-    stmt->loop.incrementer = incrementer;
+    array_add(&stmt->loop.incrementer, incrementer);
   }
 
   consume(TOKEN_NEWLINE, "Expected a newline.");
@@ -1371,15 +1380,21 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
   {
     Expr* counter = EXPR();
     counter->type = EXPR_VAR;
-    counter->var.name = stmt->loop.initializer->var.name;
+    counter->var.name = counter_stmt->var.name;
     counter->var.variable = NULL;
     counter->var.template_types = NULL;
+
+    Expr* list = EXPR();
+    list->type = EXPR_VAR;
+    list->var.name = list_stmt->var.name;
+    list->var.variable = NULL;
+    list->var.template_types = NULL;
 
     Expr* index = EXPR();
     index->type = EXPR_INDEX;
     index->index.index = counter;
     index->index.index_token = list_token;
-    index->index.expr = list_index;
+    index->index.expr = list;
     index->index.expr_token = list_token;
 
     Stmt* element_stmt = STMT();
@@ -1391,12 +1406,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
     element_stmt->var.function = NULL;
     element_stmt->var.scope = SCOPE_NONE;
 
-    array_add(&stmt->loop.body, element_stmt);
-
-    for (unsigned int i = stmt->loop.body.size - 1; i >= 1; i--)
-      stmt->loop.body.elems[i] = stmt->loop.body.elems[i - 1];
-
-    stmt->loop.body.elems[0] = element_stmt;
+    array_prepend(&stmt->loop.body, element_stmt);
   }
 
   return stmt;
@@ -1408,11 +1418,10 @@ static Stmt* for_statement(void)
   stmt->type = STMT_WHILE;
   stmt->loop.keyword = advance();
 
-  if (match(TOKEN_SEMICOLON))
-  {
-    stmt->loop.initializer = NULL;
-  }
-  else
+  array_init(&stmt->loop.initializer);
+  array_init(&stmt->loop.incrementer);
+
+  while (!match(TOKEN_SEMICOLON))
   {
     if (is_data_type_and_identifier())
     {
@@ -1420,13 +1429,22 @@ static Stmt* for_statement(void)
       Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
 
       if (match(TOKEN_IN))
+      {
         return for_in_statement(type, name, stmt);
+      }
       else
-        stmt->loop.initializer = variable_declaration_statement(type, name, false);
+      {
+        array_add(&stmt->loop.initializer, variable_declaration_statement(type, name, false));
+      }
     }
     else
     {
-      stmt->loop.initializer = expression_statement(false);
+      array_add(&stmt->loop.initializer, expression_statement(false));
+    }
+
+    if (!check(TOKEN_SEMICOLON))
+    {
+      consume(TOKEN_COMMA, "Expected a comma or semicolon after statement.");
     }
   }
 
@@ -1446,15 +1464,15 @@ static Stmt* for_statement(void)
 
   consume(TOKEN_SEMICOLON, "Expected a semicolon after condition.");
 
-  if (!check(TOKEN_NEWLINE))
+  while (!check(TOKEN_NEWLINE))
   {
-    stmt->loop.incrementer = expression_statement(true);
+    array_add(&stmt->loop.incrementer, expression_statement(false));
+
+    if (!check(TOKEN_NEWLINE))
+      consume(TOKEN_COMMA, "Expected a comma or newline after statement.");
   }
-  else
-  {
-    stmt->loop.incrementer = NULL;
-    consume(TOKEN_NEWLINE, "Expected a newline after incrementer.");
-  }
+
+  consume(TOKEN_NEWLINE, "Expected a newline after incrementer.");
 
   array_init(&stmt->loop.body);
 

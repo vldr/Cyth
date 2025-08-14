@@ -1244,8 +1244,14 @@ static const char* generate_array_to_string_function(DataType this_data_type)
       BinaryenLocalSet(codegen.module, 1,
                        BinaryenArrayNew(codegen.module, codegen.string_heap_type, length, NULL)),
 
-      BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), array_ref, CONSTANT(0),
-                        BinaryenExpressionCopy(length, codegen.module)),
+      BinaryenIf(codegen.module,
+                 BinaryenUnary(codegen.module, BinaryenEqZInt32(),
+                               BinaryenRefIsNull(codegen.module, BinaryenExpressionCopy(
+                                                                   array_ref, codegen.module))),
+
+                 BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), array_ref, CONSTANT(0),
+                                   BinaryenExpressionCopy(length, codegen.module)),
+                 NULL),
 
       RESULT()
     };

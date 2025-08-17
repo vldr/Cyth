@@ -1421,8 +1421,10 @@ static Stmt* for_statement(void)
   array_init(&stmt->loop.initializer);
   array_init(&stmt->loop.incrementer);
 
-  while (!match(TOKEN_SEMICOLON))
+  if (!check(TOKEN_SEMICOLON))
   {
+  add_initializer:
+
     if (is_data_type_and_identifier())
     {
       DataTypeToken type = consume_data_type("Expected a type.");
@@ -1442,13 +1444,19 @@ static Stmt* for_statement(void)
       array_add(&stmt->loop.initializer, expression_statement(false));
     }
 
-    if (!check(TOKEN_SEMICOLON))
+    if (match(TOKEN_COMMA))
     {
-      consume(TOKEN_COMMA, "Expected a comma or semicolon after statement.");
+      goto add_initializer;
     }
   }
 
-  if (check(TOKEN_SEMICOLON))
+  consume(TOKEN_SEMICOLON, "Expected a semicolon after initializer.");
+
+  if (!check(TOKEN_SEMICOLON))
+  {
+    stmt->loop.condition = expression();
+  }
+  else
   {
     Expr* expr = EXPR();
     expr->type = EXPR_LITERAL;
@@ -1457,19 +1465,19 @@ static Stmt* for_statement(void)
 
     stmt->loop.condition = expr;
   }
-  else
-  {
-    stmt->loop.condition = expression();
-  }
 
   consume(TOKEN_SEMICOLON, "Expected a semicolon after condition.");
 
-  while (!check(TOKEN_NEWLINE))
+  if (!check(TOKEN_NEWLINE))
   {
+  add_incrementer:
+
     array_add(&stmt->loop.incrementer, expression_statement(false));
 
-    if (!check(TOKEN_NEWLINE))
-      consume(TOKEN_COMMA, "Expected a comma or newline after statement.");
+    if (match(TOKEN_COMMA))
+    {
+      goto add_incrementer;
+    }
   }
 
   consume(TOKEN_NEWLINE, "Expected a newline after incrementer.");

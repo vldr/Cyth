@@ -1031,7 +1031,8 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   return true;
 }
 
-bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, DataType* right, DataType from)
+static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, DataType* right,
+                                    DataType from)
 {
   if (expression->op.type != TOKEN_AND && expression->op.type != TOKEN_OR)
     return false;

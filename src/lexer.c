@@ -275,8 +275,20 @@ static void literal(void)
   {
   default:
     KEYWORD_GROUP('a')
-    KEYWORD("and", TOKEN_AND)
-    KEYWORD("any", TOKEN_IDENTIFIER_ANY)
+    switch (lexer.start[1])
+    {
+    default:
+      KEYWORD_GROUP('n')
+      switch (lexer.start[2])
+      {
+      default:
+        KEYWORD_GROUP('d')
+        KEYWORD("and", TOKEN_AND)
+
+        KEYWORD_GROUP('y')
+        KEYWORD("any", TOKEN_IDENTIFIER_ANY)
+      }
+    }
 
     KEYWORD_GROUP('b')
     switch (lexer.start[1])
@@ -312,22 +324,13 @@ static void literal(void)
     default:
       KEYWORD_GROUP('a')
       KEYWORD("false", TOKEN_FALSE)
+
       KEYWORD_GROUP('o')
       KEYWORD("for", TOKEN_FOR)
+
       KEYWORD_GROUP('l')
       KEYWORD("float", TOKEN_IDENTIFIER_FLOAT)
     }
-
-    KEYWORD_GROUP('o')
-    KEYWORD("or", TOKEN_OR)
-    KEYWORD_GROUP('r')
-    KEYWORD("return", TOKEN_RETURN)
-
-    KEYWORD_GROUP('s')
-    KEYWORD("string", TOKEN_IDENTIFIER_STRING)
-
-    KEYWORD_GROUP('w')
-    KEYWORD("while", TOKEN_WHILE)
 
     KEYWORD_GROUP('i')
     switch (lexer.start[1])
@@ -337,9 +340,17 @@ static void literal(void)
       KEYWORD("if", TOKEN_IF)
 
       KEYWORD_GROUP('n')
-      KEYWORD("in", TOKEN_IN)
-      KEYWORD("int", TOKEN_IDENTIFIER_INT)
-      KEYWORD("inf", TOKEN_INFINITY)
+      switch (lexer.start[2])
+      {
+      default:
+        KEYWORD("in", TOKEN_IN)
+
+        KEYWORD_GROUP('t')
+        KEYWORD("int", TOKEN_IDENTIFIER_INT)
+
+        KEYWORD_GROUP('f')
+        KEYWORD("inf", TOKEN_INFINITY)
+      }
 
       KEYWORD_GROUP('m')
       KEYWORD("import", TOKEN_IMPORT)
@@ -351,17 +362,31 @@ static void literal(void)
     default:
       KEYWORD_GROUP('u')
       KEYWORD("null", TOKEN_NULL)
+
       KEYWORD_GROUP('o')
       KEYWORD("not", TOKEN_NOT)
+
       KEYWORD_GROUP('a')
       KEYWORD("nan", TOKEN_NAN)
     }
+
+    KEYWORD_GROUP('o')
+    KEYWORD("or", TOKEN_OR)
+
+    KEYWORD_GROUP('r')
+    KEYWORD("return", TOKEN_RETURN)
+
+    KEYWORD_GROUP('s')
+    KEYWORD("string", TOKEN_IDENTIFIER_STRING)
 
     KEYWORD_GROUP('t')
     KEYWORD("true", TOKEN_TRUE)
 
     KEYWORD_GROUP('v')
     KEYWORD("void", TOKEN_IDENTIFIER_VOID)
+
+    KEYWORD_GROUP('w')
+    KEYWORD("while", TOKEN_WHILE)
   }
 
   add_token(type);

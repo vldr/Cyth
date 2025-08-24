@@ -2147,7 +2147,7 @@ static DataType check_call_expression(CallExpr* expression)
       int number_of_arguments = array_size(&expression->arguments);
       if (number_of_arguments > 1)
       {
-        error_invalid_arity(expression->callee_token, 0, number_of_arguments);
+        error_invalid_arity(expression->callee_token, 0, number_of_arguments - 1);
         return DATA_TYPE(TYPE_VOID);
       }
     }

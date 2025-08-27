@@ -479,7 +479,7 @@ class Editor {
         "inf",
         "nan",
       ],
-      keywords: ["return", "for", "while", "break", "continue", "if", "else"],
+      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in"],
       operators: [
         "=",
         ">",
@@ -533,7 +533,7 @@ class Editor {
           [/\d+/, "number"],
           [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
           [
-            /([a-zA-Z_][a-zA-Z_0-9]*)(\()/,
+            /([a-zA-Z_][a-zA-Z_0-9]*)(\s*\()/,
             [
               {
                 cases: {
@@ -542,6 +542,19 @@ class Editor {
                 },
               },
               "default",
+            ],
+          ],
+          [
+            /([a-zA-Z_][a-zA-Z_0-9]*)(\s*<.+>\s*)(\()/,
+            [
+              {
+                cases: {
+                  "@types": "default",
+                  "@default": "function",
+                },
+              },
+              { token: "@rematch" },
+              { token: "@rematch" },
             ],
           ],
           [

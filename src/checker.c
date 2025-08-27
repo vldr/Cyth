@@ -144,8 +144,8 @@ static void error_not_a_type(Token token, const char* name)
 
 static void error_invalid_template_arity(Token token, int expected, int got)
 {
-  checker_error(token,
-                memory_sprintf("Expected %d template argument(s) but got %d.", expected, got));
+  checker_error(token, memory_sprintf("Expected %d template %s but got %d.", expected,
+                                      expected == 1 ? "argument" : "arguments", got));
 }
 
 static void error_recursive_template_type(Token token, const char* name)
@@ -261,7 +261,8 @@ static void error_invalid_binary_arity(Token token, const char* name)
 
 static void error_invalid_arity(Token token, int expected, int got)
 {
-  checker_error(token, memory_sprintf("Expected %d parameter(s) but got %d.", expected, got));
+  checker_error(token, memory_sprintf("Expected %d %s but got %d.", expected,
+                                      expected == 1 ? "parameter" : "parameters", got));
 }
 
 static void error_invalid_type_conversion(Token token, DataType from, DataType to)
@@ -855,6 +856,26 @@ static const char* data_type_token_to_string(DataTypeToken data_type_token, Arra
         array_add(string, ']');
       }
 
+      break;
+    }
+
+    case DATA_TYPE_TOKEN_FUNCTION: {
+      data_type_token_to_string(*data_type_token.function.return_value, string);
+
+      array_add(string, '(');
+
+      for (unsigned int i = 0; i < data_type_token.function.parameters.size; i++)
+      {
+        data_type_token_to_string(data_type_token.function.parameters.elems[i], string);
+
+        if (i + 1 < data_type_token.function.parameters.size)
+        {
+          array_add(string, ',');
+          array_add(string, ' ');
+        }
+      }
+
+      array_add(string, ')');
       break;
     }
 

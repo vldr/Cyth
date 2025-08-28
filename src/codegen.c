@@ -388,15 +388,14 @@ static const char* generate_string_int_cast_function(void)
 #define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
 #define BUFFER() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
 #define INDEX() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
-#define RESULT() (BinaryenLocalGet(codegen.module, 3, codegen.string_type))
-#define IS_NEGATIVE() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
+#define SIZE() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define TEMP() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   const char* name = "string.int_cast";
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
-    const int size = 32;
     const int base = 10;
 
     BinaryenExpressionRef divider =
@@ -440,25 +439,84 @@ static const char* generate_string_int_cast_function(void)
       BinaryenBlock(codegen.module, NULL, negative_append_body_list,
                     sizeof(negative_append_body_list) / sizeof_ptr(negative_append_body_list),
                     BinaryenTypeNone());
-    BinaryenExpressionRef negative_append =
-      BinaryenIf(codegen.module, IS_NEGATIVE(), negative_append_body, NULL);
+    BinaryenExpressionRef negative_append = BinaryenIf(
+      codegen.module, BinaryenBinary(codegen.module, BinaryenEqInt32(), INDEX(), CONSTANT(1)),
+      negative_append_body, NULL);
+
+    BinaryenExpressionRef size_cond1_body_list[] = {
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), CONSTANT(8))),
+      BinaryenLocalSet(
+        codegen.module, 4,
+        BinaryenBinary(codegen.module, BinaryenDivUInt32(), TEMP(), CONSTANT(100000000))),
+    };
+    BinaryenExpressionRef size_cond1 = BinaryenBlock(
+      codegen.module, NULL, size_cond1_body_list,
+      sizeof(size_cond1_body_list) / sizeof_ptr(size_cond1_body_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef size_cond2_body_list[] = {
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), CONSTANT(4))),
+      BinaryenLocalSet(
+        codegen.module, 4,
+        BinaryenBinary(codegen.module, BinaryenDivUInt32(), TEMP(), CONSTANT(10000))),
+    };
+    BinaryenExpressionRef size_cond2 = BinaryenBlock(
+      codegen.module, NULL, size_cond2_body_list,
+      sizeof(size_cond2_body_list) / sizeof_ptr(size_cond2_body_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef size_cond3_body_list[] = {
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), CONSTANT(2))),
+      BinaryenLocalSet(codegen.module, 4,
+                       BinaryenBinary(codegen.module, BinaryenDivUInt32(), TEMP(), CONSTANT(100))),
+    };
+    BinaryenExpressionRef size_cond3 = BinaryenBlock(
+      codegen.module, NULL, size_cond3_body_list,
+      sizeof(size_cond3_body_list) / sizeof_ptr(size_cond3_body_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef size_cond4_body_list[] = {
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), CONSTANT(1))),
+    };
+    BinaryenExpressionRef size_cond4 = BinaryenBlock(
+      codegen.module, NULL, size_cond4_body_list,
+      sizeof(size_cond4_body_list) / sizeof_ptr(size_cond4_body_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef size_body_list[] = {
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), TEMP(), CONSTANT(1))),
+      BinaryenLocalSet(codegen.module, 4, NUMBER()),
+
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGeUInt32(), TEMP(), CONSTANT(100000000)),
+                 size_cond1, NULL),
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGeUInt32(), TEMP(), CONSTANT(10000)),
+                 size_cond2, NULL),
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGeUInt32(), TEMP(), CONSTANT(100)),
+                 size_cond3, NULL),
+      BinaryenIf(codegen.module,
+                 BinaryenBinary(codegen.module, BinaryenGeUInt32(), TEMP(), CONSTANT(10)),
+                 size_cond4, NULL)
+    };
+    BinaryenExpressionRef size =
+      BinaryenBlock(codegen.module, NULL, size_body_list,
+                    sizeof(size_body_list) / sizeof_ptr(size_body_list), BinaryenTypeNone());
 
     BinaryenExpressionRef body_list[] = {
       negative_check,
-      BinaryenLocalSet(
-        codegen.module, 1,
-        BinaryenArrayNew(codegen.module, codegen.string_heap_type, CONSTANT(size), NULL)),
-      BinaryenLocalSet(codegen.module, 2, CONSTANT(size)),
+      size,
+
+      BinaryenLocalSet(codegen.module, 1,
+                       BinaryenArrayNew(codegen.module, codegen.string_heap_type, SIZE(), NULL)),
+      BinaryenLocalSet(codegen.module, 2, SIZE()),
+
       loop,
       negative_append,
-      BinaryenLocalSet(codegen.module, 3,
-                       BinaryenArrayNew(codegen.module, codegen.string_heap_type,
-                                        BinaryenBinary(codegen.module, BinaryenSubInt32(),
-                                                       CONSTANT(size), INDEX()),
-                                        NULL)),
-      BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), BUFFER(), INDEX(),
-                        BinaryenArrayLen(codegen.module, RESULT())),
-      RESULT(),
+
+      BUFFER()
     };
     BinaryenExpressionRef body =
       BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
@@ -472,7 +530,7 @@ static const char* generate_string_int_cast_function(void)
     BinaryenType results =
       BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
 
-    BinaryenType vars_list[] = { codegen.string_type, BinaryenTypeInt32(), codegen.string_type,
+    BinaryenType vars_list[] = { codegen.string_type, BinaryenTypeInt32(), BinaryenTypeInt32(),
                                  BinaryenTypeInt32() };
 
     BinaryenAddFunction(codegen.module, name, params, results, vars_list,
@@ -484,8 +542,8 @@ static const char* generate_string_int_cast_function(void)
 #undef NUMBER
 #undef BUFFER
 #undef INDEX
-#undef RESULT
-#undef IS_NEGATIVE
+#undef SIZE
+#undef TEMP
 #undef CONSTANT
 }
 

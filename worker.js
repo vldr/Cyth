@@ -5,7 +5,7 @@ let context;
 let canvas;
 let debug;
 
-onerror = (error) => {
+function postError(error) {
   const sourceMap = JSON.parse(textDecoder.decode(debug));
   const base64Digits =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -129,7 +129,7 @@ onmessage = (event) => {
                   instance.exports["draw"](time);
                   requestAnimationFrame(render);
                 } catch (error) {
-                  onerror(error);
+                  postError(error);
                 }
               }
 
@@ -173,7 +173,7 @@ onmessage = (event) => {
       try {
         instance.exports["<start>"]();
       } catch (error) {
-        onerror(error);
+        postError(error);
       }
 
       if (!instance.exports["draw"]) {
@@ -188,7 +188,7 @@ onmessage = (event) => {
         try {
           instance.exports["keyPressed"](data.key);
         } catch (error) {
-          onerror(error);
+          postError(error);
         }
       }
 
@@ -200,7 +200,7 @@ onmessage = (event) => {
         try {
           instance.exports["keyReleased"](data.key);
         } catch (error) {
-          onerror(error);
+          postError(error);
         }
       }
 
@@ -212,7 +212,7 @@ onmessage = (event) => {
         try {
           instance.exports["mousePressed"](data.x, data.y);
         } catch (error) {
-          onerror(error);
+          postError(error);
         }
       }
 
@@ -225,7 +225,7 @@ onmessage = (event) => {
           try {
             instance.exports["mouseDragged"](data.x, data.y);
           } catch (error) {
-            onerror(error);
+            postError(error);
           }
         }
       } else {
@@ -233,7 +233,7 @@ onmessage = (event) => {
           try {
             instance.exports["mouseMoved"](data.x, data.y);
           } catch (error) {
-            onerror(error);
+            postError(error);
           }
         }
       }
@@ -246,7 +246,7 @@ onmessage = (event) => {
         try {
           instance.exports["mouseReleased"](data.x, data.y);
         } catch (error) {
-          onerror(error);
+          postError(error);
         }
       }
 

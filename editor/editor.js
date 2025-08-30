@@ -7,6 +7,7 @@ class EditorConsole {
     this.model = model;
     this.editor = editor;
     this.editorTabs = editorTabs;
+    this.stderr = "";
     this.running = false;
 
     this.consoleStatus = document.getElementById("console-status");
@@ -28,7 +29,9 @@ class EditorConsole {
     this.clear();
 
     if (!size) {
-      this.error("Cannot run program due to internal compiler error.\n");
+      this.error("Internal compiler error:\n\n" + this.stderr);
+      this.stderr = "";
+
       return;
     }
 
@@ -50,9 +53,8 @@ class EditorConsole {
     }
 
     this.worker = new Worker("worker.js");
-    this.worker.onerror = () => this.onWorkerError();
-    this.worker.onmessageerror = () => this.onWorkerError();
-    this.worker.onmessage = (event) => this.onWorkerMessage(event);
+    this.worker.onerror = this.onWorkerError.bind(this);
+    this.worker.onmessage = this.onWorkerMessage.bind(this);
     this.worker.postMessage(
       { type: "start", bytecode, debug, canvas: offscreen },
       [offscreen]
@@ -69,14 +71,15 @@ class EditorConsole {
       let buffer = "";
 
       for (const error of this.editor.errors) {
+        if (error.startLineNumber && error.startColumn)
+          buffer += `<a onclick='Module.editor.goto(${error.startLineNumber}, ${error.startColumn})' href='#'>` +
+            this.editorTabs.getTabName() +
+            ".cy:" +
+            error.startLineNumber +
+            ":" + error.startColumn + "</a>: ";
+
         buffer +=
-          `<a onclick='Module.editor.goto(${error.startLineNumber}, ${error.startColumn})' href='#'>` +
-          this.editorTabs.getTabName() +
-          ".cy:" +
-          error.startLineNumber +
-          ":" +
-          error.startColumn +
-          "</a>: <span style='color:red'>error: </span>" +
+          "<span style='color:red'>error: </span>" +
           error.message.replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
           "\n";
       }
@@ -91,12 +94,20 @@ class EditorConsole {
       throw new Error("worker is already running");
     }
 
-    Module._run(this.editor.getText(), true);
+    try {
+      Module._run(this.editor.getText(), true);
+    }
+    catch (error) {
+      this.clear();
+      this.error("Internal compiler error:\n\n" + error.stack);
+
+      console.error(error);
+    }
   }
 
   stop(terminate) {
     if (!this.running) {
-      throw new Error("worker is already stopped");
+      return;
     }
 
     this.running = false;
@@ -175,7 +186,7 @@ class EditorConsole {
   }
 
   error(text) {
-    this.print("<span style='color:red'>error: </span>" + text);
+    this.print("<span style='color:red'>error: </span>" + text + "\n");
   }
 
   print(text, isTextOnly) {
@@ -206,9 +217,10 @@ class EditorConsole {
     this.setStatus(`Program is running...`);
   }
 
-  onWorkerError() {
-    this.stop();
-    this.print("Program crashed unexpectedly due to an error:\n");
+  onWorkerError(event) {
+    this.print("Program crashed unexpectedly due to an error:\n\n");
+    this.error(event.message);
+    this.stop(true);
   }
 
   onWorkerMessage(event) {
@@ -226,9 +238,10 @@ class EditorConsole {
       }
 
       case "error": {
-        this.onWorkerError();
-        this.print("\n");
+        this.print("Program crashed unexpectedly due to an error:\n\n");
         this.error(data.message);
+        this.stop();
+
         break;
       }
     }
@@ -688,10 +701,22 @@ class Editor {
   onInput() {
     this.errors.length = 0;
 
-    Module._run(this.getText(), false);
+    try {
+      Module._run(this.getText(), false);
+    }
+    catch (error) {
+      this.errors.push({
+        startLineNumber: 0,
+        startColumn: 0,
+        endLineNumber: Infinity,
+        endColumn: Infinity,
+        message: "Internal compiler error:\n\n" + error.stack,
+      });
+
+      console.error(error);
+    }
 
     this.editorTabs.setText(this.editor.getValue());
-
     monaco.editor.setModelMarkers(this.model, "owner", this.errors);
   }
 }
@@ -699,6 +724,9 @@ class Editor {
 var Module = {
   preRun: [],
   editor: new Editor(),
+  printErr: function (error) {
+    Module.editor.editorConsole.stderr += error + "\n";
+  },
   onRuntimeInitialized: function () {
     this.editor.init();
   },

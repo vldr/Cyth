@@ -151,6 +151,8 @@ static void run_file(void)
       array_add(&source, c);
     }
 
+    array_add(&source, '\0');
+
     run(source.elems, true);
   }
 }

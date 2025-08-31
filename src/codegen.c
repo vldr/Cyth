@@ -1467,6 +1467,55 @@ static const char* generate_string_hash_function(void)
 #undef CONSTANT
 }
 
+static const char* generate_string_to_array_function(DataType return_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define RESULT() (BinaryenLocalGet(codegen.module, 1, return_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = memory_sprintf("string.to_array");
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType return_type = data_type_to_binaryen_type(return_data_type);
+
+    BinaryenExpressionRef operands[] = {
+      BinaryenArrayNew(codegen.module, codegen.string_heap_type,
+                       BinaryenArrayLen(codegen.module, THIS()), NULL),
+      BinaryenArrayLen(codegen.module, THIS()),
+    };
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenLocalSet(codegen.module, 1,
+                       BinaryenStructNew(codegen.module, operands,
+                                         sizeof(operands) / sizeof_ptr(operands), return_type)),
+      BinaryenArrayCopy(codegen.module,
+                        BinaryenStructGet(codegen.module, 0, RESULT(), codegen.string_type, false),
+                        CONSTANT(0), THIS(), CONSTANT(0), BinaryenArrayLen(codegen.module, THIS())),
+      RESULT(),
+    };
+
+    BinaryenExpressionRef body = BinaryenBlock(
+      codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list), return_type);
+
+    BinaryenType params_list[] = { codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { return_type };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, &return_type, 1, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef RESULT
+#undef CONSTANT
+}
+
 static const char* generate_memory(void)
 {
   const char* counter_name = "__memory__";
@@ -1694,6 +1743,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_float_hash_function();
   else if (strcmp(name, "string.hash") == 0)
     return generate_string_hash_function();
+  else if (strcmp(name, "string.to_array") == 0)
+    return generate_string_to_array_function(*data_type.function_internal.return_type);
 
   else if (strcmp(name, "alloc") == 0)
     return generate_alloc_function();

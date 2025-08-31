@@ -1,0 +1,16 @@
+import "env"
+    void log(string a)
+
+log("Length: " + "".toArray().length)
+log("Length: " + "hello".toArray().length)
+
+for char c in "hello".toArray()
+    log("" + c)
+
+# Length: 0
+# Length: 5
+# h
+# e
+# l
+# l
+# o

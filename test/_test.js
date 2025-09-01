@@ -42,7 +42,7 @@ for (const filename of scripts) {
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
-          message: matches[5].trim(),
+          message: matches[5].replace(/\r/g, ''),
         };
       });
 
@@ -71,7 +71,7 @@ for (const filename of scripts) {
                   startColumn: parseInt(matches[2]),
                   endLineNumber: parseInt(matches[3]),
                   endColumn: parseInt(matches[4]),
-                  message: matches[5].trim(),
+                  message: matches[5].replace(/\r/g, ''),
                 }
                 : { message: line };
             });

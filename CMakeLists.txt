@@ -22,12 +22,20 @@ if (EMSCRIPTEN)
                      -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_run,_set_error_callback,_set_result_callback)
 
     add_custom_target(test
-        COMMAND node test/_test.js
+        COMMAND node test/_test_web.js
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
-elseif (NOT MSVC)
-    add_link_options(-pthread)
+else()
+    if (NOT MSVC)
+        add_link_options(-pthread)
+    endif()
+
+    add_custom_target(test
+        COMMAND node test/_test.js $<TARGET_FILE:cyth>
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        DEPENDS cyth
+    )
 endif()
 
 add_subdirectory(third_party/binaryen)
@@ -37,7 +45,7 @@ add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/co
                     src/memory.h src/parser.c src/parser.h src/statement.h)
 
 if (NOT MSVC)
-    set(CMAKE_C_FLAGS_DEBUG "-O0 -g -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_C_FLAGS_DEBUG "-O0 -g -D_DEBUG -fsanitize=address -fsanitize=undefined")
     set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_C_FLAGS_RELEASE "-O3 -flto")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -flto -fno-rtti")

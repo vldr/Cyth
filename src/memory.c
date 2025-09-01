@@ -1,11 +1,31 @@
 #include "memory.h"
 
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _DEBUG
+const char* __asan_default_options(void)
+{
+  return "detect_leaks=0";
+}
+
+void* memory_alloc(size_t size_bytes)
+{
+  return malloc(size_bytes);
+}
+
+void memory_reset(void)
+{
+}
+
+void memory_free(void)
+{
+}
+#else
+
+#include <stdint.h>
 #define DEFAULT_BUCKET_SIZE 16384
 
 typedef struct _BUCKET
@@ -24,7 +44,7 @@ static struct
 
 static Bucket* new_bucket(size_t capacity)
 {
-  Bucket* bucket = (Bucket*)calloc(capacity, sizeof(Bucket) + sizeof(uintptr_t));
+  Bucket* bucket = (Bucket*)malloc(sizeof(Bucket) + sizeof(uintptr_t) * capacity);
   bucket->next = NULL;
   bucket->count = 0;
   bucket->capacity = capacity;
@@ -71,6 +91,32 @@ void* memory_alloc(size_t size_bytes)
 
   return result;
 }
+
+void memory_reset(void)
+{
+  for (Bucket* bucket = memory.begin; bucket != NULL; bucket = bucket->next)
+  {
+    bucket->count = 0;
+  }
+
+  memory.end = memory.begin;
+}
+
+void memory_free(void)
+{
+  Bucket* bucket = memory.begin;
+
+  while (bucket)
+  {
+    Bucket* freed_bucket = bucket;
+    bucket = bucket->next;
+    free_bucket(freed_bucket);
+  }
+
+  memory.begin = NULL;
+  memory.end = NULL;
+}
+#endif
 
 void* memory_realloc(void* old_pointer, size_t old_size, size_t new_size)
 {
@@ -129,29 +175,4 @@ char* memory_sprintf(const char* format, ...)
   va_end(args);
 
   return result;
-}
-
-void memory_reset(void)
-{
-  for (Bucket* bucket = memory.begin; bucket != NULL; bucket = bucket->next)
-  {
-    bucket->count = 0;
-  }
-
-  memory.end = memory.begin;
-}
-
-void memory_free(void)
-{
-  Bucket* bucket = memory.begin;
-
-  while (bucket)
-  {
-    Bucket* freed_bucket = bucket;
-    bucket = bucket->next;
-    free_bucket(freed_bucket);
-  }
-
-  memory.begin = NULL;
-  memory.end = NULL;
 }

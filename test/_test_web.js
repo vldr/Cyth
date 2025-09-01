@@ -2,12 +2,55 @@ import test from "node:test";
 import assert from "assert";
 import path from "path";
 import fs from "fs/promises";
-import { spawn } from "child_process";
+import cyth from "../editor/cyth.js";
 
 Error.stackTraceLimit = Infinity;
 
-const executable = process.argv[2];
+await new Promise((resolve) => (cyth["onRuntimeInitialized"] = resolve));
+
+let errors = [];
+let logs = [];
+let bytecode;
+
+cyth._set_result_callback(
+  cyth.addFunction(
+    (size, data, sourceMapSize, sourceMap) =>
+      (bytecode = cyth.HEAPU8.subarray(data, data + size)),
+    "viiii"
+  )
+);
+
+cyth._set_error_callback(
+  cyth.addFunction(
+    (startLineNumber, startColumn, endLineNumber, endColumn, message) =>
+      errors.push({
+        startLineNumber,
+        startColumn,
+        endLineNumber,
+        endColumn,
+        message: cyth.UTF8ToString(message),
+      }),
+    "viiiii"
+  )
+);
+
+const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8");
+
+let lastEncodedText;
+
+function encodeText(text) {
+  const data = encoder.encode(text);
+  const offset = cyth._memory_alloc(data.byteLength + 1);
+  cyth.HEAPU8.set(data, offset);
+  cyth.HEAPU8[offset + data.byteLength] = 0;
+
+  if (lastEncodedText) assert.strictEqual(offset, lastEncodedText);
+  lastEncodedText = offset;
+
+  return offset;
+}
+
 const files = await fs.readdir(import.meta.dirname);
 const scripts = files.filter((f) => f.endsWith(".cy"));
 
@@ -34,72 +77,33 @@ for (const filename of scripts) {
       .split("\n")
       .filter((line) => line.startsWith("#!"))
       .map((line) => {
-        const matches = line.match(
-          /^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/
-        );
+        const matches = line.match(/^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/);
+
         return {
           startLineNumber: parseInt(matches[1]),
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
-          message: matches[5],
-        };
-      });
-
-    const bytecode = await new Promise((resolve, reject) => {
-      const process = spawn(executable, [], { stdio: ["pipe", "pipe", "pipe"] });
-      const chunks = [];
-      let errorText = "";
-
-      process.stdout.on("data", (chunk) => chunks.push(chunk));
-      process.stderr.on("data", (chunk) => (errorText += chunk.toString("utf8")));
-
-      process.on("error", reject);
-      process.on("close", (code) => {
-        if (errorText.length > 0) {
-          const errors = errorText
-            .trim()
-            .split("\n")
-            .filter(Boolean)
-            .map((line) => {
-              const matches = line.match(
-                /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
-              );
-              return matches
-                ? {
-                    startLineNumber: parseInt(matches[1]),
-                    startColumn: parseInt(matches[2]),
-                    endLineNumber: parseInt(matches[3]),
-                    endColumn: parseInt(matches[4]),
-                    message: matches[5],
-                  }
-                : { message: line };
-            });
-
-          resolve({ errors, code });
-        } else {
-          resolve({ bytecode: Buffer.concat(chunks), code });
+          message: matches[5]
         }
       });
 
-      process.stdin.end(text);
-    });
+    errors.length = 0;
+    logs.length = 0;
 
-    if (bytecode.errors) {
-      assert.notDeepStrictEqual(bytecode.code, 0);
-      assert.deepStrictEqual(bytecode.errors, expectedErrors);
-      assert.deepStrictEqual([], expectedLogs);
-    } else {
-      const logs = [];
+    cyth._run(encodeText(text), true);
 
+    if (errors.length === 0) {
       function log(output) {
         if (typeof output === "object") {
           const at = result.instance.exports["string.at"];
           const length = result.instance.exports["string.length"];
+
           const array = new Uint8Array(length(output));
           for (let i = 0; i < array.byteLength; i++) {
             array[i] = at(output, i);
           }
+
           logs.push(decoder.decode(array));
         } else {
           logs.push(String(output));
@@ -107,7 +111,7 @@ for (const filename of scripts) {
       }
 
       const kv = {};
-      const result = await WebAssembly.instantiate(bytecode.bytecode, {
+      const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log": log,
           "log<bool>": log,
@@ -122,10 +126,9 @@ for (const filename of scripts) {
       });
 
       result.instance.exports["<start>"]();
-
-      assert.deepStrictEqual(bytecode.code, 0);
-      assert.deepStrictEqual([], expectedErrors);
-      assert.deepStrictEqual(logs, expectedLogs);
     }
+
+    assert.deepStrictEqual(errors, expectedErrors);
+    assert.deepStrictEqual(logs, expectedLogs);
   });
 }

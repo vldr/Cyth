@@ -944,6 +944,11 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
       data_type_token_unalias(types);
 
       DataType data_type = class_template_to_data_type(variable->data_type, data_type_token);
+      if (data_type.type == TYPE_VOID)
+      {
+        return DATA_TYPE(TYPE_VOID);
+      }
+
       token.lexeme = data_type.class->name.lexeme;
     }
 

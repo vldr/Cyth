@@ -42,7 +42,12 @@ jobs:
           cd embuild
           make -j12
 
-      - name: Test
+      - name: Test (Linux)
+        run: |
+          cd build
+          make test
+
+      - name: Test (Web)
         run: |
           cd embuild
           make test

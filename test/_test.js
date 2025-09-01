@@ -35,14 +35,14 @@ for (const filename of scripts) {
       .filter((line) => line.startsWith("#!"))
       .map((line) => {
         const matches = line.match(
-          /^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/
+          /^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)/
         );
         return {
           startLineNumber: parseInt(matches[1]),
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
-          message: matches[5],
+          message: matches[5].trim(),
         };
       });
 
@@ -67,12 +67,12 @@ for (const filename of scripts) {
               );
               return matches
                 ? {
-                    startLineNumber: parseInt(matches[1]),
-                    startColumn: parseInt(matches[2]),
-                    endLineNumber: parseInt(matches[3]),
-                    endColumn: parseInt(matches[4]),
-                    message: matches[5],
-                  }
+                  startLineNumber: parseInt(matches[1]),
+                  startColumn: parseInt(matches[2]),
+                  endLineNumber: parseInt(matches[3]),
+                  endColumn: parseInt(matches[4]),
+                  message: matches[5].trim(),
+                }
                 : { message: line };
             });
 

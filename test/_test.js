@@ -21,12 +21,13 @@ for (const filename of scripts) {
       .map((line) =>
         line
           .substring(line.indexOf("#") + 1)
+          .replaceAll("\r", "")
           .replaceAll("\\0", "\0")
           .replaceAll("\\t", "\t")
           .replaceAll("\\b", "\b")
           .replaceAll("\\n", "\n")
-          .replaceAll("\\r", "\r")
           .replaceAll("\\f", "\f")
+          .replaceAll("\\r", "\r")
           .trimStart()
       );
 
@@ -42,7 +43,7 @@ for (const filename of scripts) {
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
-          message: matches[5].replace(/\r/g, ''),
+          message: matches[5].replaceAll("\r", ""),
         };
       });
 
@@ -71,7 +72,7 @@ for (const filename of scripts) {
                   startColumn: parseInt(matches[2]),
                   endLineNumber: parseInt(matches[3]),
                   endColumn: parseInt(matches[4]),
-                  message: matches[5].replace(/\r/g, ''),
+                  message: matches[5].replaceAll("\r", ""),
                 }
                 : { message: line };
             });

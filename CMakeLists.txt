@@ -46,9 +46,7 @@ add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/co
 
 if (NOT MSVC)
     set(CMAKE_C_FLAGS_DEBUG "-O0 -g -D_DEBUG -fsanitize=address -fsanitize=undefined")
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_C_FLAGS_RELEASE "-O3 -flto")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -flto -fno-rtti")
 endif()
 
 if (EMSCRIPTEN)

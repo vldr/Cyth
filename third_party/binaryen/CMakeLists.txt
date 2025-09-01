@@ -45,6 +45,10 @@ add_library(binaryen src/binaryen-c.cpp src/ir/ExpressionAnalyzer.cpp src/ir/Exp
                      third_party/llvm-project/ErrorHandling.cpp third_party/llvm-project/NativeFormatting.cpp
                      third_party/llvm-project/raw_ostream.cpp third_party/llvm-project/SmallVector.cpp
                      third_party/llvm-project/Twine.cpp)
+         
+if (NOT MSVC)               
+    set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g")
+endif()
 
 set_target_properties(binaryen PROPERTIES
     CXX_STANDARD 17

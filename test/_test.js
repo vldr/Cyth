@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "assert";
 import path from "path";
 import fs from "fs/promises";
-import { spawn } from "child_process";
+import { spawnSync } from "child_process";
 
 Error.stackTraceLimit = Infinity;
 
@@ -47,49 +47,34 @@ for (const filename of scripts) {
         };
       });
 
-    const bytecode = await new Promise((resolve, reject) => {
-      const process = spawn(executable, [], { stdio: ["pipe", "pipe", "pipe"] });
-      const chunks = [];
-      let errorText = "";
+    const process = spawnSync(executable, [], { input: text });
+    const bytecode = process.stdout;
+    const error = process.stderr;
+    const status = process.status;
 
-      process.stdout.on("data", (chunk) => chunks.push(chunk));
-      process.stderr.on("data", (chunk) => (errorText += chunk.toString("utf8")));
+    if (error.byteLength) {
+      const errors = error.toString()
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const matches = line.match(
+            /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
+          );
 
-      process.on("error", reject);
-      process.on("close", (code) => {
-        if (errorText.length > 0) {
-          const errors = errorText
-            .trim()
-            .split("\n")
-            .filter(Boolean)
-            .map((line) => {
-              const matches = line.match(
-                /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
-              );
-              return matches
-                ? {
-                  startLineNumber: parseInt(matches[1]),
-                  startColumn: parseInt(matches[2]),
-                  endLineNumber: parseInt(matches[3]),
-                  endColumn: parseInt(matches[4]),
-                  message: matches[5].replaceAll("\r", ""),
-                }
-                : { message: line };
-            });
+          return matches
+            ? {
+              startLineNumber: parseInt(matches[1]),
+              startColumn: parseInt(matches[2]),
+              endLineNumber: parseInt(matches[3]),
+              endColumn: parseInt(matches[4]),
+              message: matches[5].replaceAll("\r", ""),
+            }
+            : { message: line };
+        });
 
-          resolve({ errors, code });
-        } else {
-          resolve({ bytecode: Buffer.concat(chunks), code });
-        }
-      });
-
-      process.stdin.end(text);
-    });
-
-    if (bytecode.errors) {
-      assert.notDeepStrictEqual(bytecode.code, 0);
-      assert.deepStrictEqual(bytecode.errors, expectedErrors);
       assert.deepStrictEqual([], expectedLogs);
+      assert.deepStrictEqual(errors, expectedErrors);
+      assert.notDeepStrictEqual(status, 0);
     } else {
       const logs = [];
 
@@ -108,7 +93,7 @@ for (const filename of scripts) {
       }
 
       const kv = {};
-      const result = await WebAssembly.instantiate(bytecode.bytecode, {
+      const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log": log,
           "log<bool>": log,
@@ -124,9 +109,9 @@ for (const filename of scripts) {
 
       result.instance.exports["<start>"]();
 
-      assert.deepStrictEqual(bytecode.code, 0);
       assert.deepStrictEqual([], expectedErrors);
       assert.deepStrictEqual(logs, expectedLogs);
+      assert.deepStrictEqual(status, 0);
     }
   });
 }

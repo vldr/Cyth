@@ -1,7 +1,6 @@
 #ifndef array_h
 #define array_h
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -83,7 +82,7 @@
     unsigned int idx = (i);                                                                        \
     assert(idx < (a)->size);                                                                       \
                                                                                                    \
-    const unsigned int _cnt = (a)->size - (idx) - 1;                                               \
+    const unsigned int _cnt = (a)->size - (idx)-1;                                                 \
     if (_cnt > 0)                                                                                  \
     {                                                                                              \
       memmove(&((a)->elems[idx]), &((a)->elems[idx + 1]), _cnt * sizeof(*((a)->elems)));           \

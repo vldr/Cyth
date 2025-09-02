@@ -1,7 +1,28 @@
 #ifndef main_h
 #define main_h
 
-#include <assert.h>
+#include <stdio.h>
+
+#if defined(_MSC_VER)
+#define trap() __debugbreak()
+#elif defined(__clang__)
+#define trap() __builtin_debugtrap()
+#elif defined(__GNUC__)
+#define trap() __builtin_trap()
+#else
+#define trap() ((void)0)
+#endif
+
+#define assert(expr)                                                                               \
+  do                                                                                               \
+  {                                                                                                \
+    if (!(expr))                                                                                   \
+    {                                                                                              \
+      fprintf(stderr, "Assertion failed: %s %s:%d\n", #expr, __FILE__, __LINE__);                  \
+      trap();                                                                                      \
+      abort();                                                                                     \
+    }                                                                                              \
+  } while (0)
 
 #ifdef _WIN32
 #define UNREACHABLE(message)                                                                       \

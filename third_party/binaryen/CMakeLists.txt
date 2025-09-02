@@ -1,12 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(binaryen)
 
-if (MSVC)
-    add_compile_options(/W0 /MP)
-else()
-    add_compile_options(-Wno-everything -w)
-endif()
-
 add_library(binaryen src/binaryen-c.cpp src/ir/ExpressionAnalyzer.cpp src/ir/ExpressionManipulator.cpp
                      src/ir/debuginfo.cpp src/ir/drop.cpp src/ir/effects.cpp src/ir/eh-utils.cpp 
                      src/ir/export-utils.cpp src/ir/intrinsics.cpp src/ir/lubs.cpp src/ir/memory-utils.cpp
@@ -45,16 +39,23 @@ add_library(binaryen src/binaryen-c.cpp src/ir/ExpressionAnalyzer.cpp src/ir/Exp
                      third_party/llvm-project/ErrorHandling.cpp third_party/llvm-project/NativeFormatting.cpp
                      third_party/llvm-project/raw_ostream.cpp third_party/llvm-project/SmallVector.cpp
                      third_party/llvm-project/Twine.cpp)
-         
-if (NOT MSVC)               
-    set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g")
+
+if (MSVC)
+    target_compile_options(binaryen PRIVATE /W0 /MP)
+else()
+    target_compile_options(binaryen PRIVATE -Wno-everything -w)
+
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(binaryen PRIVATE -O1)
+    else()
+        target_compile_options(binaryen PRIVATE -flto)
+    endif()
 endif()
 
 set_target_properties(binaryen PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
 )
-
 target_include_directories(binaryen PRIVATE third_party/FP16/include 
                                             third_party/llvm-project/include)
 target_include_directories(binaryen PUBLIC src)

@@ -6,11 +6,7 @@ endif()
 
 project(cyth)
 
-if (MSVC)
-    add_compile_options(/MP)
-else()
-    add_compile_options(-Wall -Wextra -pedantic)
-
+if (NOT MSVC)
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_link_options(-fsanitize=address -fsanitize=undefined)
     endif()
@@ -44,9 +40,16 @@ add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/co
                     src/lexer.h src/main.c src/main.h src/map.c src/map.h src/memory.c
                     src/memory.h src/parser.c src/parser.h src/statement.h)
 
-if (NOT MSVC)
-    set(CMAKE_C_FLAGS_DEBUG "-O0 -g -D_DEBUG -fsanitize=address -fsanitize=undefined")
-    set(CMAKE_C_FLAGS_RELEASE "-O3 -flto")
+if (MSVC)
+    target_compile_options(cyth PRIVATE /MP)
+else()
+    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic)
+
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(cyth PRIVATE -fsanitize=address -fsanitize=undefined -D_DEBUG)
+    else()
+        target_compile_options(cyth PRIVATE -flto)
+    endif()
 endif()
 
 if (EMSCRIPTEN)

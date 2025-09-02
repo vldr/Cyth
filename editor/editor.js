@@ -99,7 +99,8 @@ class EditorConsole {
     }
     catch (error) {
       this.clear();
-      this.error("Internal compiler error:\n\n" + error.stack);
+      this.error("Internal compiler error:\n\n" + this.stderr + error.stack);
+      this.stderr = "";
 
       console.error(error);
     }
@@ -710,8 +711,9 @@ class Editor {
         startColumn: 0,
         endLineNumber: Infinity,
         endColumn: Infinity,
-        message: "Internal compiler error:\n\n" + error.stack,
+        message: "Internal compiler error:\n\n" + this.editorConsole.stderr + error.stack,
       });
+      this.editorConsole.stderr = "";
 
       console.error(error);
     }
@@ -726,6 +728,7 @@ var Module = {
   editor: new Editor(),
   printErr: function (error) {
     Module.editor.editorConsole.stderr += error + "\n";
+    console.error(error);
   },
   onRuntimeInitialized: function () {
     this.editor.init();

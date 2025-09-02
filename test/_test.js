@@ -26,8 +26,8 @@ for (const filename of scripts) {
           .replaceAll("\\t", "\t")
           .replaceAll("\\b", "\b")
           .replaceAll("\\n", "\n")
-          .replaceAll("\\f", "\f")
           .replaceAll("\\r", "\r")
+          .replaceAll("\\f", "\f")
           .trimStart()
       );
 
@@ -48,44 +48,41 @@ for (const filename of scripts) {
       });
 
     const process = spawnSync(executable, [], { input: text });
-    const bytecode = process.stdout;
-    const error = process.stderr;
+    const logs = [];
     const status = process.status;
+    const bytecode = process.stdout;
+    const errors = process.stderr
+      .toString()
+      .trim()
+      .split("\n")
+      .filter((line) => line)
+      .map((line) => {
+        const matches = line.match(
+          /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
+        );
 
-    if (error.byteLength) {
-      const errors = error.toString()
-        .trim()
-        .split("\n")
-        .map((line) => {
-          const matches = line.match(
-            /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
-          );
+        return matches
+          ? {
+            startLineNumber: parseInt(matches[1]),
+            startColumn: parseInt(matches[2]),
+            endLineNumber: parseInt(matches[3]),
+            endColumn: parseInt(matches[4]),
+            message: matches[5].replaceAll("\r", ""),
+          }
+          : line;
+      });
 
-          return matches
-            ? {
-              startLineNumber: parseInt(matches[1]),
-              startColumn: parseInt(matches[2]),
-              endLineNumber: parseInt(matches[3]),
-              endColumn: parseInt(matches[4]),
-              message: matches[5].replaceAll("\r", ""),
-            }
-            : { message: line };
-        });
-
-      assert.deepStrictEqual([], expectedLogs);
-      assert.deepStrictEqual(errors, expectedErrors);
-      assert.notDeepStrictEqual(status, 0);
-    } else {
-      const logs = [];
-
+    if (errors.length === 0) {
       function log(output) {
         if (typeof output === "object") {
           const at = result.instance.exports["string.at"];
           const length = result.instance.exports["string.length"];
+
           const array = new Uint8Array(length(output));
           for (let i = 0; i < array.byteLength; i++) {
             array[i] = at(output, i);
           }
+
           logs.push(decoder.decode(array));
         } else {
           logs.push(String(output));
@@ -108,10 +105,14 @@ for (const filename of scripts) {
       });
 
       result.instance.exports["<start>"]();
-
-      assert.deepStrictEqual([], expectedErrors);
-      assert.deepStrictEqual(logs, expectedLogs);
-      assert.deepStrictEqual(status, 0);
     }
+
+    if (errors.length === 0)
+      assert.deepStrictEqual(status, 0);
+    else
+      assert.notDeepStrictEqual(status, 0);
+
+    assert.deepStrictEqual(errors, expectedErrors);
+    assert.deepStrictEqual(logs, expectedLogs);
   });
 }

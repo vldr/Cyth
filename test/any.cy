@@ -26,10 +26,6 @@ Object d = (Object) get(3)
 int[] e = (int[]) get(4)
 string f = (string) get(5)
 
-Object g = (Object) get(-1)
-int[] h = (int[]) get(-1)
-string i = (string) get(-1)
-
 log((string) a.data)
 log((string) b[0])
 log((string) b[1])
@@ -41,9 +37,6 @@ log((string) e[0])
 log((string) e[1])
 log((string) e[2])
 log(f)
-log((string) (g == null))
-log((string) h.length)
-log((string) i.length)
 
 # 12
 # 22
@@ -55,6 +48,3 @@ log((string) i.length)
 # 44
 # 66
 # hello world
-# true
-# 0
-# 0

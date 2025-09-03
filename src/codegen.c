@@ -2193,11 +2193,11 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_CHAR:
       return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, &value, 1);
     case TYPE_ANY:
-      return BinaryenIf(codegen.module, BinaryenRefTest(codegen.module, value, codegen.string_type),
+      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                        BinaryenUnreachable(codegen.module),
                         BinaryenRefCast(codegen.module,
                                         BinaryenExpressionCopy(value, codegen.module),
-                                        codegen.string_type),
-                        generate_default_initialization(expression->to_data_type));
+                                        codegen.string_type));
 
     default:
       break;
@@ -2279,13 +2279,11 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     switch (expression->from_data_type.type)
     {
     case TYPE_ANY:
-      return BinaryenIf(codegen.module,
-                        BinaryenRefTest(codegen.module, value,
-                                        data_type_to_binaryen_type(expression->to_data_type)),
+      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                        BinaryenUnreachable(codegen.module),
                         BinaryenRefCast(codegen.module,
                                         BinaryenExpressionCopy(value, codegen.module),
-                                        data_type_to_binaryen_type(expression->to_data_type)),
-                        generate_default_initialization(expression->to_data_type));
+                                        data_type_to_binaryen_type(expression->to_data_type)));
 
     default:
       break;
@@ -2296,11 +2294,11 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     switch (expression->from_data_type.type)
     {
     case TYPE_ANY:
-      return BinaryenIf(
-        codegen.module, BinaryenRefTest(codegen.module, value, expression->to_data_type.class->ref),
-        BinaryenRefCast(codegen.module, BinaryenExpressionCopy(value, codegen.module),
-                        expression->to_data_type.class->ref),
-        BinaryenRefNull(codegen.module, expression->to_data_type.class->ref));
+      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                        BinaryenUnreachable(codegen.module),
+                        BinaryenRefCast(codegen.module,
+                                        BinaryenExpressionCopy(value, codegen.module),
+                                        expression->to_data_type.class->ref));
 
     default:
       break;
@@ -2675,6 +2673,23 @@ static BinaryenExpressionRef generate_array_expression(LiteralArrayExpr* express
   }
 }
 
+static BinaryenExpressionRef generate_is_expression(IsExpr* expression)
+{
+  BinaryenExpressionRef ref = generate_expression(expression->expr);
+
+  switch (expression->expr_data_type.type)
+  {
+  case TYPE_ANY:
+    return BinaryenSelect(codegen.module, BinaryenRefIsNull(codegen.module, ref),
+                          BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
+                          BinaryenRefTest(codegen.module,
+                                          BinaryenExpressionCopy(ref, codegen.module),
+                                          data_type_to_binaryen_type(expression->is_data_type)));
+  default:
+    UNREACHABLE("Unexpected expression data type");
+  }
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -2701,6 +2716,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_index_expression(&expression->index);
   case EXPR_ARRAY:
     return generate_array_expression(&expression->array);
+  case EXPR_IS:
+    return generate_is_expression(&expression->is);
 
   default:
     UNREACHABLE("Unhandled expression");

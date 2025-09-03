@@ -19,4 +19,4 @@ int[] a = [test()]
 #! 7:1-7:5 The array type is unresolved; add a cast to declare its type.
 #! 8:1-8:5 The array type is unresolved; add a cast to declare its type.
 #! 9:1-9:5 The array type is unresolved; add a cast to declare its type.
-#! 12:12-12:18 Mismatched types 'int' and 'void'.
+#! 12:12-12:18 Mismatched types, expected 'int' but got 'void'.

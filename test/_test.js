@@ -9,7 +9,7 @@ Error.stackTraceLimit = Infinity;
 const executable = process.argv[2];
 const decoder = new TextDecoder("utf-8");
 const files = await fs.readdir(import.meta.dirname);
-const scripts = files.filter((f) => f.endsWith(".cy"));
+const scripts = process.argv[3] ? [process.argv[3]] : files.filter((f) => f.endsWith(".cy"));
 
 for (const filename of scripts) {
   await test(filename, async () => {
@@ -100,7 +100,7 @@ for (const filename of scripts) {
           "log<char>": log,
 
           set: (key, value) => { kv[key] = value; },
-          get: (key) => { return kv[key]; },
+          get: (key) => { return key in kv ? kv[key] : null; },
         },
       });
 

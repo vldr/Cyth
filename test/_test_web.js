@@ -121,7 +121,7 @@ for (const filename of scripts) {
           "log<char>": log,
 
           set: (key, value) => { kv[key] = value; },
-          get: (key) => { return kv[key]; },
+          get: (key) => { return key in kv ? kv[key] : null; },
         },
       });
 

@@ -56,7 +56,7 @@ static void checker_error(Token token, const char* message)
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
 {
-  checker_error(token, memory_sprintf("Mismatched types '%s' and '%s'.",
+  checker_error(token, memory_sprintf("Mismatched types, expected '%s' but got '%s'.",
                                       data_type_to_string(expected), data_type_to_string(got)));
 }
 
@@ -284,6 +284,12 @@ static void error_no_return(Token token)
 static void error_array_type_is_unresolved(Token token)
 {
   checker_error(token, "The array type is unresolved; add a cast to declare its type.");
+}
+
+static void error_type_is_not_assignable(Token token, DataType from, DataType to)
+{
+  checker_error(token, memory_sprintf("The type '%s' is not assignable to '%s'.",
+                                      data_type_to_string(from), data_type_to_string(to)));
 }
 
 ArrayVarStmt global_locals(void)
@@ -526,7 +532,7 @@ bool assignable_data_type(DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
     return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
-           source.type == TYPE_NULL;
+           source.type == TYPE_NULL || source.type == TYPE_ANY;
 
   if (destination.type == TYPE_OBJECT)
     return source.type == TYPE_NULL;
@@ -2560,6 +2566,30 @@ static DataType check_array_expression(LiteralArrayExpr* expression)
   return expression->data_type;
 }
 
+static DataType check_is_expression(IsExpr* expression)
+{
+  expression->expr_data_type = check_expression(expression->expr);
+  expression->is_data_type = data_type_token_to_data_type(expression->is_data_type_token);
+
+  switch (expression->expr_data_type.type)
+  {
+  case TYPE_ANY:
+    if (!assignable_data_type(expression->expr_data_type, expression->is_data_type))
+    {
+      error_type_is_not_assignable(expression->is_data_type_token.token, expression->is_data_type,
+                                   expression->expr_data_type);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    break;
+  default:
+    error_type_mismatch(expression->expr_token, DATA_TYPE(TYPE_ANY), expression->expr_data_type);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
+  return DATA_TYPE(TYPE_BOOL);
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -2586,6 +2616,8 @@ static DataType check_expression(Expr* expression)
     return check_index_expression(&expression->index);
   case EXPR_ARRAY:
     return check_array_expression(&expression->array);
+  case EXPR_IS:
+    return check_is_expression(&expression->is);
 
   default:
     UNREACHABLE("Unhandled expression");

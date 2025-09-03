@@ -228,6 +228,17 @@ typedef struct _INDEX_EXPR
   Token index_token;
 } IndexExpr;
 
+typedef struct _IS_EXPR
+{
+  DataType expr_data_type;
+  DataType is_data_type;
+
+  Token expr_token;
+  DataTypeToken is_data_type_token;
+
+  Expr* expr;
+} IsExpr;
+
 struct _EXPR
 {
   enum
@@ -243,6 +254,7 @@ struct _EXPR
     EXPR_CALL,
     EXPR_ACCESS,
     EXPR_INDEX,
+    EXPR_IS,
   } type;
 
   union {
@@ -257,6 +269,7 @@ struct _EXPR
     CastExpr cast;
     AccessExpr access;
     IndexExpr index;
+    IsExpr is;
   };
 };
 

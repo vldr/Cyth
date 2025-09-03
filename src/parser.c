@@ -636,6 +636,24 @@ static Expr* call(void)
 
       expr = index;
     }
+    else if (match(TOKEN_IS))
+    {
+      Expr* is = EXPR();
+      is->type = EXPR_IS;
+      is->is.is_data_type_token = consume_data_type("Expected a type after 'is' keyword.");
+      is->is.expr = expr;
+      is->is.expr_token = (Token){
+        TOKEN_IDENTIFIER,
+        start_token.start_line,
+        start_token.start_column,
+        end_token.end_line,
+        end_token.end_column,
+        0,
+        "",
+      };
+
+      expr = is;
+    }
     else
     {
       break;

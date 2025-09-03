@@ -12,7 +12,6 @@
 #define array_def(T, name)                                                                         \
   typedef struct Array##name                                                                       \
   {                                                                                                \
-    bool oom;                                                                                      \
     unsigned int cap;                                                                              \
     unsigned int size;                                                                             \
     T* elems;                                                                                      \
@@ -27,31 +26,19 @@
 #define array_add(a, k)                                                                            \
   do                                                                                               \
   {                                                                                                \
-    const unsigned int _max = 0xffffffff / sizeof_ptr((a)->elems);                                 \
     unsigned int _cap;                                                                             \
     unsigned int _element_size;                                                                    \
     void* _p;                                                                                      \
                                                                                                    \
     if ((a)->cap == (a)->size)                                                                     \
     {                                                                                              \
-      if ((a)->cap > _max / 2)                                                                     \
-      {                                                                                            \
-        (a)->oom = true;                                                                           \
-        break;                                                                                     \
-      }                                                                                            \
-                                                                                                   \
       _cap = (a)->cap == 0 ? 8 : (a)->cap * 2;                                                     \
       _element_size = sizeof_ptr(((a)->elems));                                                    \
       _p = memory_realloc((a)->elems, (a)->cap * _element_size, _cap * _element_size);             \
-      if (_p == NULL)                                                                              \
-      {                                                                                            \
-        (a)->oom = true;                                                                           \
-        break;                                                                                     \
-      }                                                                                            \
+                                                                                                   \
       (a)->cap = _cap;                                                                             \
       (a)->elems = _p;                                                                             \
     }                                                                                              \
-    (a)->oom = false;                                                                              \
     (a)->elems[(a)->size++] = k;                                                                   \
   } while (0)
 
@@ -70,10 +57,8 @@
   do                                                                                               \
   {                                                                                                \
     (a)->size = 0;                                                                                 \
-    (a)->oom = false;                                                                              \
   } while (0)
 
-#define array_oom(a) ((a)->oom)
 #define array_at(a, i) ((a)->elems[i])
 #define array_size(a) ((a)->size)
 #define array_del(a, i)                                                                            \
@@ -82,7 +67,7 @@
     unsigned int idx = (i);                                                                        \
     assert(idx < (a)->size);                                                                       \
                                                                                                    \
-    const unsigned int _cnt = (a)->size - (idx)-1;                                                 \
+    const unsigned int _cnt = (a)->size - (idx) - 1;                                               \
     if (_cnt > 0)                                                                                  \
     {                                                                                              \
       memmove(&((a)->elems[idx]), &((a)->elems[idx + 1]), _cnt * sizeof(*((a)->elems)));           \

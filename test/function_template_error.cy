@@ -8,6 +8,6 @@ fib + 2
 fib2 + 2
 A + 2
 
-#! 7:5-7:6 Mismatched types 'void<T, K>(int, T)' and 'int'.
-#! 8:6-8:7 Mismatched types 'void(int, int)' and 'int'.
-#! 9:3-9:4 Mismatched types 'class A<T, K>' and 'int'.
+#! 7:5-7:6 Mismatched types, expected 'void<T, K>(int, T)' but got 'int'.
+#! 8:6-8:7 Mismatched types, expected 'void(int, int)' but got 'int'.
+#! 9:3-9:4 Mismatched types, expected 'class A<T, K>' but got 'int'.

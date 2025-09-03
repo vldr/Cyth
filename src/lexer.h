@@ -83,6 +83,7 @@ typedef enum
   TOKEN_FOR,
   TOKEN_IF,
   TOKEN_IN,
+  TOKEN_IS,
   TOKEN_NULL,
   TOKEN_OR,
   TOKEN_NOT,

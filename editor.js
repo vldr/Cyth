@@ -493,7 +493,7 @@ class Editor {
         "inf",
         "nan",
       ],
-      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in"],
+      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in", "is"],
       operators: [
         "=",
         ">",

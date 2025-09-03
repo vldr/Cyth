@@ -2,14 +2,14 @@ import test from "node:test";
 import assert from "assert";
 import path from "path";
 import fs from "fs/promises";
-import { spawnSync } from "child_process";
+import child_process from "child_process";
 
 Error.stackTraceLimit = Infinity;
 
 const executable = process.argv[2];
 const decoder = new TextDecoder("utf-8");
 const files = await fs.readdir(import.meta.dirname);
-const scripts = process.argv[3] ? [process.argv[3]] : files.filter((f) => f.endsWith(".cy"));
+const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) : files.filter((f) => f.endsWith(".cy"));
 
 for (const filename of scripts) {
   await test(filename, async () => {
@@ -47,7 +47,7 @@ for (const filename of scripts) {
         };
       });
 
-    const process = spawnSync(executable, [], { input: text });
+    const process = child_process.spawnSync(executable, [], { input: text });
     const logs = [];
     const status = process.status;
     const bytecode = process.stdout;
@@ -55,7 +55,7 @@ for (const filename of scripts) {
       .toString()
       .trim()
       .split("\n")
-      .filter((line) => line)
+      .filter(Boolean)
       .map((line) => {
         const matches = line.match(
           /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/

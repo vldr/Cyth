@@ -25,15 +25,6 @@ if (EMSCRIPTEN)
 else()
     if (NOT MSVC)
         add_link_options(-pthread)
-
-        file(GLOB TEST_FILES "${CMAKE_SOURCE_DIR}/test/*.cy")
-        foreach(file ${TEST_FILES})
-            get_filename_component(name ${file} NAME)
-            add_custom_target(${name}
-                COMMAND node ${CMAKE_SOURCE_DIR}/test/_test.js $<TARGET_FILE:cyth> ${name}
-                DEPENDS cyth
-            )
-        endforeach()
     endif()
 
     add_custom_target(test

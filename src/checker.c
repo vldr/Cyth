@@ -2026,8 +2026,8 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->argument_tokens.elems[i - 1], argument_data_type,
-                            parameter_data_type);
+        error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
+                            argument_data_type);
       }
     }
 
@@ -2062,8 +2062,8 @@ static DataType check_call_expression(CallExpr* expression)
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
           !assignable_data_type(parameter_data_type, argument_data_type))
       {
-        error_type_mismatch(expression->argument_tokens.elems[i], argument_data_type,
-                            parameter_data_type);
+        error_type_mismatch(expression->argument_tokens.elems[i], parameter_data_type,
+                            argument_data_type);
       }
     }
 
@@ -2122,7 +2122,7 @@ static DataType check_call_expression(CallExpr* expression)
         else
           argument_token = expression->argument_tokens.elems[i];
 
-        error_type_mismatch(argument_token, argument_data_type, parameter_data_type);
+        error_type_mismatch(argument_token, parameter_data_type, argument_data_type);
       }
     }
 
@@ -2170,8 +2170,8 @@ static DataType check_call_expression(CallExpr* expression)
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
             !assignable_data_type(parameter_data_type, argument_data_type))
         {
-          error_type_mismatch(expression->argument_tokens.elems[i - 1], argument_data_type,
-                              parameter_data_type);
+          error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
+                              argument_data_type);
         }
       }
     }

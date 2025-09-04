@@ -52,7 +52,7 @@ class EditorConsole {
       this.worker.terminate();
     }
 
-    this.worker = new Worker("worker.js");
+    this.worker = new Worker(this.editor.blobUrl);
     this.worker.onerror = this.onWorkerError.bind(this);
     this.worker.onmessage = this.onWorkerMessage.bind(this);
     this.worker.postMessage(
@@ -426,7 +426,7 @@ class EditorTabs {
 }
 
 class Editor {
-  init() {
+  init(blobUrl) {
     Module._set_error_callback(
       Module.addFunction(this.onError.bind(this), "viiiii")
     );
@@ -651,6 +651,7 @@ class Editor {
       tabSize: 2,
     });
 
+    this.blobUrl = blobUrl;
     this.editorTabs = new EditorTabs(this);
     this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);
 
@@ -726,11 +727,17 @@ class Editor {
 var Module = {
   preRun: [],
   editor: new Editor(),
+
   printErr: function (error) {
     Module.editor.editorConsole.stderr += error + "\n";
     console.error(error);
   },
-  onRuntimeInitialized: function () {
-    this.editor.init();
+
+  onRuntimeInitialized: async function () {
+    const response = await fetch("worker.js");
+    const code = await response.blob();
+    const blobUrl = URL.createObjectURL(code);
+
+    this.editor.init(blobUrl);
   },
 };

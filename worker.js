@@ -15,12 +15,15 @@ function postError(error) {
       shift = 0,
       digit,
       continuation;
-    do {
-      digit = base64Digits.indexOf(str[index++]);
-      continuation = digit & 32;
-      result += (digit & 31) << shift;
-      shift += 5;
-    } while (continuation);
+
+    if (str) {
+      do {
+        digit = base64Digits.indexOf(str[index++]);
+        continuation = digit & 32;
+        result += (digit & 31) << shift;
+        shift += 5;
+      } while (continuation);
+    }
     return { value: (result & 1 ? -1 : 1) * (result >> 1), index };
   };
 
@@ -65,26 +68,43 @@ function postError(error) {
     }
   };
 
-  const regex = /wasm-function\[([0-9]+)\]:(0[xX][0-9a-fA-F]+)/g;
-  const stackTrace = {};
-  const stackTraceOffsets = [];
-
-  for (const matches of error.stack.matchAll(regex)) {
-    const location = sourceMap.functions[Number(matches[1])];
-    const offset = Number(matches[2]);
-
-    stackTrace[offset] = location;
-    stackTraceOffsets.push(offset);
-  }
-
-  map(sourceMap, stackTrace);
-
   let errorMessage = error.message + "\n";
-  for (const offset of stackTraceOffsets) {
-    errorMessage +=
-      "    at " +
-      stackTrace[offset].replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
-      "\n";
+
+  const regex = /wasm-function\[([0-9]+)\]:(0[xX][0-9a-fA-F]+)/g;
+  const stack = error.stack;
+
+  if (regex.test(stack)) {
+    const stackTrace = {};
+    const stackTraceOffsets = [];
+    regex.lastIndex = 0;
+
+    for (const matches of stack.matchAll(regex)) {
+      const location = sourceMap.functions[Number(matches[1])];
+      const offset = Number(matches[2]);
+
+      stackTrace[offset] = location;
+      stackTraceOffsets.push(offset);
+    }
+
+    map(sourceMap, stackTrace);
+
+    for (const offset of stackTraceOffsets) {
+      errorMessage +=
+        "    at " +
+        stackTrace[offset].replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
+        "\n";
+    }
+  }
+  else {
+    const regex = /wasm-function\[([0-9]+)\]/g;
+
+    for (const matches of stack.matchAll(regex)) {
+      const location = sourceMap.functions[Number(matches[1])];
+      errorMessage +=
+        "    at " +
+        location.replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
+        "\n";
+    }
   }
 
   postMessage({

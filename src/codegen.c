@@ -1101,10 +1101,6 @@ static const char* generate_array_pop_function(DataType this_data_type)
   if (!BinaryenGetFunction(codegen.module, name))
   {
     BinaryenExpressionRef body_list[] = {
-      BinaryenIf(codegen.module,
-                 BinaryenBinary(codegen.module, BinaryenLeSInt32(), SIZE(), CONSTANT(0)),
-                 BinaryenUnreachable(codegen.module), NULL),
-
       BinaryenStructSet(codegen.module, 1, THIS(),
                         BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), CONSTANT(1))),
 
@@ -2192,13 +2188,17 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
                           codegen.string_type);
     case TYPE_CHAR:
       return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, &value, 1);
-    case TYPE_ANY:
-      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
-                        BinaryenUnreachable(codegen.module),
-                        BinaryenRefCast(codegen.module,
-                                        BinaryenExpressionCopy(value, codegen.module),
-                                        codegen.string_type));
+    case TYPE_ANY: {
+      BinaryenExpressionRef result =
+        BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                   BinaryenUnreachable(codegen.module),
+                   BinaryenRefCast(codegen.module, BinaryenExpressionCopy(value, codegen.module),
+                                   codegen.string_type));
 
+      generate_debug_info(expression->type.token, BinaryenIfGetIfTrue(result), codegen.function);
+      generate_debug_info(expression->type.token, BinaryenIfGetIfFalse(result), codegen.function);
+      return result;
+    }
     default:
       break;
     }
@@ -2278,13 +2278,17 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
   {
     switch (expression->from_data_type.type)
     {
-    case TYPE_ANY:
-      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
-                        BinaryenUnreachable(codegen.module),
-                        BinaryenRefCast(codegen.module,
-                                        BinaryenExpressionCopy(value, codegen.module),
-                                        data_type_to_binaryen_type(expression->to_data_type)));
+    case TYPE_ANY: {
+      BinaryenExpressionRef result =
+        BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                   BinaryenUnreachable(codegen.module),
+                   BinaryenRefCast(codegen.module, BinaryenExpressionCopy(value, codegen.module),
+                                   data_type_to_binaryen_type(expression->to_data_type)));
 
+      generate_debug_info(expression->type.token, BinaryenIfGetIfTrue(result), codegen.function);
+      generate_debug_info(expression->type.token, BinaryenIfGetIfFalse(result), codegen.function);
+      return result;
+    }
     default:
       break;
     }
@@ -2293,13 +2297,17 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
   {
     switch (expression->from_data_type.type)
     {
-    case TYPE_ANY:
-      return BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
-                        BinaryenUnreachable(codegen.module),
-                        BinaryenRefCast(codegen.module,
-                                        BinaryenExpressionCopy(value, codegen.module),
-                                        expression->to_data_type.class->ref));
+    case TYPE_ANY: {
+      BinaryenExpressionRef result =
+        BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
+                   BinaryenUnreachable(codegen.module),
+                   BinaryenRefCast(codegen.module, BinaryenExpressionCopy(value, codegen.module),
+                                   expression->to_data_type.class->ref));
 
+      generate_debug_info(expression->type.token, BinaryenIfGetIfTrue(result), codegen.function);
+      generate_debug_info(expression->type.token, BinaryenIfGetIfFalse(result), codegen.function);
+      return result;
+    }
     default:
       break;
     }
@@ -2438,24 +2446,20 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
       BinaryenExpressionRef length = BinaryenStructGet(
         codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
-      BinaryenExpressionRef unreachable = BinaryenUnreachable(codegen.module);
-      BinaryenExpressionRef check = BinaryenIf(
-        codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
-        unreachable, NULL);
+      BinaryenExpressionRef bounded_index = BinaryenBinary(
+        codegen.module, BinaryenOrInt32(), BinaryenExpressionCopy(index, codegen.module),
+        BinaryenBinary(codegen.module, BinaryenShlInt32(),
+                       BinaryenBinary(codegen.module, BinaryenGeUInt32(), index, length),
+                       BinaryenConst(codegen.module, BinaryenLiteralInt32(31))));
 
       BinaryenExpressionRef list[] = {
-        check,
-        BinaryenArraySet(codegen.module, array, BinaryenExpressionCopy(index, codegen.module),
-                         value),
+        BinaryenArraySet(codegen.module, array, bounded_index, value),
         BinaryenArrayGet(codegen.module, BinaryenExpressionCopy(array, codegen.module),
-                         BinaryenExpressionCopy(index, codegen.module), BinaryenTypeAuto(), false),
+                         BinaryenExpressionCopy(index, codegen.module), type, false),
       };
 
-      generate_debug_info(expression->target->index.index_token, unreachable, codegen.function);
-      generate_debug_info(expression->target->index.index_token, list[1], codegen.function);
-
-      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
-                           BinaryenTypeAuto());
+      generate_debug_info(expression->target->index.index_token, list[0], codegen.function);
+      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
     }
   }
 }
@@ -2612,22 +2616,16 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
     BinaryenExpressionRef length = BinaryenStructGet(
       codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
 
-    BinaryenExpressionRef unreachable = BinaryenUnreachable(codegen.module);
-    BinaryenExpressionRef check =
-      BinaryenIf(codegen.module, BinaryenBinary(codegen.module, BinaryenGeSInt32(), index, length),
-                 unreachable, NULL);
+    BinaryenExpressionRef bounded_index = BinaryenBinary(
+      codegen.module, BinaryenOrInt32(), BinaryenExpressionCopy(index, codegen.module),
+      BinaryenBinary(codegen.module, BinaryenShlInt32(),
+                     BinaryenBinary(codegen.module, BinaryenGeUInt32(), index, length),
+                     BinaryenConst(codegen.module, BinaryenLiteralInt32(31))));
 
-    BinaryenExpressionRef list[] = {
-      check,
-      BinaryenArrayGet(codegen.module, array, BinaryenExpressionCopy(index, codegen.module),
-                       BinaryenTypeAuto(), false),
-    };
+    BinaryenExpressionRef get = BinaryenArrayGet(codegen.module, array, bounded_index, type, false);
+    generate_debug_info(expression->index_token, get, codegen.function);
 
-    generate_debug_info(expression->index_token, unreachable, codegen.function);
-    generate_debug_info(expression->index_token, list[1], codegen.function);
-
-    return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
-                         BinaryenTypeAuto());
+    return get;
   }
   case TYPE_OBJECT: {
     BinaryenExpressionRef operands[] = {

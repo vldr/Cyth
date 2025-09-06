@@ -22,6 +22,12 @@ if (EMSCRIPTEN)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
+
+    add_custom_target(serve
+        COMMAND npx http-server -c-1 editor/
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        DEPENDS cyth
+    )
 else()
     if (NOT MSVC)
         add_link_options(-pthread)

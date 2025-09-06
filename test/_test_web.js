@@ -52,7 +52,7 @@ function encodeText(text) {
 }
 
 const files = await fs.readdir(import.meta.dirname);
-const scripts = files.filter((f) => f.endsWith(".cy"));
+const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) : files.filter((f) => f.endsWith(".cy"));
 
 for (const filename of scripts) {
   await test(filename, async () => {

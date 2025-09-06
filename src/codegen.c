@@ -547,49 +547,65 @@ static const char* generate_string_int_cast_function(void)
 #undef CONSTANT
 }
 
-static const char* generate_string_concat_function(void)
+static const char* generate_string_concat_function(int count)
 {
-  const char* name = "string.concat";
+  const char* name = memory_sprintf("string.concat.%d", count);
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
-    BinaryenExpressionRef left = BinaryenLocalGet(codegen.module, 0, codegen.string_type);
-    BinaryenExpressionRef right = BinaryenLocalGet(codegen.module, 1, codegen.string_type);
+    BinaryenExpressionRef total_length = NULL;
+    for (int i = 0; i < count; i++)
+    {
+      BinaryenExpressionRef array = BinaryenLocalGet(codegen.module, i, codegen.string_type);
+      BinaryenExpressionRef length = BinaryenArrayLen(codegen.module, array);
 
-    BinaryenExpressionRef left_length = BinaryenArrayLen(codegen.module, left);
-    BinaryenExpressionRef right_length = BinaryenArrayLen(codegen.module, right);
+      if (total_length)
+        total_length = BinaryenBinary(codegen.module, BinaryenAddInt32(), total_length, length);
+      else
+        total_length = length;
+    }
 
-    BinaryenExpressionRef length =
-      BinaryenBinary(codegen.module, BinaryenAddInt32(), left_length, right_length);
+    ArrayBinaryenExpressionRef body_list;
+    array_init(&body_list);
+    array_add(&body_list,
+              BinaryenLocalSet(
+                codegen.module, count,
+                BinaryenArrayNew(codegen.module, codegen.string_heap_type, total_length, NULL)));
 
-    BinaryenExpressionRef index = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
-    BinaryenExpressionRef clone =
-      BinaryenArrayNew(codegen.module, codegen.string_heap_type, length, NULL);
+    for (int i = 0; i < count; i++)
+    {
+      BinaryenExpressionRef source = BinaryenLocalGet(codegen.module, i, codegen.string_type);
+      BinaryenExpressionRef length = BinaryenArrayLen(codegen.module, source);
+      BinaryenExpressionRef total_length = BinaryenConst(codegen.module, BinaryenLiteralInt32(0));
 
-    BinaryenExpressionRef body_list[] = {
-      BinaryenLocalSet(codegen.module, 2, clone),
-      BinaryenArrayCopy(codegen.module, BinaryenLocalGet(codegen.module, 2, codegen.string_type),
-                        BinaryenExpressionCopy(index, codegen.module),
-                        BinaryenExpressionCopy(left, codegen.module),
-                        BinaryenExpressionCopy(index, codegen.module),
-                        BinaryenExpressionCopy(left_length, codegen.module)),
+      for (int j = 0; j < i; j++)
+      {
+        BinaryenExpressionRef array = BinaryenLocalGet(codegen.module, j, codegen.string_type);
+        BinaryenExpressionRef length = BinaryenArrayLen(codegen.module, array);
 
-      BinaryenArrayCopy(codegen.module, BinaryenLocalGet(codegen.module, 2, codegen.string_type),
-                        BinaryenExpressionCopy(left_length, codegen.module),
-                        BinaryenExpressionCopy(right, codegen.module),
-                        BinaryenExpressionCopy(index, codegen.module),
-                        BinaryenExpressionCopy(right_length, codegen.module)),
+        total_length = BinaryenBinary(codegen.module, BinaryenAddInt32(), total_length, length);
+      }
 
-      BinaryenLocalGet(codegen.module, 2, codegen.string_type)
-    };
+      array_add(&body_list,
+                BinaryenArrayCopy(codegen.module,
+                                  BinaryenLocalGet(codegen.module, count, codegen.string_type),
+                                  total_length, BinaryenExpressionCopy(source, codegen.module),
+                                  BinaryenConst(codegen.module, BinaryenLiteralInt32(0)), length));
+    }
+
+    array_add(&body_list, BinaryenLocalGet(codegen.module, count, codegen.string_type));
 
     BinaryenExpressionRef body =
-      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
-                    codegen.string_type);
+      BinaryenBlock(codegen.module, NULL, body_list.elems, body_list.size, codegen.string_type);
 
-    BinaryenType params_list[] = { codegen.string_type, codegen.string_type };
-    BinaryenType params =
-      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+    ArrayBinaryenType params_list;
+    array_init(&params_list);
+    for (int i = 0; i < count; i++)
+    {
+      array_add(&params_list, codegen.string_type);
+    }
+
+    BinaryenType params = BinaryenTypeCreate(params_list.elems, params_list.size);
 
     BinaryenType results_list[] = { codegen.string_type };
     BinaryenType results =
@@ -1840,9 +1856,41 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       op = BinaryenAddFloat32();
     else if (data_type.type == TYPE_STRING)
     {
-      BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, generate_string_concat_function(), operands,
-                          sizeof(operands) / sizeof_ptr(operands), codegen.string_type);
+      const char prefix[] = "string.concat";
+
+      ArrayBinaryenExpressionRef operands;
+      array_init(&operands);
+
+      if (BinaryenExpressionGetId(left) == BinaryenCallId() &&
+          strncmp(BinaryenCallGetTarget(left), prefix, sizeof(prefix) - 1) == 0)
+      {
+        for (unsigned int i = 0; i < BinaryenCallGetNumOperands(left); i++)
+        {
+          BinaryenExpressionRef expression = BinaryenCallGetOperandAt(left, i);
+          array_add(&operands, expression);
+        }
+      }
+      else
+      {
+        array_add(&operands, left);
+      }
+
+      if (BinaryenExpressionGetId(right) == BinaryenCallId() &&
+          strncmp(BinaryenCallGetTarget(right), prefix, sizeof(prefix) - 1) == 0)
+      {
+        for (unsigned int i = 0; i < BinaryenCallGetNumOperands(right); i++)
+        {
+          BinaryenExpressionRef expression = BinaryenCallGetOperandAt(right, i);
+          array_add(&operands, expression);
+        }
+      }
+      else
+      {
+        array_add(&operands, right);
+      }
+
+      return BinaryenCall(codegen.module, generate_string_concat_function(operands.size),
+                          operands.elems, operands.size, codegen.string_type);
     }
     else if (data_type.type == TYPE_OBJECT)
     {

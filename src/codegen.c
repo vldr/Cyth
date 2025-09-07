@@ -549,7 +549,7 @@ static const char* generate_string_int_cast_function(void)
 
 static const char* generate_string_concat_function(int count)
 {
-  const char* name = memory_sprintf("string.concat.%d", count);
+  const char* name = count == 2 ? "string.concat" : memory_sprintf("string.concat.%d", count);
 
   if (!BinaryenGetFunction(codegen.module, name))
   {

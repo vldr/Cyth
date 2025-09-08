@@ -1098,6 +1098,113 @@ static const char* generate_array_push_function(DataType this_data_type, DataTyp
 #undef CONSTANT
 }
 
+static const char* generate_array_push_string_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define VALUE() (BinaryenLocalGet(codegen.module, 1, value_type))
+#define TEMP() (BinaryenLocalGet(codegen.module, 2, array_type))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
+#define CAPACITY() (BinaryenArrayLen(codegen.module, ARRAY()))
+#define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
+#define VALUE_SIZE() (BinaryenArrayLen(codegen.module, VALUE()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  DataType element_data_type = array_data_type_element(this_data_type);
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+  BinaryenType value_type = codegen.string_type;
+
+  const char* name = "array.push_string";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType array_type = BinaryenExpressionGetType(
+      BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false));
+
+    BinaryenExpressionRef resize_list[] = {
+      BinaryenLocalSet(codegen.module, 2, ARRAY()),
+
+      BinaryenStructSet(
+        codegen.module, 0, THIS(),
+        BinaryenArrayNew(
+          codegen.module, array_type,
+          BinaryenBinary(codegen.module, BinaryenMulInt32(), CONSTANT(2),
+                         BinaryenBinary(codegen.module, BinaryenAddInt32(), VALUE_SIZE(), SIZE())),
+          generate_default_initialization(element_data_type))),
+
+      BinaryenArrayCopy(codegen.module, ARRAY(), CONSTANT(0), TEMP(), CONSTANT(0), SIZE())
+    };
+    BinaryenExpressionRef resize =
+      BinaryenBlock(codegen.module, NULL, resize_list,
+                    sizeof(resize_list) / sizeof_ptr(resize_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef loop_list[] = {
+      BinaryenBreak(codegen.module, "array.push_string.block",
+                    BinaryenBinary(codegen.module, BinaryenGeUInt32(), COUNTER(), VALUE_SIZE()),
+                    NULL),
+
+      BinaryenArraySet(
+        codegen.module, ARRAY(),
+        BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), SIZE()),
+        BinaryenArrayGet(codegen.module, VALUE(), COUNTER(), BinaryenTypeInt32(), false)),
+
+      BinaryenLocalSet(codegen.module, 3,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
+
+      BinaryenBreak(codegen.module, "array.push_string.loop", NULL, NULL),
+    };
+    BinaryenExpressionRef loop =
+      BinaryenBlock(codegen.module, "array.push_string.block", loop_list,
+                    sizeof(loop_list) / sizeof_ptr(loop_list), BinaryenTypeNone());
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenIf(
+        codegen.module, BinaryenRefIsNull(codegen.module, ARRAY()),
+        BinaryenStructSet(codegen.module, 0, THIS(),
+                          BinaryenArrayNew(codegen.module, array_type, VALUE_SIZE(),
+                                           generate_default_initialization(element_data_type))),
+        NULL),
+
+      BinaryenIf(
+        codegen.module,
+        BinaryenBinary(codegen.module, BinaryenGeSInt32(),
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), VALUE_SIZE(), SIZE()),
+                       CAPACITY()),
+        resize, NULL),
+
+      BinaryenLoop(codegen.module, "array.push_string.loop", loop),
+
+      BinaryenStructSet(codegen.module, 1, THIS(),
+                        BinaryenBinary(codegen.module, BinaryenAddInt32(), SIZE(), VALUE_SIZE())),
+
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    BinaryenType params_list[] = { this_type, value_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+    BinaryenType vars_list[] = { array_type, BinaryenTypeInt32() };
+
+    BinaryenAddFunction(codegen.module, name, params, BinaryenTypeNone(), vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef THIS
+#undef VALUE
+#undef TEMP
+#undef COUNTER
+#undef ARRAY
+#undef CAPACITY
+#undef SIZE
+#undef VALUE_SIZE
+#undef CONSTANT
+}
+
 static const char* generate_array_pop_function(DataType this_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
@@ -1737,15 +1844,18 @@ static const char* generate_function_internal(DataType data_type)
   if (strcmp(name, "array.push") == 0)
     return generate_array_push_function(array_at(&data_type.function_internal.parameter_types, 0),
                                         array_at(&data_type.function_internal.parameter_types, 1));
+  if (strcmp(name, "array.push_string") == 0)
+    return generate_array_push_string_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.to_string") == 0)
+    return generate_array_to_string_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.pop") == 0)
     return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.clear") == 0)
     return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.reserve") == 0)
     return generate_array_reserve_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
-  else if (strcmp(name, "array.to_string") == 0)
-    return generate_array_to_string_function(
       array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();
@@ -2627,8 +2737,13 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
     }
     else if (strcmp(expression->name.lexeme, "capacity") == 0)
     {
-      return BinaryenArrayLen(
-        codegen.module, BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeInt32(), false));
+      return BinaryenIf(
+        codegen.module,
+        BinaryenRefIsNull(codegen.module,
+                          BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeInt32(), false)),
+        BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
+        BinaryenArrayLen(codegen.module,
+                         BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeInt32(), false)));
     }
 
     UNREACHABLE("Unhandled array access name");

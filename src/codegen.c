@@ -71,7 +71,7 @@ static struct
 
   const char* function;
   int strings;
-  int loops;
+  int loop;
 } codegen;
 
 static void generate_debug_info(Token token, BinaryenExpressionRef expression, const char* function)
@@ -2912,11 +2912,13 @@ static BinaryenExpressionRef generate_if_statement(IfStmt* statement)
 
 static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 {
-  codegen.loops++;
+  int previous_loop = codegen.loop;
+  codegen.loop = statement->keyword.start_line << 16 | statement->keyword.start_column;
 
-  const char* continue_name = memory_sprintf("continue|%d", codegen.loops);
-  const char* break_name = memory_sprintf("break|%d", codegen.loops);
-  const char* loop_name = memory_sprintf("loop|%d", codegen.loops);
+  const char* continue_name =
+    memory_sprintf("continue:%d:%d", codegen.loop >> 16, codegen.loop & 0xFFFF);
+  const char* break_name = memory_sprintf("break:%d:%d", codegen.loop >> 16, codegen.loop & 0xFFFF);
+  const char* loop_name = memory_sprintf("loop:%d:%d", codegen.loop >> 16, codegen.loop & 0xFFFF);
 
   BinaryenExpressionRef continue_block = generate_statements(&statement->body);
   BinaryenBlockSetName(continue_block, continue_name);
@@ -2939,6 +2941,8 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
   array_add(&block_list, generate_statements(&statement->initializer));
   array_add(&block_list, loop);
 
+  codegen.loop = previous_loop;
+
   return BinaryenBlock(codegen.module, break_name, block_list.elems, block_list.size,
                        BinaryenTypeNone());
 }
@@ -2954,13 +2958,13 @@ static BinaryenExpressionRef generate_return_statement(ReturnStmt* statement)
 
 static BinaryenExpressionRef generate_continue_statement(void)
 {
-  const char* name = memory_sprintf("continue|%d", codegen.loops);
+  const char* name = memory_sprintf("continue:%d:%d", codegen.loop >> 16, codegen.loop & 0xFFFF);
   return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 
 static BinaryenExpressionRef generate_break_statement(void)
 {
-  const char* name = memory_sprintf("break|%d", codegen.loops);
+  const char* name = memory_sprintf("break:%d:%d", codegen.loop >> 16, codegen.loop & 0xFFFF);
   return BinaryenBreak(codegen.module, name, NULL, NULL);
 }
 
@@ -3357,7 +3361,7 @@ void codegen_init(ArrayStmt statements)
   codegen.module = BinaryenModuleCreate();
   codegen.class = BinaryenTypeNone();
   codegen.statements = statements;
-  codegen.loops = -1;
+  codegen.loop = 0;
   codegen.strings = 0;
   codegen.function = "<start>";
 

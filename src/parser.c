@@ -41,6 +41,9 @@ static Token peek(void)
 
 static Token previous(void)
 {
+  if (!parser.current)
+    return TOKEN_EMPTY();
+
   return array_at(&parser.tokens, parser.current - 1);
 }
 

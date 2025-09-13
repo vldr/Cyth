@@ -292,6 +292,13 @@ static void error_type_is_not_assignable(Token token, DataType from, DataType to
                                       data_type_to_string(from), data_type_to_string(to)));
 }
 
+static void error_ternary_type_mismatch(Token token, DataType left, DataType right)
+{
+  checker_error(token,
+                memory_sprintf("The ternary true type '%s' doesn't match the false type '%s'.",
+                               data_type_to_string(left), data_type_to_string(right)));
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -2613,6 +2620,30 @@ static DataType check_is_expression(IsExpr* expression)
   return DATA_TYPE(TYPE_BOOL);
 }
 
+static DataType check_if_expression(IfExpr* expression)
+{
+  DataType data_type = check_expression(expression->condition);
+  if (data_type.type != TYPE_BOOL)
+  {
+    Expr* cast_expression = cast_to_bool(expression->condition, data_type);
+    if (cast_expression)
+      expression->condition = cast_expression;
+    else
+      error_condition_is_not_bool(expression->condition_token);
+  }
+
+  DataType left_data_type = check_expression(expression->left);
+  DataType right_data_type = check_expression(expression->right);
+
+  if (!equal_data_type(left_data_type, right_data_type) &&
+      !assignable_data_type(left_data_type, right_data_type))
+  {
+    error_ternary_type_mismatch(expression->body_token, left_data_type, right_data_type);
+  }
+
+  return left_data_type;
+}
+
 static DataType check_expression(Expr* expression)
 {
   switch (expression->type)
@@ -2641,6 +2672,8 @@ static DataType check_expression(Expr* expression)
     return check_array_expression(&expression->array);
   case EXPR_IS:
     return check_is_expression(&expression->is);
+  case EXPR_IF:
+    return check_if_expression(&expression->cond);
 
   default:
     UNREACHABLE("Unhandled expression");

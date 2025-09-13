@@ -2851,6 +2851,15 @@ static BinaryenExpressionRef generate_is_expression(IsExpr* expression)
   }
 }
 
+static BinaryenExpressionRef generate_if_expression(IfExpr* expression)
+{
+  BinaryenExpressionRef condition = generate_expression(expression->condition);
+  BinaryenExpressionRef ifTrue = generate_expression(expression->left);
+  BinaryenExpressionRef ifFalse = generate_expression(expression->right);
+
+  return BinaryenIf(codegen.module, condition, ifTrue, ifFalse);
+}
+
 static BinaryenExpressionRef generate_expression(Expr* expression)
 {
   switch (expression->type)
@@ -2879,6 +2888,8 @@ static BinaryenExpressionRef generate_expression(Expr* expression)
     return generate_array_expression(&expression->array);
   case EXPR_IS:
     return generate_is_expression(&expression->is);
+  case EXPR_IF:
+    return generate_if_expression(&expression->cond);
 
   default:
     UNREACHABLE("Unhandled expression");

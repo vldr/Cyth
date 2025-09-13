@@ -239,6 +239,18 @@ typedef struct _IS_EXPR
   Expr* expr;
 } IsExpr;
 
+typedef struct _IF_EXPR
+{
+  DataType data_type;
+
+  Token body_token;
+  Token condition_token;
+
+  Expr* condition;
+  Expr* left;
+  Expr* right;
+} IfExpr;
+
 struct _EXPR
 {
   enum
@@ -255,6 +267,7 @@ struct _EXPR
     EXPR_ACCESS,
     EXPR_INDEX,
     EXPR_IS,
+    EXPR_IF,
   } type;
 
   union {
@@ -270,6 +283,7 @@ struct _EXPR
     AccessExpr access;
     IndexExpr index;
     IsExpr is;
+    IfExpr cond;
   };
 };
 

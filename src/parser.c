@@ -836,15 +836,27 @@ static Expr* logic_or(void)
 static Expr* assignment(void)
 {
   int current = parser.current;
+  Token start_token = peek();
   Expr* expr = logic_or();
 
-  if (match(TOKEN_EQUAL) || match(TOKEN_PLUS_EQUAL) || match(TOKEN_MINUS_EQUAL) ||
-      match(TOKEN_STAR_EQUAL) || match(TOKEN_SLASH_EQUAL) || match(TOKEN_PERCENT_EQUAL) ||
-      match(TOKEN_AMPERSAND_EQUAL) || match(TOKEN_PIPE_EQUAL) || match(TOKEN_CARET_EQUAL) ||
-      match(TOKEN_LESS_LESS_EQUAL) || match(TOKEN_GREATER_GREATER_EQUAL))
+  switch (peek().type)
   {
+  case TOKEN_EQUAL:
+  case TOKEN_PLUS_EQUAL:
+  case TOKEN_MINUS_EQUAL:
+  case TOKEN_STAR_EQUAL:
+  case TOKEN_SLASH_EQUAL:
+  case TOKEN_PERCENT_EQUAL:
+  case TOKEN_AMPERSAND_EQUAL:
+  case TOKEN_PIPE_EQUAL:
+  case TOKEN_CARET_EQUAL:
+  case TOKEN_LESS_LESS_EQUAL:
+  case TOKEN_GREATER_GREATER_EQUAL: {
+    advance();
     seek(current);
+
     Expr* expr_copy = logic_or();
+
     advance();
 
     Token op = previous();
@@ -889,9 +901,7 @@ static Expr* assignment(void)
     }
 
     if (op.type != TOKEN_EQUAL)
-    {
       BINARY_EXPR(value, op, expr, value);
-    }
 
     Expr* var = EXPR();
     var->type = EXPR_ASSIGN;
@@ -901,6 +911,31 @@ static Expr* assignment(void)
     var->assign.variable = NULL;
 
     return var;
+  }
+  case TOKEN_QUESTION: {
+    Token condition_token = combine_tokens(start_token, previous());
+    start_token = advance();
+
+    Expr* left = assignment();
+
+    consume(TOKEN_COLON, "Expected a colon after expression.");
+
+    Expr* right = assignment();
+    Token body_token = combine_tokens(start_token, previous());
+
+    Expr* var = EXPR();
+    var->type = EXPR_IF;
+
+    var->cond.body_token = body_token;
+    var->cond.condition_token = condition_token;
+    var->cond.condition = expr;
+    var->cond.left = left;
+    var->cond.right = right;
+
+    return var;
+  }
+  default:
+    break;
   }
 
   return expr;

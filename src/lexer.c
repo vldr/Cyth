@@ -462,6 +462,9 @@ static void scan_token(void)
   case ':':
     add_token(TOKEN_COLON);
     break;
+  case '?':
+    add_token(TOKEN_QUESTION);
+    break;
   case ';':
     add_token(TOKEN_SEMICOLON);
     break;
@@ -733,6 +736,7 @@ void lexer_print(void)
       "TOKEN_STAR_EQUAL",
       "TOKEN_PERCENT",
       "TOKEN_PERCENT_EQUAL",
+      "TOKEN_QUESTION",
 
       "TOKEN_BANG",
       "TOKEN_BANG_EQUAL",

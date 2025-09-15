@@ -551,6 +551,7 @@ class Editor {
             [
               {
                 cases: {
+                  "@keywords": "keyword",
                   "@types": "types",
                   "@default": "function",
                 },
@@ -563,7 +564,7 @@ class Editor {
             [
               {
                 cases: {
-                  "@types": "default",
+                  "@types": "types",
                   "@default": "function",
                 },
               },

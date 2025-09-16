@@ -1,5 +1,6 @@
-#! 1:1-3:3 Expected an expression.
-#! 5:11-5:12 Expected an expression.
   while true
 
     while 0
+
+#! 1:1-1:3 Expected an expression.
+#! 3:12-6:37 Expected an expression.

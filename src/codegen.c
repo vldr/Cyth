@@ -2631,11 +2631,6 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
   {
   case TYPE_PROTOTYPE:
     name = callee_data_type.class->name.lexeme;
-
-    if (callee_data_type.class->initializer_function)
-      generate_debug_info(expression->callee_token, callee_data_type.class->initializer_function,
-                          name);
-
     break;
 
   case TYPE_FUNCTION:
@@ -3087,11 +3082,14 @@ static BinaryenExpressionRef generate_function_template_declaration(FuncTemplate
 
 static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapType heap_type)
 {
-  BinaryenType previous_class = codegen.class;
-  codegen.class = statement->ref;
-
   const char* initalizer_name = statement->name.lexeme;
   const char* initalizer_function_name = memory_sprintf("%s.__init__", initalizer_name);
+
+  BinaryenType previous_class = codegen.class;
+  const char* previous_function = codegen.function;
+
+  codegen.function = initalizer_name;
+  codegen.class = statement->ref;
 
   FuncStmt* function;
   FuncStmt* initializer_function = NULL;
@@ -3156,10 +3154,12 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
       array_add(&parameter_types, parameter_type);
     }
 
-    statement->initializer_function =
+    BinaryenExpressionRef call =
       BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
                    BinaryenTypeNone());
-    array_add(&initializer_body, statement->initializer_function);
+    generate_debug_info(initializer_function->name, call, codegen.function);
+
+    array_add(&initializer_body, call);
   }
 
   array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, statement->ref));
@@ -3170,8 +3170,10 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
 
   BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, statement->ref, NULL, 0,
                       initializer);
+  BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
   codegen.class = previous_class;
+  codegen.function = previous_function;
 }
 
 static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,

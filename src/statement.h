@@ -117,7 +117,6 @@ typedef struct _CLASS_STMT
   ArrayFuncTemplateStmt function_templates;
 
   uintptr_t ref;
-  void* initializer_function;
 } ClassStmt;
 
 typedef struct _CLASS_TEMPLATE_STMT

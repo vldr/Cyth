@@ -85,10 +85,15 @@ static void newline(void)
   lexer.current_line++;
 }
 
+static char consume(void)
+{
+  return *lexer.current++;
+}
+
 static char advance(void)
 {
   lexer.current_column++;
-  return *lexer.current++;
+  return consume();
 }
 
 static char peek(void)
@@ -550,15 +555,24 @@ static void scan_token(void)
 
   case ' ':
   case '\t':
-  case '\r':
     break;
 
+  case '\r':
   case '\n':
+    if (c == '\r')
+    {
+      if (peek() != '\n')
+        break;
+
+      c = consume();
+    }
+
     if (!lexer.multi_line)
       add_custom_token(TOKEN_NEWLINE, "\\n", sizeof("\\n") - 1);
 
     newline();
     break;
+
   default:
     if (isdigit(c))
     {

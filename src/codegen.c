@@ -3260,6 +3260,11 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
 
     if (parameters_contain_string)
       generate_string_export_functions();
+
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    generate_function_ref(NULL, &subtypes, statement->function_data_type);
   }
   else
   {

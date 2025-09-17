@@ -232,6 +232,11 @@ static void error_invalid_set_return_type(Token token)
   checker_error(token, "The return type of '__set__' must be 'void'.");
 }
 
+static void error_invalid_str_return_type(Token token)
+{
+  checker_error(token, "The return type of '__str__' must be 'string'.");
+}
+
 static void error_invalid_get_set_function(Token token)
 {
   checker_error(
@@ -252,6 +257,11 @@ static void error_invalid_get_arity(Token token)
 static void error_invalid_set_arity(Token token)
 {
   checker_error(token, "The '__set__' method must have two arguments.");
+}
+
+static void error_invalid_str_arity(Token token)
+{
+  checker_error(token, "The '__str__' method must have no arguments.");
 }
 
 static void error_invalid_binary_arity(Token token, const char* name)
@@ -683,6 +693,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
 
   ClassStmt* class_statement = &statement->class;
   class_statement->name.lexeme = name;
+  class_statement->name.length = strlen(name);
   class_statement->name.start_line = template_type.token.start_line;
   class_statement->name.end_line = template_type.token.end_line;
   class_statement->name.start_column = template_type.token.start_column;
@@ -760,6 +771,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
 
   FuncStmt* function_statement = &statement->func;
   function_statement->name.lexeme = name;
+  function_statement->name.length = strlen(name);
   function_statement->name.start_line = function_type.token.start_line;
   function_statement->name.end_line = function_type.token.end_line;
   function_statement->name.start_column = function_type.token.start_column;
@@ -963,6 +975,7 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
       }
 
       token.lexeme = data_type.class->name.lexeme;
+      token.length = data_type.class->name.length;
     }
 
     return token_to_data_type(token);
@@ -1044,11 +1057,13 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
 
   if (left->type == from.type && right->type == to.type)
   {
+    from = *left;
     target_type = left;
     target = &expression->left;
   }
   else if (left->type == to.type && right->type == from.type)
   {
+    from = *right;
     target_type = right;
     target = &expression->right;
   }
@@ -1160,11 +1175,13 @@ static void init_function_declaration(FuncStmt* statement)
     statement->name.lexeme =
       memory_sprintf("%s.%s:%d:%d", checker.function->name.lexeme, statement->name.lexeme,
                      statement->name.start_line, statement->name.start_column);
+    statement->name.length = strlen(statement->name.lexeme);
   }
   else if (checker.loop || checker.cond)
   {
     statement->name.lexeme = memory_sprintf(
       "%s:%d:%d", statement->name.lexeme, statement->name.start_line, statement->name.start_column);
+    statement->name.length = strlen(statement->name.lexeme);
   }
 
   if (checker.class)
@@ -1176,7 +1193,7 @@ static void init_function_declaration(FuncStmt* statement)
     }
 
     VarStmt* parameter = ALLOC(VarStmt);
-    parameter->name = (Token){ .lexeme = "this" };
+    parameter->name = (Token){ .lexeme = "this", .length = sizeof("this") - 1 };
     parameter->type = (DataTypeToken){
       .type = DATA_TYPE_TOKEN_PRIMITIVE,
       .token = checker.class->name,
@@ -1402,6 +1419,7 @@ static void init_class_declaration_body(ClassStmt* statement)
     const char* function_name = function_statement->name.lexeme;
 
     function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
+    function_statement->name.length = strlen(statement->name.lexeme);
   }
 
   FuncTemplateStmt* function_template;
@@ -1413,6 +1431,7 @@ static void init_class_declaration_body(ClassStmt* statement)
     const char* function_name = function_template->name.lexeme;
 
     function_template->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
+    function_template->name.length = strlen(statement->name.lexeme);
   }
 
   int count = 0;
@@ -1532,6 +1551,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_ARRAY:
         valid = equal_data_type(expression->from_data_type, expression->to_data_type);
         break;
+      case TYPE_STRING:
       case TYPE_ANY:
         valid = true;
         break;
@@ -1547,6 +1567,7 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_OBJECT:
         valid = equal_data_type(expression->from_data_type, expression->to_data_type);
         break;
+      case TYPE_STRING:
       case TYPE_ANY:
         valid = true;
         break;
@@ -1780,6 +1801,8 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_INTEGER), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FLOAT), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_ARRAY), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_STRING)) &&
 
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_STRING)) &&
@@ -2001,7 +2024,7 @@ static DataType check_call_expression(CallExpr* expression)
     {
       argument = EXPR();
       argument->type = EXPR_VAR;
-      argument->var.name = (Token){ .lexeme = "this" };
+      argument->var.name = (Token){ .lexeme = "this", .length = sizeof("this") - 1 };
       argument->var.variable = array_at(&function->parameters, 0);
       argument->var.template_types = NULL;
       argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
@@ -2886,6 +2909,27 @@ static void check_set_function_declaration(FuncStmt* function)
   }
 }
 
+static void check_str_function_declaration(FuncStmt* function)
+{
+  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__str__") == 0)
+  {
+    int got = array_size(&function->parameters);
+    int expected = 1;
+
+    if (expected != got)
+    {
+      error_invalid_str_arity(function->name);
+      return;
+    }
+
+    if (function->data_type.type != TYPE_STRING)
+    {
+      error_invalid_str_return_type(function->name);
+      return;
+    }
+  }
+}
+
 static void check_binary_overload_function_declaration(FuncStmt* function, const char* name)
 {
   if (strcmp(function->name.lexeme + checker.class->name.length + 1, name) == 0)
@@ -2955,6 +2999,7 @@ static void check_function_declaration(FuncStmt* statement)
   {
     check_get_function_declaration(statement);
     check_set_function_declaration(statement);
+    check_str_function_declaration(statement);
 
     check_binary_overload_function_declaration(statement, "__add__");
     check_binary_overload_function_declaration(statement, "__sub__");

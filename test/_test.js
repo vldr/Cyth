@@ -107,12 +107,12 @@ for (const filename of scripts) {
       result.instance.exports["<start>"]();
     }
 
+    assert.deepStrictEqual(errors, expectedErrors);
+    assert.deepStrictEqual(logs, expectedLogs);
+
     if (errors.length === 0)
       assert.deepStrictEqual(status, 0);
     else
       assert.notDeepStrictEqual(status, 0);
-
-    assert.deepStrictEqual(errors, expectedErrors);
-    assert.deepStrictEqual(logs, expectedLogs);
   });
 }

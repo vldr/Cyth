@@ -89,10 +89,15 @@ function postError(error) {
     map(sourceMap, stackTrace);
 
     for (const offset of stackTraceOffsets) {
+      let error = stackTrace[offset].replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+      const regex = /.*:([0-9]+):([0-9]+)/;
+      const matches = error.match(regex);
+      if (matches)
+        error = `<a onclick="Module.editor.goto(${matches[1]}, ${matches[2]})" href="#">${error}</a>`;
+
       errorMessage +=
-        "    at " +
-        stackTrace[offset].replaceAll("<", "&lt;").replaceAll(">", "&gt;") +
-        "\n";
+        "    at " + error + "\n";
     }
   }
   else {

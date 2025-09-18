@@ -35,13 +35,13 @@ c = log
 log((string)b)
 log((string)c)
 
-# Object{field = 12}
+# Object(\n field = 12\n)
 # void(string)
 
 log("" + b)
 log("" + c)
 
-# Object{field = 12}
+# Object(\n field = 12\n)
 # void(string)
 
 log((string)log)

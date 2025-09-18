@@ -31,12 +31,9 @@ log((string) object)
 
 # A: [1, 2, 3]
 # [1, 2, 3]
-
 # B: null
 # null
-
-# C: Object{a = 12, b = 62.25, c = true, d = a, e = hello world, f = null, g = null}
-# Object{a = 12, b = 62.25, c = true, d = a, e = hello world, f = null, g = null}
-
-# D: Object{a = 12, b = 62.25, c = true, d = a, e = hello world, f = any, g = void(string)}
-# Object{a = 12, b = 62.25, c = true, d = a, e = hello world, f = any, g = void(string)}
+# C: Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = null,\n g = null\n)
+# Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = null,\n g = null\n)
+# D: Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = any,\n g = void(string)\n)
+# Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = any,\n g = void(string)\n)

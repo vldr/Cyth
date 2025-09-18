@@ -1592,9 +1592,25 @@ static DataType check_cast_expression(CastExpr* expression)
       }
 
       break;
+    case TYPE_NULL:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_ANY:
+      case TYPE_OBJECT:
+      case TYPE_FUNCTION_POINTER:
+        valid = true;
+        break;
+
+      default:
+        break;
+      }
+
+      break;
     case TYPE_FUNCTION_POINTER:
       switch (expression->to_data_type.type)
       {
+      case TYPE_NULL:
+      case TYPE_STRING:
       case TYPE_BOOL:
         valid = true;
         break;
@@ -1604,6 +1620,26 @@ static DataType check_cast_expression(CastExpr* expression)
       }
 
       break;
+
+    case TYPE_ALIAS:
+    case TYPE_FUNCTION:
+    case TYPE_FUNCTION_MEMBER:
+    case TYPE_FUNCTION_INTERNAL:
+    case TYPE_FUNCTION_TEMPLATE:
+    case TYPE_PROTOTYPE:
+    case TYPE_PROTOTYPE_TEMPLATE:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_STRING:
+        valid = true;
+        break;
+
+      default:
+        break;
+      }
+
+      break;
+
     default:
       break;
     }
@@ -1803,6 +1839,19 @@ skip:
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_BOOL), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_ARRAY), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_OBJECT), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_ALIAS), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_POINTER),
+                DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_MEMBER),
+                DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_INTERNAL),
+                DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_TEMPLATE),
+                DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_PROTOTYPE), DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE),
+                DATA_TYPE(TYPE_STRING)) &&
 
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_INTEGER)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_STRING)) &&

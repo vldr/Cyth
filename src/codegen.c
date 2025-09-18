@@ -769,8 +769,10 @@ static BinaryenExpressionRef generate_string_cast_function(DataType data_type,
                           generate_string_literal_expression(name, strlen(name)));
   }
 
-  default:
-    UNREACHABLE("Unexpected string cast type");
+  default: {
+    const char* name = data_type_to_string(data_type);
+    return generate_string_literal_expression(name, strlen(name));
+  }
   }
 }
 
@@ -1113,8 +1115,10 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   switch (data_type.type)
   {
   case TYPE_VOID:
+  case TYPE_ALIAS:
   case TYPE_PROTOTYPE:
   case TYPE_PROTOTYPE_TEMPLATE:
+  case TYPE_FUNCTION_TEMPLATE:
     return BinaryenTypeNone();
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
@@ -2556,6 +2560,14 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_CHAR:
     case TYPE_ARRAY:
     case TYPE_OBJECT:
+    case TYPE_ALIAS:
+    case TYPE_FUNCTION:
+    case TYPE_FUNCTION_MEMBER:
+    case TYPE_FUNCTION_INTERNAL:
+    case TYPE_FUNCTION_POINTER:
+    case TYPE_FUNCTION_TEMPLATE:
+    case TYPE_PROTOTYPE:
+    case TYPE_PROTOTYPE_TEMPLATE:
       return generate_string_cast_function(expression->from_data_type, value);
 
     case TYPE_ANY: {
@@ -2639,7 +2651,9 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_ARRAY:
     case TYPE_STRING:
     case TYPE_OBJECT:
+    case TYPE_NULL:
       return value;
+
     default:
       break;
     }
@@ -2667,6 +2681,8 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_NULL:
+      return generate_default_initialization(expression->to_data_type);
     case TYPE_ANY: {
       BinaryenExpressionRef result =
         BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),
@@ -2678,6 +2694,17 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       generate_debug_info(expression->type.token, BinaryenIfGetIfFalse(result), codegen.function);
       return result;
     }
+    default:
+      break;
+    }
+  }
+  else if (expression->to_data_type.type == TYPE_FUNCTION_POINTER)
+  {
+    switch (expression->from_data_type.type)
+    {
+    case TYPE_NULL:
+      return generate_default_initialization(expression->to_data_type);
+
     default:
       break;
     }

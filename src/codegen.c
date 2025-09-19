@@ -50,11 +50,14 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
                                                         TypeBuilderRef type_builder_ref,
                                                         ArrayTypeBuilderSubtype* subtypes);
 
-static BinaryenExpressionRef generate_string_cast_function(DataType data_type,
-                                                           BinaryenExpressionRef value,
-                                                           BinaryenExpressionRef depth);
-static BinaryenExpressionRef generate_string_literal_expression(const char* literal, int length);
 static const char* generate_string_concat_function(int count);
+static const char* generate_array_push_function(DataType this_data_type, DataType value_data_type);
+static BinaryenExpressionRef generate_string_cast_function(DataType data_type,
+                                                           DataType list_data_type,
+                                                           BinaryenExpressionRef value,
+                                                           BinaryenExpressionRef depth,
+                                                           BinaryenExpressionRef list);
+static BinaryenExpressionRef generate_string_literal_expression(const char* literal, int length);
 
 static BinaryenPackedType data_type_to_binaryen_packed_type(DataType data_type);
 static BinaryenType data_type_to_binaryen_type(DataType data_type);
@@ -625,12 +628,13 @@ static const char* generate_string_int_cast_function(void)
 #undef CONSTANT
 }
 
-static const char* generate_string_array_cast_function(DataType data_type)
+static const char* generate_string_array_cast_function(DataType data_type, DataType list_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define DEPTH() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
-#define RESULT() (BinaryenLocalGet(codegen.module, 2, codegen.string_type))
-#define COUNTER() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define LIST() (BinaryenLocalGet(codegen.module, 2, list_type))
+#define RESULT() (BinaryenLocalGet(codegen.module, 3, codegen.string_type))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
 #define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
 #define CAPACITY() (BinaryenArrayLen(codegen.module, ARRAY()))
 #define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
@@ -638,7 +642,6 @@ static const char* generate_string_array_cast_function(DataType data_type)
 
   BinaryenType this_type = data_type_to_binaryen_type(data_type);
   DataType element_data_type = array_data_type_element(data_type);
-
   bool multiline = element_data_type.type == TYPE_ARRAY || element_data_type.type == TYPE_OBJECT;
 
   const char* name = memory_sprintf("string.array_cast.%d", this_type);
@@ -646,41 +649,43 @@ static const char* generate_string_array_cast_function(DataType data_type)
   if (!BinaryenGetFunction(codegen.module, name))
   {
     BinaryenType element_type = data_type_to_binaryen_type(element_data_type);
+    BinaryenType list_type = data_type_to_binaryen_type(list_data_type);
 
     BinaryenExpressionRef loop_body_list[] = {
       BinaryenBreak(codegen.module, "string.array_cast.block",
                     BinaryenBinary(codegen.module, BinaryenGeUInt32(), COUNTER(), SIZE()), NULL),
 
       BinaryenLocalSet(
-        codegen.module, 2,
-        BinaryenCall(codegen.module, generate_string_concat_function(4),
-                     (BinaryenExpressionRef[]){
-                       RESULT(),
+        codegen.module, 3,
+        BinaryenCall(
+          codegen.module, generate_string_concat_function(4),
+          (BinaryenExpressionRef[]){
+            RESULT(),
 
-                       multiline ? BinaryenCall(codegen.module, generate_string_pad_function(),
-                                                (BinaryenExpressionRef[]){
-                                                  BinaryenBinary(codegen.module, BinaryenAddInt32(),
-                                                                 DEPTH(), CONSTANT(1)),
-                                                  CONSTANT(' '),
-                                                },
-                                                2, codegen.string_type)
-                                 : generate_string_literal_expression("", -1),
+            multiline ? BinaryenCall(codegen.module, generate_string_pad_function(),
+                                     (BinaryenExpressionRef[]){
+                                       BinaryenBinary(codegen.module, BinaryenAddInt32(), DEPTH(),
+                                                      CONSTANT(1)),
+                                       CONSTANT(' '),
+                                     },
+                                     2, codegen.string_type)
+                      : generate_string_literal_expression("", -1),
 
-                       generate_string_cast_function(
-                         element_data_type,
-                         BinaryenArrayGet(codegen.module, ARRAY(), COUNTER(), element_type, false),
-                         BinaryenBinary(codegen.module, BinaryenAddInt32(), DEPTH(), CONSTANT(1))),
+            generate_string_cast_function(
+              element_data_type, list_data_type,
+              BinaryenArrayGet(codegen.module, ARRAY(), COUNTER(), element_type, false),
+              BinaryenBinary(codegen.module, BinaryenAddInt32(), DEPTH(), CONSTANT(1)), LIST()),
 
-                       BinaryenIf(codegen.module,
-                                  BinaryenBinary(codegen.module, BinaryenLtUInt32(), COUNTER(),
-                                                 BinaryenBinary(codegen.module, BinaryenSubInt32(),
-                                                                SIZE(), CONSTANT(1))),
-                                  generate_string_literal_expression(multiline ? ",\n" : ", ", -1),
-                                  generate_string_literal_expression("", -1)),
-                     },
-                     4, codegen.string_type)),
+            BinaryenIf(codegen.module,
+                       BinaryenBinary(
+                         codegen.module, BinaryenLtUInt32(), COUNTER(),
+                         BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), CONSTANT(1))),
+                       generate_string_literal_expression(multiline ? ",\n" : ", ", -1),
+                       generate_string_literal_expression("", -1)),
+          },
+          4, codegen.string_type)),
 
-      BinaryenLocalSet(codegen.module, 3,
+      BinaryenLocalSet(codegen.module, 4,
                        BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
 
       BinaryenBreak(codegen.module, "string.array_cast.loop", NULL, NULL),
@@ -692,13 +697,13 @@ static const char* generate_string_array_cast_function(DataType data_type)
     BinaryenExpressionRef loop = BinaryenLoop(codegen.module, "string.array_cast.loop", loop_body);
 
     BinaryenExpressionRef body_list[] = {
-      BinaryenLocalSet(codegen.module, 2,
+      BinaryenLocalSet(codegen.module, 3,
                        generate_string_literal_expression(multiline ? "[\n" : "[", -1)),
 
       loop,
 
       BinaryenLocalSet(
-        codegen.module, 2,
+        codegen.module, 3,
         BinaryenCall(codegen.module, generate_string_concat_function(4),
                      (BinaryenExpressionRef[]){
                        RESULT(),
@@ -720,7 +725,7 @@ static const char* generate_string_array_cast_function(DataType data_type)
       BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
                     codegen.string_type);
 
-    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32(), list_type };
     BinaryenType params =
       BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
 
@@ -737,6 +742,8 @@ static const char* generate_string_array_cast_function(DataType data_type)
   return name;
 
 #undef THIS
+#undef DEPTH
+#undef LIST
 #undef RESULT
 #undef COUNTER
 #undef ARRAY
@@ -745,19 +752,26 @@ static const char* generate_string_array_cast_function(DataType data_type)
 #undef CONSTANT
 }
 
-static const char* generate_string_object_cast_function(DataType data_type)
+static const char* generate_string_object_cast_function(DataType data_type, DataType list_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
 #define DEPTH() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
-#define RESULT() (BinaryenLocalGet(codegen.module, 2, codegen.string_type))
+#define LIST() (BinaryenLocalGet(codegen.module, 2, list_type))
+#define RESULT() (BinaryenLocalGet(codegen.module, 3, codegen.string_type))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
+#define ARRAY() (BinaryenStructGet(codegen.module, 0, LIST(), BinaryenTypeAuto(), false))
+#define SIZE() (BinaryenStructGet(codegen.module, 1, LIST(), BinaryenTypeInt32(), false))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
 
   BinaryenType this_type = data_type_to_binaryen_type(data_type);
+  BinaryenType list_type = data_type_to_binaryen_type(list_data_type);
   const char* name = memory_sprintf("string.object_cast.%d", this_type);
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
-    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    ClassStmt* class = data_type.class;
+
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32(), list_type };
     BinaryenType params =
       BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
 
@@ -765,17 +779,80 @@ static const char* generate_string_object_cast_function(DataType data_type)
     BinaryenType results =
       BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
 
-    BinaryenType vars_list[] = { codegen.string_type };
+    BinaryenType vars_list[] = { codegen.string_type, BinaryenTypeInt32() };
 
     BinaryenFunctionRef func = BinaryenAddFunction(
       codegen.module, name, params, results, vars_list, sizeof(vars_list) / sizeof_ptr(vars_list),
       BinaryenBlock(codegen.module, NULL, NULL, 0, BinaryenTypeNone()));
 
-    ClassStmt* class = data_type.class;
+    BinaryenExpressionRef loop_body_list[] = {
+      BinaryenBreak(codegen.module, "string.object_cast.block",
+                    BinaryenBinary(codegen.module, BinaryenGeUInt32(), COUNTER(), SIZE()), NULL),
+
+      BinaryenIf(
+        codegen.module,
+        BinaryenRefEq(codegen.module, THIS(),
+                      BinaryenRefCast(codegen.module,
+                                      BinaryenArrayGet(codegen.module, ARRAY(), COUNTER(),
+                                                       BinaryenTypeAnyref(), false),
+                                      BinaryenTypeEqref())),
+        BinaryenReturn(
+          codegen.module,
+          BinaryenCall(
+            codegen.module, generate_string_concat_function(4),
+            (BinaryenExpressionRef[]){
+              generate_string_literal_expression(class->name.lexeme, class->name.length),
+
+              BinaryenIf(codegen.module,
+                         BinaryenBinary(codegen.module, BinaryenNeInt32(), COUNTER(), CONSTANT(0)),
+                         generate_string_literal_expression("$", -1),
+                         generate_string_literal_expression("", -1)),
+
+              BinaryenIf(codegen.module,
+                         BinaryenBinary(codegen.module, BinaryenNeInt32(), COUNTER(), CONSTANT(0)),
+                         BinaryenCall(codegen.module, generate_string_int_cast_function(),
+                                      (BinaryenExpressionRef[]){ COUNTER() }, 1,
+                                      codegen.string_type),
+                         generate_string_literal_expression("", -1)),
+
+              generate_string_literal_expression("(...)", -1),
+            },
+            4, codegen.string_type)
+
+            ),
+        NULL),
+
+      BinaryenLocalSet(codegen.module, 4,
+                       BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
+
+      BinaryenBreak(codegen.module, "string.object_cast.loop", NULL, NULL),
+    };
+
+    BinaryenExpressionRef loop_body =
+      BinaryenBlock(codegen.module, "string.object_cast.block", loop_body_list,
+                    sizeof(loop_body_list) / sizeof_ptr(loop_body_list), BinaryenTypeNone());
+    BinaryenExpressionRef loop = BinaryenLoop(codegen.module, "string.object_cast.loop", loop_body);
+
     ArrayBinaryenExpressionRef list;
     array_init(&list);
     array_add(&list, generate_string_literal_expression(class->name.lexeme, class->name.length));
-    array_add(&list, generate_string_literal_expression("(\n", -1));
+    array_add(&list,
+              BinaryenIf(codegen.module,
+                         BinaryenBinary(codegen.module, BinaryenNeInt32(), COUNTER(), CONSTANT(0)),
+                         generate_string_literal_expression("$", -1),
+                         generate_string_literal_expression("", -1)));
+    array_add(
+      &list,
+      BinaryenIf(
+        codegen.module, BinaryenBinary(codegen.module, BinaryenNeInt32(), COUNTER(), CONSTANT(0)),
+        BinaryenCall(codegen.module, generate_string_int_cast_function(),
+                     (BinaryenExpressionRef[]){
+                       BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), CONSTANT(1)),
+                     },
+                     1, codegen.string_type),
+        generate_string_literal_expression("", -1)));
+
+    array_add(&list, generate_string_literal_expression(class->variables.size ? "(\n" : "(", -1));
 
     VarStmt* var;
     array_foreach(&class->variables, var)
@@ -791,18 +868,23 @@ static const char* generate_string_object_cast_function(DataType data_type)
       array_add(&list, generate_string_literal_expression(" = ", -1));
 
       array_add(&list, generate_string_cast_function(
-                         var->data_type,
+                         var->data_type, list_data_type,
                          BinaryenStructGet(codegen.module, var->index, THIS(),
                                            data_type_to_binaryen_type(var->data_type), false),
-                         BinaryenBinary(codegen.module, BinaryenAddInt32(), DEPTH(), CONSTANT(1))));
+                         BinaryenBinary(codegen.module, BinaryenAddInt32(), DEPTH(), CONSTANT(1)),
+                         LIST()));
       if (_i + 1 != class->variables.size)
         array_add(&list, generate_string_literal_expression(",\n", -1));
     }
 
-    array_add(&list, generate_string_literal_expression("\n", -1));
-    array_add(&list, BinaryenCall(codegen.module, generate_string_pad_function(),
-                                  (BinaryenExpressionRef[]){ DEPTH(), CONSTANT(' ') }, 2,
-                                  codegen.string_type));
+    if (class->variables.size)
+    {
+      array_add(&list, generate_string_literal_expression("\n", -1));
+      array_add(&list, BinaryenCall(codegen.module, generate_string_pad_function(),
+                                    (BinaryenExpressionRef[]){ DEPTH(), CONSTANT(' ') }, 2,
+                                    codegen.string_type));
+    }
+
     array_add(&list, generate_string_literal_expression(")", -1));
 
     BinaryenExpressionRef body_list[] = {
@@ -810,7 +892,13 @@ static const char* generate_string_object_cast_function(DataType data_type)
                  BinaryenReturn(codegen.module, generate_string_literal_expression("null", -1)),
                  NULL),
 
-      BinaryenLocalSet(codegen.module, 2,
+      loop,
+
+      BinaryenCall(codegen.module,
+                   generate_array_push_function(list_data_type, DATA_TYPE(TYPE_ANY)),
+                   (BinaryenExpressionRef[]){ LIST(), THIS() }, 2, BinaryenTypeNone()),
+
+      BinaryenLocalSet(codegen.module, 3,
                        BinaryenCall(codegen.module, generate_string_concat_function(list.size),
                                     list.elems, list.size, codegen.string_type)),
 
@@ -826,13 +914,20 @@ static const char* generate_string_object_cast_function(DataType data_type)
   return name;
 
 #undef THIS
+#undef DEPTH
+#undef LIST
 #undef RESULT
+#undef COUNTER
+#undef ARRAY
+#undef SIZE
 #undef CONSTANT
 }
 
 static BinaryenExpressionRef generate_string_cast_function(DataType data_type,
+                                                           DataType list_data_type,
                                                            BinaryenExpressionRef value,
-                                                           BinaryenExpressionRef depth)
+                                                           BinaryenExpressionRef depth,
+                                                           BinaryenExpressionRef list)
 {
   switch (data_type.type)
   {
@@ -850,13 +945,22 @@ static BinaryenExpressionRef generate_string_cast_function(DataType data_type,
   case TYPE_CHAR:
     return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, &value, 1);
   case TYPE_ARRAY:
-    return BinaryenCall(codegen.module, generate_string_array_cast_function(data_type),
-                        (BinaryenExpressionRef[]){ value, depth }, 2, codegen.string_type);
+    return BinaryenCall(codegen.module,
+                        generate_string_array_cast_function(data_type, list_data_type),
+                        (BinaryenExpressionRef[]){ value, depth, list }, 3, codegen.string_type);
   case TYPE_OBJECT: {
     const char* name = get_function_member(data_type, "__str__");
-    return BinaryenCall(
-      codegen.module, name ? name : generate_string_object_cast_function(data_type),
-      (BinaryenExpressionRef[]){ value, depth }, name ? 1 : 2, codegen.string_type);
+    if (name)
+      return BinaryenCall(codegen.module, name, &value, 1, codegen.string_type);
+    else
+      return BinaryenCall(codegen.module,
+                          generate_string_object_cast_function(data_type, list_data_type),
+                          (BinaryenExpressionRef[]){
+                            value,
+                            depth,
+                            list,
+                          },
+                          3, codegen.string_type);
   }
 
   case TYPE_ANY:
@@ -2664,10 +2768,25 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
     case TYPE_FUNCTION_POINTER:
     case TYPE_FUNCTION_TEMPLATE:
     case TYPE_PROTOTYPE:
-    case TYPE_PROTOTYPE_TEMPLATE:
-      return generate_string_cast_function(expression->from_data_type, value,
-                                           BinaryenConst(codegen.module, BinaryenLiteralInt32(0)));
+    case TYPE_PROTOTYPE_TEMPLATE: {
+      BinaryenExpressionRef list = NULL;
+      DataType list_data_type = DATA_TYPE(TYPE_ARRAY);
 
+      if (expression->from_data_type.type == TYPE_OBJECT ||
+          expression->from_data_type.type == TYPE_ARRAY)
+      {
+        list_data_type.array.data_type = ALLOC(DataType);
+        list_data_type.array.count = ALLOC(unsigned char);
+        *list_data_type.array.count = 1;
+        *list_data_type.array.data_type = DATA_TYPE(TYPE_ANY);
+
+        list = generate_default_initialization(list_data_type);
+      }
+
+      return generate_string_cast_function(expression->from_data_type, list_data_type, value,
+                                           BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
+                                           list);
+    }
     case TYPE_ANY: {
       BinaryenExpressionRef result =
         BinaryenIf(codegen.module, BinaryenRefIsNull(codegen.module, value),

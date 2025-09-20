@@ -697,6 +697,10 @@ static const char* generate_string_array_cast_function(DataType data_type, DataT
     BinaryenExpressionRef loop = BinaryenLoop(codegen.module, "string.array_cast.loop", loop_body);
 
     BinaryenExpressionRef body_list[] = {
+      BinaryenIf(
+        codegen.module, BinaryenBinary(codegen.module, BinaryenEqInt32(), SIZE(), CONSTANT(0)),
+        BinaryenReturn(codegen.module, generate_string_literal_expression("[]", -1)), NULL),
+
       BinaryenLocalSet(codegen.module, 3,
                        generate_string_literal_expression(multiline ? "[\n" : "[", -1)),
 
@@ -714,6 +718,7 @@ static const char* generate_string_array_cast_function(DataType data_type, DataT
                                                 (BinaryenExpressionRef[]){ DEPTH(), CONSTANT(' ') },
                                                 2, codegen.string_type)
                                  : generate_string_literal_expression("", -1),
+
                        generate_string_literal_expression(multiline ? "]" : "", -1),
 
                      },

@@ -25,6 +25,8 @@
   } while (0)
 
 #ifdef _WIN32
+#include <malloc.h>
+
 #define UNREACHABLE(message)                                                                       \
   do                                                                                               \
   {                                                                                                \

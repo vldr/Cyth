@@ -61,6 +61,7 @@ typedef struct _DATA_TYPE
     TYPE_FUNCTION_INTERNAL,
     TYPE_FUNCTION_POINTER,
     TYPE_FUNCTION_TEMPLATE,
+    TYPE_FUNCTION_GROUP,
     TYPE_PROTOTYPE,
     TYPE_PROTOTYPE_TEMPLATE,
     TYPE_OBJECT,
@@ -90,6 +91,8 @@ typedef struct _DATA_TYPE
       struct _FUNC_STMT* function;
       struct _EXPR* this;
     } function_member;
+
+    ArrayDataType function_group;
 
     struct
     {
@@ -145,6 +148,8 @@ typedef struct _BINARY_EXPR
   Expr* left;
   Token op;
   Expr* right;
+
+  const char* function;
 } BinaryExpr;
 
 typedef struct _UNARY_EXPR
@@ -180,6 +185,8 @@ typedef struct _ASSIGN_EXPR
   Expr* value;
 
   VarStmt* variable;
+
+  const char* function;
 } AssignExpr;
 
 typedef struct _CALL_EXPR
@@ -191,6 +198,8 @@ typedef struct _CALL_EXPR
   Token callee_token;
   ArrayExpr arguments;
   ArrayToken argument_tokens;
+
+  const char* function;
 } CallExpr;
 
 typedef struct _CAST_EXPR
@@ -226,6 +235,8 @@ typedef struct _INDEX_EXPR
 
   Expr* index;
   Token index_token;
+
+  const char* function;
 } IndexExpr;
 
 typedef struct _IS_EXPR

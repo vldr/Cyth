@@ -60,6 +60,7 @@ typedef struct _FUNC_STMT
   DataTypeToken type;
 
   Token name;
+  const char* name_raw;
   const char* import;
 
   ArrayVarStmt variables;

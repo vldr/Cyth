@@ -2,10 +2,8 @@ import "env"
     void log(int n)
 
 class A
+    int __init__
+
     void __init__()
 
-    void __init__(int a, int b)
-        log(a)
-        log(b)
-
-#! 7:10-7:18 The name '__init__' already exists.
+#! 5:9-5:17 The name '__init__' already exists.

@@ -1326,6 +1326,7 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_PROTOTYPE:
   case TYPE_PROTOTYPE_TEMPLATE:
   case TYPE_FUNCTION_TEMPLATE:
+  case TYPE_FUNCTION_GROUP:
     return BinaryenTypeNone();
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
@@ -2430,7 +2431,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__add__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2446,7 +2447,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__sub__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2462,7 +2463,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__mul__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2478,7 +2479,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__div__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2493,33 +2494,25 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
   case TOKEN_CARET:
   case TOKEN_LESS_LESS:
   case TOKEN_GREATER_GREATER: {
-    char* name;
-
     switch (expression->op.type)
     {
     case TOKEN_PERCENT:
       op = BinaryenRemSInt32();
-      name = "__mod__";
       break;
     case TOKEN_AMPERSAND:
       op = BinaryenAndInt32();
-      name = "__and__";
       break;
     case TOKEN_PIPE:
       op = BinaryenOrInt32();
-      name = "__or__";
       break;
     case TOKEN_CARET:
       op = BinaryenXorInt32();
-      name = "__xor__";
       break;
     case TOKEN_LESS_LESS:
       op = BinaryenShlInt32();
-      name = "__lshift__";
       break;
     case TOKEN_GREATER_GREATER:
       op = BinaryenShrSInt32();
-      name = "__rshift__";
       break;
     default:
       UNREACHABLE("Unknown operator");
@@ -2528,7 +2521,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, name), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2546,7 +2539,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       op = BinaryenEqFloat32();
     else if (data_type.type == TYPE_OBJECT)
     {
-      const char* function = get_function_member(data_type, "__eq__");
+      const char* function = expression->function;
       if (function)
       {
         BinaryenExpressionRef operands[] = { left, right };
@@ -2576,7 +2569,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       op = BinaryenNeFloat32();
     else if (data_type.type == TYPE_OBJECT)
     {
-      const char* function = get_function_member(data_type, "__ne__");
+      const char* function = expression->function;
       if (function)
       {
         BinaryenExpressionRef operands[] = { left, right };
@@ -2610,7 +2603,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__le__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2628,7 +2621,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__ge__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2646,7 +2639,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__lt__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -2664,7 +2657,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, get_function_member(data_type, "__gt__"), operands,
+      return BinaryenCall(codegen.module, expression->function, operands,
                           sizeof(operands) / sizeof_ptr(operands),
                           data_type_to_binaryen_type(expression->return_data_type));
     }
@@ -3049,9 +3042,8 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
       BinaryenExpressionRef operands[] = { ref, index, value };
 
       BinaryenExpressionRef list[] = {
-        BinaryenCall(codegen.module,
-                     get_function_member(expression->target->index.expr_data_type, "__set__"),
-                     operands, sizeof(operands) / sizeof_ptr(operands), BinaryenTypeNone()),
+        BinaryenCall(codegen.module, expression->function, operands,
+                     sizeof(operands) / sizeof_ptr(operands), BinaryenTypeNone()),
         BinaryenExpressionCopy(value, codegen.module),
       };
 
@@ -3085,38 +3077,6 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
 
 static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 {
-  const char* name;
-  DataType callee_data_type = expression->callee_data_type;
-
-  switch (callee_data_type.type)
-  {
-  case TYPE_PROTOTYPE:
-    name = callee_data_type.class->name.lexeme;
-    break;
-
-  case TYPE_FUNCTION:
-    name = callee_data_type.function->name.lexeme;
-    break;
-
-  case TYPE_FUNCTION_MEMBER:
-    name = callee_data_type.function_member.function->name.lexeme;
-    break;
-
-  case TYPE_FUNCTION_INTERNAL:
-    name = generate_function_internal(callee_data_type);
-    break;
-
-  case TYPE_FUNCTION_POINTER:
-    name = "";
-    break;
-
-  case TYPE_ALIAS:
-    return generate_default_initialization(*callee_data_type.alias.data_type);
-
-  default:
-    UNREACHABLE("Unhandled data type");
-  }
-
   BinaryenType return_type = data_type_to_binaryen_type(expression->return_data_type);
 
   ArrayBinaryenExpressionRef arguments;
@@ -3130,13 +3090,23 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 
   BinaryenExpressionRef call;
 
-  if (callee_data_type.type == TYPE_FUNCTION_POINTER)
+  if (expression->callee_data_type.type == TYPE_ALIAS)
+  {
+    return generate_default_initialization(*expression->callee_data_type.alias.data_type);
+  }
+  else if (expression->callee_data_type.type == TYPE_FUNCTION_POINTER)
   {
     call = BinaryenCallRef(codegen.module, generate_expression(expression->callee), arguments.elems,
                            arguments.size, return_type, false);
   }
   else
   {
+    const char* name;
+    if (expression->callee_data_type.type == TYPE_FUNCTION_INTERNAL)
+      name = generate_function_internal(expression->callee_data_type);
+    else
+      name = expression->function;
+
     call = BinaryenCall(codegen.module, name, arguments.elems, arguments.size, return_type);
   }
 
@@ -3252,8 +3222,8 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
       index,
     };
 
-    return BinaryenCall(codegen.module, get_function_member(expression->expr_data_type, "__get__"),
-                        operands, sizeof(operands) / sizeof_ptr(operands), type);
+    return BinaryenCall(codegen.module, expression->function, operands,
+                        sizeof(operands) / sizeof_ptr(operands), type);
   }
   default:
     UNREACHABLE("Unhandled index type");
@@ -3548,22 +3518,17 @@ static BinaryenExpressionRef generate_function_template_declaration(FuncTemplate
 
 static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapType heap_type)
 {
-  const char* initalizer_name = statement->name.lexeme;
-  const char* initalizer_function_name = memory_sprintf("%s.__init__", initalizer_name);
+  ArrayFuncStmt initializer_functions;
+  array_init(&initializer_functions);
 
   BinaryenType previous_class = codegen.class;
-  const char* previous_function = codegen.function;
-
-  codegen.function = initalizer_name;
   codegen.class = statement->ref;
 
   FuncStmt* function;
-  FuncStmt* initializer_function = NULL;
-
   array_foreach(&statement->functions, function)
   {
-    if (strcmp(function->name.lexeme, initalizer_function_name) == 0)
-      initializer_function = function;
+    if (strcmp(function->name_raw, "__init__") == 0)
+      array_add(&initializer_functions, function);
 
     generate_function_declaration(function);
   }
@@ -3574,72 +3539,90 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
     generate_function_template_declaration(function_template);
   }
 
-  VarStmt* variable;
-  ArrayBinaryenExpressionRef default_initializers;
-  array_init(&default_initializers);
-  array_foreach(&statement->variables, variable)
-  {
-    BinaryenExpressionRef default_initializer =
-      generate_default_initialization(variable->data_type);
-    array_add(&default_initializers, default_initializer);
-  }
+  if (initializer_functions.size == 0)
+    array_add(&initializer_functions, NULL);
 
-  ArrayBinaryenExpressionRef initializer_body;
-  array_init(&initializer_body);
-  array_add(&initializer_body,
-            BinaryenLocalSet(codegen.module, 0,
-                             BinaryenStructNew(codegen.module, default_initializers.elems,
-                                               default_initializers.size, heap_type)));
-
-  array_foreach(&statement->variables, variable)
+  FuncStmt* initializer_function;
+  array_foreach(&initializer_functions, initializer_function)
   {
-    if (variable->initializer)
+    const char* initalizer_name =
+      _i == 0 ? statement->name.lexeme : memory_sprintf("%s.%d", statement->name.lexeme, _i + 1);
+
+    const char* previous_function = codegen.function;
+    codegen.function = initalizer_name;
+
+    VarStmt* variable;
+    ArrayBinaryenExpressionRef default_initializers;
+    array_init(&default_initializers);
+    array_foreach(&statement->variables, variable)
     {
-      BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, statement->ref);
-      BinaryenExpressionRef value = generate_expression(variable->initializer);
-      array_add(&initializer_body, BinaryenStructSet(codegen.module, variable->index, ref, value));
-    }
-  }
-
-  ArrayBinaryenType parameter_types;
-  array_init(&parameter_types);
-  array_add(&parameter_types, statement->ref);
-
-  if (initializer_function)
-  {
-    ArrayBinaryenExpressionRef parameters;
-    array_init(&parameters);
-    array_add(&parameters, BinaryenLocalGet(codegen.module, 0, statement->ref));
-
-    for (unsigned int i = 1; i < initializer_function->parameters.size; i++)
-    {
-      VarStmt* parameter = array_at(&initializer_function->parameters, i);
-      BinaryenType parameter_type = data_type_to_binaryen_type(parameter->data_type);
-
-      array_add(&parameters, BinaryenLocalGet(codegen.module, i, parameter_type));
-      array_add(&parameter_types, parameter_type);
+      BinaryenExpressionRef default_initializer =
+        generate_default_initialization(variable->data_type);
+      array_add(&default_initializers, default_initializer);
     }
 
-    BinaryenExpressionRef call =
-      BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
-                   BinaryenTypeNone());
-    generate_debug_info(initializer_function->name, call, codegen.function);
+    ArrayBinaryenExpressionRef initializer_body;
+    array_init(&initializer_body);
+    array_add(&initializer_body,
+              BinaryenLocalSet(codegen.module, 0,
+                               BinaryenStructNew(codegen.module, default_initializers.elems,
+                                                 default_initializers.size, heap_type)));
 
-    array_add(&initializer_body, call);
+    array_foreach(&statement->variables, variable)
+    {
+      if (variable->initializer)
+      {
+        BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, statement->ref);
+        BinaryenExpressionRef value = generate_expression(variable->initializer);
+        array_add(&initializer_body,
+                  BinaryenStructSet(codegen.module, variable->index, ref, value));
+      }
+    }
+
+    ArrayBinaryenType parameter_types;
+    array_init(&parameter_types);
+    array_add(&parameter_types, statement->ref);
+
+    if (initializer_function)
+    {
+      const char* initalizer_function_name = initializer_function->name.lexeme;
+
+      ArrayBinaryenExpressionRef parameters;
+      array_init(&parameters);
+      array_add(&parameters, BinaryenLocalGet(codegen.module, 0, statement->ref));
+
+      for (unsigned int i = 1; i < initializer_function->parameters.size; i++)
+      {
+        VarStmt* parameter = array_at(&initializer_function->parameters, i);
+        BinaryenType parameter_type = data_type_to_binaryen_type(parameter->data_type);
+
+        array_add(&parameters, BinaryenLocalGet(codegen.module, i, parameter_type));
+        array_add(&parameter_types, parameter_type);
+      }
+
+      BinaryenExpressionRef call =
+        BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
+                     BinaryenTypeNone());
+      generate_debug_info(initializer_function->name, call, codegen.function);
+
+      array_add(&initializer_body, call);
+    }
+
+    array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, statement->ref));
+
+    BinaryenType initializer_params =
+      BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
+    BinaryenExpressionRef initializer = BinaryenBlock(codegen.module, NULL, initializer_body.elems,
+                                                      initializer_body.size, statement->ref);
+
+    BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, statement->ref, NULL,
+                        0, initializer);
+    BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
+
+    codegen.function = previous_function;
   }
-
-  array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, statement->ref));
-
-  BinaryenType initializer_params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
-  BinaryenExpressionRef initializer = BinaryenBlock(codegen.module, NULL, initializer_body.elems,
-                                                    initializer_body.size, statement->ref);
-
-  BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, statement->ref, NULL, 0,
-                      initializer);
-  BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
   codegen.class = previous_class;
-  codegen.function = previous_function;
 }
 
 static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,

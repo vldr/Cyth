@@ -88,11 +88,13 @@ static void error_unknown_operation(Token token)
   checker_error(token, memory_sprintf("Operator '%s' is not valid.", token.lexeme));
 }
 
-static void error_missing_operator_overload(Token token, DataType data_type,
-                                            const char* function_name)
+static void error_missing_operator_overload(Token token, DataType left_data_type,
+                                            DataType right_data_type, const char* function_name)
 {
-  checker_error(token, memory_sprintf("Operator '%s' is not defined for '%s' (missing %s method).",
-                                      token.lexeme, data_type_to_string(data_type), function_name));
+  checker_error(
+    token, memory_sprintf("Operator '%s' is not defined for '%s' and '%s' (missing %s method).",
+                          token.lexeme, data_type_to_string(left_data_type),
+                          data_type_to_string(right_data_type), function_name));
 }
 
 static void error_name_already_exists(Token token, const char* name)
@@ -309,6 +311,19 @@ static void error_ternary_type_mismatch(Token token, DataType left, DataType rig
                                data_type_to_string(left), data_type_to_string(right)));
 }
 
+static void error_cannot_find_suitable_overload(Token name, DataType data_type)
+{
+  checker_error(
+    name, memory_sprintf("Cannot find a suitable overload: %s", data_type_to_string(data_type)));
+}
+
+static void error_overload_conflict(Token token, const char* name)
+{
+  checker_error(
+    token,
+    memory_sprintf("Cannot overload '%s', parameter types conflict with another function.", name));
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -459,6 +474,27 @@ const char* data_type_to_string(DataType data_type)
     {
       array_add(&string, '[');
       array_add(&string, ']');
+    }
+
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  case TYPE_FUNCTION_GROUP: {
+    ArrayChar string;
+    array_init(&string);
+
+    for (unsigned int i = 0; i < data_type.function_group.size; i++)
+    {
+      const char* c = data_type_to_string(data_type.function_group.elems[i]);
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i + 1 != data_type.function_group.size)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
     }
 
     array_add(&string, '\0');
@@ -1097,6 +1133,55 @@ static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, Data
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
+static int expand_function_group(DataType* data_type, DataType* argument_data_types,
+                                 unsigned int num_of_arguments)
+{
+  int index = 0;
+  if (data_type->type != TYPE_FUNCTION_GROUP)
+    return index;
+
+  ArrayDataType function_group = data_type->function_group;
+  DataType function_data_type;
+
+  array_foreach(&function_group, function_data_type)
+  {
+    FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                           ? function_data_type.function
+                           : function_data_type.function_member.function;
+
+    int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+    bool match = true;
+
+    if (function->parameters.size - offset == num_of_arguments)
+    {
+      for (unsigned int i = offset; i < function->parameters.size; i++)
+      {
+        DataType argument_data_type = argument_data_types[i - offset];
+        DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+        if (!equal_data_type(parameter_data_type, argument_data_type) &&
+            !assignable_data_type(parameter_data_type, argument_data_type))
+        {
+          match = false;
+          break;
+        }
+      }
+    }
+    else
+    {
+      match = false;
+    }
+
+    if (match)
+    {
+      *data_type = function_data_type;
+      index = _i;
+    }
+  }
+
+  return index;
+}
+
 static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type, Token name)
 {
   if (!types)
@@ -1165,10 +1250,6 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
 static void init_function_declaration(FuncStmt* statement)
 {
   const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
 
   if (checker.function)
   {
@@ -1216,28 +1297,87 @@ static void init_function_declaration(FuncStmt* statement)
 
   statement->data_type = data_type_token_to_data_type(statement->type);
 
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = statement->type;
-  variable->scope = SCOPE_GLOBAL;
-  variable->initializer = NULL;
-  variable->function = NULL;
-
   if (checker.class)
   {
-    variable->data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
-    variable->data_type.function_member.function = statement;
-    variable->data_type.function_member.this = NULL;
+    statement->function_data_type = DATA_TYPE(TYPE_FUNCTION_MEMBER);
+    statement->function_data_type.function_member.function = statement;
+    statement->function_data_type.function_member.this = NULL;
   }
   else
   {
-    variable->data_type = DATA_TYPE(TYPE_FUNCTION);
-    variable->data_type.function = statement;
+    statement->function_data_type = DATA_TYPE(TYPE_FUNCTION);
+    statement->function_data_type.function = statement;
   }
 
-  statement->function_data_type = variable->data_type;
+  if (environment_check_variable(checker.environment, name))
+  {
+    VarStmt* variable = environment_get_variable(checker.environment, name);
 
-  environment_set_variable(checker.environment, name, variable);
+    if (variable->data_type.type == TYPE_FUNCTION ||
+        variable->data_type.type == TYPE_FUNCTION_MEMBER ||
+        variable->data_type.type == TYPE_FUNCTION_GROUP)
+    {
+      if (variable->data_type.type != TYPE_FUNCTION_GROUP)
+      {
+        DataType function_data_type = variable->data_type;
+        variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+
+        array_init(&variable->data_type.function_group);
+        array_add(&variable->data_type.function_group, function_data_type);
+      }
+
+      DataType function_data_type;
+      array_foreach(&variable->data_type.function_group, function_data_type)
+      {
+        FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                               ? function_data_type.function
+                               : function_data_type.function_member.function;
+
+        if (function->parameters.size == statement->parameters.size)
+        {
+          bool equal = true;
+
+          for (unsigned int i = 0; i < function->parameters.size; i++)
+          {
+            if (!equal_data_type(function->parameters.elems[i]->data_type,
+                                 statement->parameters.elems[i]->data_type))
+            {
+              equal = false;
+              break;
+            }
+          }
+
+          if (equal)
+          {
+            error_overload_conflict(statement->name, name);
+            return;
+          }
+        }
+      }
+
+      array_add(&variable->data_type.function_group, statement->function_data_type);
+
+      statement->name.lexeme =
+        memory_sprintf("%s.%d", name, array_size(&variable->data_type.function_group));
+      statement->name.length = strlen(statement->name.lexeme);
+    }
+    else
+    {
+      error_name_already_exists(statement->name, name);
+    }
+  }
+  else
+  {
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = statement->name;
+    variable->type = DATA_TYPE_TOKEN_EMPTY();
+    variable->scope = SCOPE_GLOBAL;
+    variable->initializer = NULL;
+    variable->function = NULL;
+    variable->data_type = statement->function_data_type;
+
+    environment_set_variable(checker.environment, name, variable);
+  }
 }
 
 static void init_class_template_declaration(ClassTemplateStmt* statement)
@@ -1802,18 +1942,28 @@ static DataType check_binary_expression(BinaryExpr* expression)
     }
 
     VarStmt* variable = map_get_var_stmt(class->members, name);
-    if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
+    if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
+                      variable->data_type.type != TYPE_FUNCTION_GROUP))
     {
       if (op.type == TOKEN_EQUAL_EQUAL || op.type == TOKEN_BANG_EQUAL)
       {
         goto skip;
       }
 
-      error_missing_operator_overload(op, left, name);
+      error_missing_operator_overload(op, left, right, name);
       return DATA_TYPE(TYPE_VOID);
     }
 
-    FuncStmt* function = variable->data_type.function_member.function;
+    DataType function_data_type = variable->data_type;
+    expand_function_group(&function_data_type, &right, 1);
+
+    if (function_data_type.type == TYPE_FUNCTION_GROUP)
+    {
+      error_missing_operator_overload(op, left, right, name);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    FuncStmt* function = function_data_type.function_member.function;
     if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type) &&
         !assignable_data_type(array_at(&function->parameters, 1)->data_type, right))
     {
@@ -1821,6 +1971,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
+    expression->function = function->name.lexeme;
     expression->return_data_type = function->data_type;
     expression->operand_data_type = left;
 
@@ -1864,6 +2015,7 @@ skip:
     }
   }
 
+  expression->function = NULL;
   expression->return_data_type = left;
   expression->operand_data_type = left;
 
@@ -2032,11 +2184,23 @@ static DataType check_assignment_expression(AssignExpr* expression)
       ClassStmt* class = target->index.expr_data_type.class;
       VarStmt* variable = map_get_var_stmt(class->members, "__set__");
 
-      if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
+      if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
+                        variable->data_type.type != TYPE_FUNCTION_GROUP))
       {
         error_not_indexable_and_assignable_missing_overload(expression->op);
         return DATA_TYPE(TYPE_VOID);
       }
+
+      DataType function_data_type = variable->data_type;
+      expand_function_group(&function_data_type, &value_data_type, 1);
+
+      if (function_data_type.type == TYPE_FUNCTION_GROUP)
+      {
+        error_not_indexable_and_assignable_missing_overload(expression->op);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      expression->function = function_data_type.function_member.function->name.lexeme;
     }
 
     expression->variable = NULL;
@@ -2054,8 +2218,19 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
-  if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE ||
-      callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
+  DataType* argument_data_types = alloca(expression->arguments.size * sizeof(DataType));
+  for (unsigned int i = 0; i < expression->arguments.size; i++)
+    argument_data_types[i] = check_expression(expression->arguments.elems[i]);
+
+  expand_function_group(&callee_data_type, argument_data_types, expression->arguments.size);
+
+  if (callee_data_type.type == TYPE_FUNCTION_GROUP)
+  {
+    error_cannot_find_suitable_overload(expression->callee_token, callee_data_type);
+    return DATA_TYPE(TYPE_VOID);
+  }
+  else if (callee_data_type.type == TYPE_FUNCTION_TEMPLATE ||
+           callee_data_type.type == TYPE_PROTOTYPE_TEMPLATE)
   {
     error_missing_template_types(expression->callee_token);
     return DATA_TYPE(TYPE_VOID);
@@ -2094,10 +2269,9 @@ static DataType check_call_expression(CallExpr* expression)
 
     for (int i = 1; i < number_of_arguments; i++)
     {
-      Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      DataType argument_data_type = check_expression(argument);
+      DataType argument_data_type = argument_data_types[i - 1];
       DataType parameter_data_type = parameter->data_type;
 
       data_type_inference(&argument_data_type, &parameter_data_type);
@@ -2110,6 +2284,7 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
+    expression->function = function->name.lexeme;
     expression->return_data_type = function->data_type;
     expression->callee_data_type = callee_data_type;
 
@@ -2130,10 +2305,9 @@ static DataType check_call_expression(CallExpr* expression)
 
     for (int i = 0; i < number_of_arguments; i++)
     {
-      Expr* argument = expression->arguments.elems[i];
       VarStmt* parameter = function->parameters.elems[i];
 
-      DataType argument_data_type = check_expression(argument);
+      DataType argument_data_type = argument_data_types[i];
       DataType parameter_data_type = parameter->data_type;
 
       data_type_inference(&argument_data_type, &parameter_data_type);
@@ -2146,6 +2320,7 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
+    expression->function = function->name.lexeme;
     expression->return_data_type = function->data_type;
     expression->callee_data_type = callee_data_type;
 
@@ -2184,9 +2359,7 @@ static DataType check_call_expression(CallExpr* expression)
 
     for (int i = offset; i < number_of_arguments; i++)
     {
-      Expr* argument = expression->arguments.elems[i];
-
-      DataType argument_data_type = check_expression(argument);
+      DataType argument_data_type = argument_data_types[i - offset];
       DataType parameter_data_type = callee_data_type.function_internal.parameter_types.elems[i];
 
       data_type_inference(&argument_data_type, &parameter_data_type);
@@ -2204,6 +2377,9 @@ static DataType check_call_expression(CallExpr* expression)
         error_type_mismatch(argument_token, parameter_data_type, argument_data_type);
       }
     }
+
+    if (callee_data_type.type == TYPE_FUNCTION_INTERNAL)
+      expression->function = callee_data_type.function_internal.name;
 
     expression->return_data_type = *callee_data_type.function_internal.return_type;
     expression->callee_data_type = callee_data_type;
@@ -2223,9 +2399,20 @@ static DataType check_call_expression(CallExpr* expression)
 
     array_prepend(&expression->arguments, argument);
 
-    if (variable && variable->data_type.type == TYPE_FUNCTION_MEMBER)
+    if (variable && (variable->data_type.type == TYPE_FUNCTION_MEMBER ||
+                     variable->data_type.type == TYPE_FUNCTION_GROUP))
     {
-      FuncStmt* function = variable->data_type.function_member.function;
+      DataType function_data_type = variable->data_type;
+      int index = expand_function_group(&function_data_type, argument_data_types,
+                                        expression->arguments.size - 1);
+
+      if (function_data_type.type == TYPE_FUNCTION_GROUP)
+      {
+        error_cannot_find_suitable_overload(expression->callee_token, function_data_type);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      FuncStmt* function = function_data_type.function;
       int number_of_arguments = array_size(&expression->arguments);
       int expected_number_of_arguments = array_size(&function->parameters);
 
@@ -2238,10 +2425,9 @@ static DataType check_call_expression(CallExpr* expression)
 
       for (int i = 1; i < number_of_arguments; i++)
       {
-        Expr* argument = expression->arguments.elems[i];
         VarStmt* parameter = function->parameters.elems[i];
 
-        DataType argument_data_type = check_expression(argument);
+        DataType argument_data_type = argument_data_types[i - 1];
         DataType parameter_data_type = parameter->data_type;
 
         data_type_inference(&argument_data_type, &parameter_data_type);
@@ -2253,6 +2439,9 @@ static DataType check_call_expression(CallExpr* expression)
                               argument_data_type);
         }
       }
+
+      expression->function =
+        index == 0 ? class->name.lexeme : memory_sprintf("%s.%d", class->name.lexeme, index + 1);
     }
     else
     {
@@ -2262,6 +2451,8 @@ static DataType check_call_expression(CallExpr* expression)
         error_invalid_arity(expression->callee_token, 0, number_of_arguments - 1);
         return DATA_TYPE(TYPE_VOID);
       }
+
+      expression->function = class->name.lexeme;
     }
 
     expression->callee_data_type = callee_data_type;
@@ -2314,7 +2505,19 @@ static DataType check_access_expression(AccessExpr* expression)
     expand_template_types(expression->template_types, &expression->data_type, expression->name);
 
     if (expression->data_type.type == TYPE_FUNCTION_MEMBER)
+    {
       expression->data_type.function_member.this = expression->expr;
+    }
+    else if (expression->data_type.type == TYPE_FUNCTION_GROUP)
+    {
+      for (unsigned int i = 0; i < expression->data_type.function_group.size; i++)
+      {
+        if (expression->data_type.function_group.elems[i].type == TYPE_FUNCTION_MEMBER)
+        {
+          expression->data_type.function_group.elems[i].function_member.this = expression->expr;
+        }
+      }
+    }
 
     return expression->data_type;
   }
@@ -2629,13 +2832,23 @@ static DataType check_index_expression(IndexExpr* expression)
     ClassStmt* class = expr_data_type.class;
     VarStmt* variable = map_get_var_stmt(class->members, "__get__");
 
-    if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
+    if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
+                      variable->data_type.type != TYPE_FUNCTION_GROUP))
     {
       error_not_indexable_missing_overload(expression->expr_token);
       return DATA_TYPE(TYPE_VOID);
     }
 
-    FuncStmt* function = variable->data_type.function_member.function;
+    DataType function_data_type = variable->data_type;
+    expand_function_group(&function_data_type, &index_data_type, 1);
+
+    if (function_data_type.type == TYPE_FUNCTION_GROUP)
+    {
+      error_not_indexable_missing_overload(expression->expr_token);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    FuncStmt* function = function_data_type.function_member.function;
     if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
     {
       error_indexable_type_mismatch(expression->index_token,
@@ -2643,6 +2856,7 @@ static DataType check_index_expression(IndexExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
+    expression->function = function->name.lexeme;
     expression->data_type = function->data_type;
     expression->expr_data_type = expr_data_type;
 
@@ -2924,7 +3138,7 @@ static void check_variable_declaration(VarStmt* statement)
 
 static void check_get_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__get__") == 0)
+  if (strcmp(function->name_raw, "__get__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 2;
@@ -2939,7 +3153,7 @@ static void check_get_function_declaration(FuncStmt* function)
 
 static void check_set_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__set__") == 0)
+  if (strcmp(function->name_raw, "__set__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 3;
@@ -2960,7 +3174,7 @@ static void check_set_function_declaration(FuncStmt* function)
 
 static void check_str_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name.lexeme + checker.class->name.length + 1, "__str__") == 0)
+  if (strcmp(function->name_raw, "__str__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 1;
@@ -2981,7 +3195,7 @@ static void check_str_function_declaration(FuncStmt* function)
 
 static void check_binary_overload_function_declaration(FuncStmt* function, const char* name)
 {
-  if (strcmp(function->name.lexeme + checker.class->name.length + 1, name) == 0)
+  if (strcmp(function->name_raw, name) == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 2;

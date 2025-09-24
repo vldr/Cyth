@@ -228,11 +228,6 @@ static void error_invalid_initializer_return_type(Token token)
   checker_error(token, "The return type of '__init__' must be 'void'.");
 }
 
-static void error_invalid_set_return_type(Token token)
-{
-  checker_error(token, "The return type of '__set__' must be 'void'.");
-}
-
 static void error_invalid_str_return_type(Token token)
 {
   checker_error(token, "The return type of '__str__' must be 'string'.");
@@ -1316,6 +1311,11 @@ static void init_function_declaration(FuncStmt* statement)
   array_foreach(&statement->parameters, parameter)
   {
     parameter->data_type = data_type_token_to_data_type(parameter->type);
+
+    if (parameter->data_type.type == TYPE_VOID)
+    {
+      error_type_cannot_be_void(parameter->type.token);
+    }
   }
 
   statement->data_type = data_type_token_to_data_type(statement->type);
@@ -2217,10 +2217,14 @@ static DataType check_assignment_expression(AssignExpr* expression)
     if (target->index.expr_data_type.type == TYPE_OBJECT)
     {
       expression->function = target->index.function;
+      expression->data_type = target->index.data_type;
+    }
+    else
+    {
+      expression->data_type = value_data_type;
     }
 
     expression->variable = NULL;
-    expression->data_type = value_data_type;
 
     return expression->data_type;
   }
@@ -2894,10 +2898,10 @@ static DataType check_index_expression(IndexExpr* expression)
     }
 
     expression->function = function->name.lexeme;
-    expression->data_type = checker.assignment ? value_data_type : function->data_type;
+    expression->data_type = function->data_type;
     expression->expr_data_type = expr_data_type;
 
-    return expression->data_type;
+    return checker.assignment ? value_data_type : function->data_type;
   }
 
   error_not_indexable(expression->expr_token, expr_data_type);
@@ -3198,12 +3202,6 @@ static void check_set_function_declaration(FuncStmt* function)
     if (expected != got)
     {
       error_invalid_set_arity(function->name);
-      return;
-    }
-
-    if (function->data_type.type != TYPE_VOID)
-    {
-      error_invalid_set_return_type(function->name);
       return;
     }
   }

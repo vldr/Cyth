@@ -3041,14 +3041,9 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
     {
       BinaryenExpressionRef operands[] = { ref, index, value };
 
-      BinaryenExpressionRef list[] = {
-        BinaryenCall(codegen.module, expression->function, operands,
-                     sizeof(operands) / sizeof_ptr(operands), BinaryenTypeNone()),
-        BinaryenExpressionCopy(value, codegen.module),
-      };
-
-      return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
-                           BinaryenTypeAuto());
+      return BinaryenCall(codegen.module, expression->function, operands,
+                          sizeof(operands) / sizeof_ptr(operands),
+                          data_type_to_binaryen_type(expression->target->index.data_type));
     }
     else
     {

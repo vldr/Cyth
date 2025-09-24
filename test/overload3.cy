@@ -3,11 +3,13 @@ import "env"
   void log(int n)
 
 class A
-  void __set__(int index, int value)
+  int __set__(int index, int value)
     log("set " + index + " = " + value)
+    return 30
 
-  void __set__(int index, string value)
+  string __set__(int index, string value)
     log("set " + index + " = " + value)
+    return "world"
 
   int __get__(int index)
     log("get " + index)
@@ -19,11 +21,11 @@ class A
 
 log(A()[10] = "hello")
 # set 10 = hello
-# hello
+# world
 
 log(A()[10] = 20)
 # set 10 = 20
-# 20
+# 30
 
 log(A()[20])
 # get 20
@@ -34,17 +36,18 @@ log(A()["world"])
 # hello
 
 class B
-  void __set__(int index, int value)
+  string __set__(int index, int value)
     log("set " + index + " = " + value)
+    return "hello"
 
   int __get__(int index)
     log("get " + index)
     return 10
 
-log(A()[10] = 20)
+log(B()[10] = 20)
 # set 10 = 20
-# 20
+# hello
 
-log(A()[20])
+log(B()[20])
 # get 20
 # 10

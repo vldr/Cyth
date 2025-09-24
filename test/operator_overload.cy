@@ -68,8 +68,9 @@ class Test
         log("__rshift__")
         return this  
 
-    void __set__(string index, string value)
+    string __set__(string index, string value)
         log("Set Index = " + index + " Value = " + value)
+        return value
 
     string __get__(string index)
         log("Get Index = " + index)

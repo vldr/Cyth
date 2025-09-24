@@ -23,6 +23,7 @@ static struct
   IfStmt* cond;
   ClassTemplateStmt* class_template;
   WhileStmt* loop;
+  DataType* assignment;
 } checker;
 
 static void check_statement(Stmt* statement, bool synchronize);
@@ -172,21 +173,19 @@ static void error_not_indexable(Token token, DataType data_type)
                 memory_sprintf("Cannot index into type '%s'.", data_type_to_string(data_type)));
 }
 
-static void error_not_indexable_missing_overload(Token token)
+static void error_not_indexable_missing_overload(Token token, DataType index_data_type,
+                                                 DataType value_data_type)
 {
-  checker_error(token, "The object cannot be indexed, missing '__get__' method.");
-}
-
-static void error_indexable_type_mismatch(Token token, DataType expected, DataType got)
-{
-  checker_error(token,
-                memory_sprintf("The '__get__' method expects index type '%s' but got '%s' instead.",
-                               data_type_to_string(expected), data_type_to_string(got)));
-}
-
-static void error_not_indexable_and_assignable_missing_overload(Token token)
-{
-  checker_error(token, "The object cannot be indexed and assigned to, missing '__set__' method.");
+  if (checker.assignment)
+    checker_error(token, memory_sprintf("The object cannot be indexed and assigned to, missing "
+                                        "'__set__' method that takes '%s' and '%s'.",
+                                        data_type_to_string(index_data_type),
+                                        data_type_to_string(value_data_type)));
+  else
+    checker_error(
+      token,
+      memory_sprintf("The object cannot be indexed, missing '__get__' method that takes '%s'.",
+                     data_type_to_string(index_data_type)));
 }
 
 static void error_index_not_an_int(Token token)
@@ -237,18 +236,6 @@ static void error_invalid_set_return_type(Token token)
 static void error_invalid_str_return_type(Token token)
 {
   checker_error(token, "The return type of '__str__' must be 'string'.");
-}
-
-static void error_invalid_get_set_function(Token token)
-{
-  checker_error(
-    token,
-    "The return type of '__get__' must match the type of the second parameter of '__set__'.");
-}
-static void error_invalid_get_set_first_parameter_function(Token token)
-{
-  checker_error(token,
-                "The '__get__' and  '__set__' methods must have the same first parameter type.");
 }
 
 static void error_invalid_get_arity(Token token)
@@ -327,6 +314,48 @@ static void error_overload_conflict(Token token, const char* name)
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
+}
+
+const char* function_data_type_to_string(const char* name, DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER: {
+    ArrayChar string;
+    array_init(&string);
+
+    const char* c = name;
+    while (*c)
+      array_add(&string, *c++);
+
+    unsigned int offset = data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+    FuncStmt* function = data_type.type == TYPE_FUNCTION_MEMBER ? data_type.function_member.function
+                                                                : data_type.function;
+
+    array_add(&string, '(');
+
+    for (unsigned int i = offset; i < function->parameters.size; i++)
+    {
+      const char* c = data_type_to_string(function->parameters.elems[i]->data_type);
+      while (*c)
+        array_add(&string, *c++);
+
+      if (i < function->parameters.size - 1)
+      {
+        array_add(&string, ',');
+        array_add(&string, ' ');
+      }
+    }
+
+    array_add(&string, ')');
+    array_add(&string, '\0');
+
+    return string.elems;
+  }
+  default:
+    UNREACHABLE("Unexpected function data type");
+  }
 }
 
 const char* data_type_to_string(DataType data_type)
@@ -1133,53 +1162,47 @@ static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, Data
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
-static int expand_function_group(DataType* data_type, DataType* argument_data_types,
-                                 unsigned int num_of_arguments)
+static void expand_function_group(DataType* data_type, DataType* argument_data_types,
+                                  unsigned int num_of_arguments)
 {
-  int index = 0;
-  if (data_type->type != TYPE_FUNCTION_GROUP)
-    return index;
-
-  ArrayDataType function_group = data_type->function_group;
-  DataType function_data_type;
-
-  array_foreach(&function_group, function_data_type)
+  if (data_type->type == TYPE_FUNCTION_GROUP)
   {
-    FuncStmt* function = function_data_type.type == TYPE_FUNCTION
-                           ? function_data_type.function
-                           : function_data_type.function_member.function;
+    ArrayDataType function_group = data_type->function_group;
+    DataType function_data_type;
 
-    int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
-    bool match = true;
-
-    if (function->parameters.size - offset == num_of_arguments)
+    array_foreach(&function_group, function_data_type)
     {
-      for (unsigned int i = offset; i < function->parameters.size; i++)
-      {
-        DataType argument_data_type = argument_data_types[i - offset];
-        DataType parameter_data_type = function->parameters.elems[i]->data_type;
+      FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                             ? function_data_type.function
+                             : function_data_type.function_member.function;
 
-        if (!equal_data_type(parameter_data_type, argument_data_type) &&
-            !assignable_data_type(parameter_data_type, argument_data_type))
+      int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+      bool match = true;
+
+      if (function->parameters.size - offset == num_of_arguments)
+      {
+        for (unsigned int i = offset; i < function->parameters.size; i++)
         {
-          match = false;
-          break;
+          DataType argument_data_type = argument_data_types[i - offset];
+          DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+          if (!equal_data_type(parameter_data_type, argument_data_type) &&
+              !assignable_data_type(parameter_data_type, argument_data_type))
+          {
+            match = false;
+            break;
+          }
         }
       }
-    }
-    else
-    {
-      match = false;
-    }
+      else
+      {
+        match = false;
+      }
 
-    if (match)
-    {
-      *data_type = function_data_type;
-      index = _i;
+      if (match)
+        *data_type = function_data_type;
     }
   }
-
-  return index;
 }
 
 static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type, Token name)
@@ -1320,8 +1343,15 @@ static void init_function_declaration(FuncStmt* statement)
       if (variable->data_type.type != TYPE_FUNCTION_GROUP)
       {
         DataType function_data_type = variable->data_type;
-        variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+        FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
+                               ? function_data_type.function_member.function
+                               : function_data_type.function;
 
+        function->name.lexeme =
+          function_data_type_to_string(function->name.lexeme, function_data_type);
+        function->name.length = strlen(statement->name.lexeme);
+
+        variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
         array_init(&variable->data_type.function_group);
         array_add(&variable->data_type.function_group, function_data_type);
       }
@@ -1357,8 +1387,7 @@ static void init_function_declaration(FuncStmt* statement)
 
       array_add(&variable->data_type.function_group, statement->function_data_type);
 
-      statement->name.lexeme =
-        memory_sprintf("%s.%d", name, array_size(&variable->data_type.function_group));
+      statement->name.lexeme = function_data_type_to_string(name, statement->function_data_type);
       statement->name.length = strlen(statement->name.lexeme);
     }
     else
@@ -2130,8 +2159,14 @@ static DataType check_variable_expression(VarExpr* expression)
 static DataType check_assignment_expression(AssignExpr* expression)
 {
   Expr* target = expression->target;
-  DataType target_data_type = check_expression(target);
   DataType value_data_type = check_expression(expression->value);
+
+  DataType* previous_assignment = checker.assignment;
+  checker.assignment = &value_data_type;
+
+  DataType target_data_type = check_expression(target);
+
+  checker.assignment = previous_assignment;
 
   if (target_data_type.type == TYPE_VOID || target_data_type.type == TYPE_PROTOTYPE ||
       target_data_type.type == TYPE_FUNCTION || target_data_type.type == TYPE_FUNCTION_MEMBER)
@@ -2181,26 +2216,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
     if (target->index.expr_data_type.type == TYPE_OBJECT)
     {
-      ClassStmt* class = target->index.expr_data_type.class;
-      VarStmt* variable = map_get_var_stmt(class->members, "__set__");
-
-      if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
-                        variable->data_type.type != TYPE_FUNCTION_GROUP))
-      {
-        error_not_indexable_and_assignable_missing_overload(expression->op);
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      DataType function_data_type = variable->data_type;
-      expand_function_group(&function_data_type, &value_data_type, 1);
-
-      if (function_data_type.type == TYPE_FUNCTION_GROUP)
-      {
-        error_not_indexable_and_assignable_missing_overload(expression->op);
-        return DATA_TYPE(TYPE_VOID);
-      }
-
-      expression->function = function_data_type.function_member.function->name.lexeme;
+      expression->function = target->index.function;
     }
 
     expression->variable = NULL;
@@ -2403,8 +2419,8 @@ static DataType check_call_expression(CallExpr* expression)
                      variable->data_type.type == TYPE_FUNCTION_GROUP))
     {
       DataType function_data_type = variable->data_type;
-      int index = expand_function_group(&function_data_type, argument_data_types,
-                                        expression->arguments.size - 1);
+      expand_function_group(&function_data_type, argument_data_types,
+                            expression->arguments.size - 1);
 
       if (function_data_type.type == TYPE_FUNCTION_GROUP)
       {
@@ -2441,7 +2457,9 @@ static DataType check_call_expression(CallExpr* expression)
       }
 
       expression->function =
-        index == 0 ? class->name.lexeme : memory_sprintf("%s.%d", class->name.lexeme, index + 1);
+        variable->data_type.type == TYPE_FUNCTION_GROUP
+          ? function_data_type_to_string(class->name.lexeme, function_data_type)
+          : class->name.lexeme;
     }
     else
     {
@@ -2830,34 +2848,53 @@ static DataType check_index_expression(IndexExpr* expression)
   else if (expr_data_type.type == TYPE_OBJECT)
   {
     ClassStmt* class = expr_data_type.class;
-    VarStmt* variable = map_get_var_stmt(class->members, "__get__");
+    VarStmt* variable =
+      map_get_var_stmt(class->members, checker.assignment ? "__set__" : "__get__");
+    DataType value_data_type = checker.assignment ? *checker.assignment : DATA_TYPE(TYPE_VOID);
 
     if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
                       variable->data_type.type != TYPE_FUNCTION_GROUP))
     {
-      error_not_indexable_missing_overload(expression->expr_token);
+      error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                           value_data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
     DataType function_data_type = variable->data_type;
-    expand_function_group(&function_data_type, &index_data_type, 1);
+
+    if (checker.assignment)
+      expand_function_group(&function_data_type, (DataType[]){ index_data_type, value_data_type },
+                            2);
+    else
+      expand_function_group(&function_data_type, &index_data_type, 1);
 
     if (function_data_type.type == TYPE_FUNCTION_GROUP)
     {
-      error_not_indexable_missing_overload(expression->expr_token);
+      error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                           value_data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
     FuncStmt* function = function_data_type.function_member.function;
     if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
     {
-      error_indexable_type_mismatch(expression->index_token,
-                                    array_at(&function->parameters, 1)->data_type, index_data_type);
+      error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                           value_data_type);
       return DATA_TYPE(TYPE_VOID);
     }
 
+    if (checker.assignment)
+    {
+      if (!equal_data_type(value_data_type, array_at(&function->parameters, 2)->data_type))
+      {
+        error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                             value_data_type);
+        return DATA_TYPE(TYPE_VOID);
+      }
+    }
+
     expression->function = function->name.lexeme;
-    expression->data_type = function->data_type;
+    expression->data_type = checker.assignment ? value_data_type : function->data_type;
     expression->expr_data_type = expr_data_type;
 
     return expression->data_type;
@@ -3288,35 +3325,6 @@ static void check_function_declaration(FuncStmt* statement)
   checker.function = previous_function;
 }
 
-static void check_set_get_function_declarations(ClassStmt* statement)
-{
-  VarStmt* set_variable = map_get_var_stmt(statement->members, "__set__");
-  VarStmt* get_variable = map_get_var_stmt(statement->members, "__get__");
-
-  if (set_variable && get_variable && set_variable->data_type.type == TYPE_FUNCTION_MEMBER &&
-      get_variable->data_type.type == TYPE_FUNCTION_MEMBER)
-  {
-    FuncStmt* set_function = set_variable->data_type.function_member.function;
-    FuncStmt* get_function = get_variable->data_type.function_member.function;
-
-    if (set_function->parameters.size != 3 || get_function->parameters.size != 2)
-      return;
-
-    if (!equal_data_type(get_function->data_type, set_function->parameters.elems[2]->data_type))
-    {
-      error_invalid_get_set_function(get_function->name);
-      return;
-    }
-
-    if (!equal_data_type(get_function->parameters.elems[1]->data_type,
-                         set_function->parameters.elems[1]->data_type))
-    {
-      error_invalid_get_set_first_parameter_function(set_function->parameters.elems[1]->type.token);
-      return;
-    }
-  }
-}
-
 static void check_class_declaration(ClassStmt* statement)
 {
   if (checker.function || checker.loop || checker.class || checker.cond)
@@ -3342,8 +3350,6 @@ static void check_class_declaration(ClassStmt* statement)
   {
     check_function_declaration(function_statement);
   }
-
-  check_set_get_function_declarations(statement);
 
   checker.environment = previous_environment;
   checker.class = previous_class;
@@ -3618,6 +3624,7 @@ void checker_init(ArrayStmt statements)
   checker.class = NULL;
   checker.loop = NULL;
   checker.cond = NULL;
+  checker.assignment = NULL;
   checker.statements = statements;
 
   checker.environment = environment_init(NULL);

@@ -3518,8 +3518,11 @@ static BinaryenExpressionRef generate_function_template_declaration(FuncTemplate
 
 static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapType heap_type)
 {
-  ArrayFuncStmt initializer_functions;
-  array_init(&initializer_functions);
+  ArrayFuncStmt initializer_functions = {
+    .size = 0,
+    .cap = 1,
+    .elems = alloca(sizeof(FuncStmt)),
+  };
 
   BinaryenType previous_class = codegen.class;
   codegen.class = statement->ref;
@@ -3539,14 +3542,18 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
     generate_function_template_declaration(function_template);
   }
 
-  if (initializer_functions.size == 0)
-    array_add(&initializer_functions, NULL);
+  unsigned int index = 0;
 
-  FuncStmt* initializer_function;
-  array_foreach(&initializer_functions, initializer_function)
+  do
   {
+    FuncStmt* initializer_function =
+      initializer_functions.size ? initializer_functions.elems[index] : NULL;
+
     const char* initalizer_name =
-      _i == 0 ? statement->name.lexeme : memory_sprintf("%s.%d", statement->name.lexeme, _i + 1);
+      initializer_functions.size > 1
+        ? function_data_type_to_string(statement->name.lexeme,
+                                       initializer_function->function_data_type)
+        : statement->name.lexeme;
 
     const char* previous_function = codegen.function;
     codegen.function = initalizer_name;
@@ -3620,7 +3627,9 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
     BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
     codegen.function = previous_function;
-  }
+    index++;
+
+  } while (index < initializer_functions.size);
 
   codegen.class = previous_class;
 }

@@ -84,6 +84,8 @@ for (const filename of scripts) {
           }
 
           logs.push(decoder.decode(array));
+        } else if (typeof output == "undefined") {
+          logs.push("");
         } else {
           logs.push(String(output));
         }
@@ -93,11 +95,18 @@ for (const filename of scripts) {
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log": log,
+
           "log<bool>": log,
           "log<int>": log,
           "log<float>": log,
           "log<string>": log,
           "log<char>": log,
+
+          "log()": log,
+          "log(int)": log,
+          "log(float)": log,
+          "log(string)": log,
+          "log(char)": log,
 
           set: (key, value) => { kv[key] = value; },
           get: (key) => { return key in kv ? kv[key] : null; },

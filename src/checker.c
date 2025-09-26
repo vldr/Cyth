@@ -1158,7 +1158,7 @@ static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, Data
 }
 
 static void expand_function_group(DataType* data_type, DataType* argument_data_types,
-                                  unsigned int num_of_arguments)
+                                  unsigned int number_of_arguments)
 {
   if (data_type->type == TYPE_FUNCTION_GROUP)
   {
@@ -1174,7 +1174,7 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
       int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
       bool match = true;
 
-      if (function->parameters.size - offset == num_of_arguments)
+      if (function->parameters.size - offset == number_of_arguments)
       {
         for (unsigned int i = offset; i < function->parameters.size; i++)
         {
@@ -1790,6 +1790,38 @@ static DataType check_cast_expression(CastExpr* expression)
 
       break;
 
+    case TYPE_FUNCTION_GROUP:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_FUNCTION_POINTER: {
+        DataType function_data_type = expression->from_data_type;
+        expand_function_group(&function_data_type,
+                              expression->to_data_type.function_internal.parameter_types.elems,
+                              expression->to_data_type.function_internal.parameter_types.size);
+
+        if (function_data_type.type != TYPE_FUNCTION_GROUP)
+        {
+          expression->from_data_type = function_data_type;
+          valid = true;
+        }
+        else
+        {
+          valid = false;
+        }
+
+        break;
+      }
+
+      case TYPE_STRING:
+        valid = true;
+        break;
+
+      default:
+        break;
+      }
+
+      break;
+
     case TYPE_ALIAS:
     case TYPE_FUNCTION:
     case TYPE_FUNCTION_MEMBER:
@@ -2029,6 +2061,8 @@ skip:
                 DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_TEMPLATE),
                 DATA_TYPE(TYPE_STRING)) &&
+        !upcast(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_GROUP),
+                DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_PROTOTYPE), DATA_TYPE(TYPE_STRING)) &&
         !upcast(expression, &left, &right, DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE),
                 DATA_TYPE(TYPE_STRING)) &&
@@ -2169,7 +2203,11 @@ static DataType check_assignment_expression(AssignExpr* expression)
   checker.assignment = previous_assignment;
 
   if (target_data_type.type == TYPE_VOID || target_data_type.type == TYPE_PROTOTYPE ||
-      target_data_type.type == TYPE_FUNCTION || target_data_type.type == TYPE_FUNCTION_MEMBER)
+      target_data_type.type == TYPE_PROTOTYPE_TEMPLATE ||
+      target_data_type.type == TYPE_FUNCTION_TEMPLATE || target_data_type.type == TYPE_FUNCTION ||
+      target_data_type.type == TYPE_FUNCTION_MEMBER ||
+      target_data_type.type == TYPE_FUNCTION_GROUP ||
+      target_data_type.type == TYPE_FUNCTION_INTERNAL)
   {
     error_not_assignable(expression->op);
     return DATA_TYPE(TYPE_VOID);

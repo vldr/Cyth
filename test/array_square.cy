@@ -5,15 +5,7 @@ int maxSquare(int[][] data)
   int m = data.length
   int n = data[0].length
   int[][] dp
-
-  for int i = 0; i < m; i += 1
-    int[] a
-
-    for int j = 0; j < n; j += 1
-      a.push(0)
-
-    dp.push(a)
-
+  dp.reserve(m, n)
 
   int max
 

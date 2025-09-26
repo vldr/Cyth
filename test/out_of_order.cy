@@ -23,13 +23,7 @@ class Cellular
     this.windowWidth = windowWidth
     this.windowHeight = windowHeight
 
-    for int x = 0; x < width; x += 1
-      int[] row
-
-      for int y = 0; y < height; y += 1
-        row.push(0)
-
-      cells.push(row)
+    this.cells.reserve(width, height)
 
   void addCell(int x, int y)
     cells[x][y] = 1

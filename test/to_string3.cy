@@ -1,6 +1,9 @@
 import "env"
     void log(string n)
 
+    void overload()
+    void overload(int a)
+
 any a = (any)null
 
 string test<T>()
@@ -49,22 +52,26 @@ log((string)b.test)
 log((string)test)
 log((string)"".toArray)
 log(test<string>())
+log((string)overload)
 
 # void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)
 # string string
+# void(), void(int)
 
 log("" + log)
 log("" + b.test)
 log("" + test)
 log("" + "".toArray)
+log("" + overload)
 
 # void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)
+# void(), void(int)
 
 log((string)Object)
 log((string)Object2)

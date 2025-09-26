@@ -10,13 +10,7 @@ class GameOfLife
     this.width = width
     this.height = height
 
-    for int x = 0; x < width; x += 1
-      int[] row
-
-      for int y = 0; y < height; y += 1
-        row.push(0)
-
-      cells.push(row)
+    cells.reserve(width, height)
                 
   void addCell(int x, int y)
     cells[x][y] = 1
@@ -41,14 +35,7 @@ class GameOfLife
 
   void nextGeneration()
     int[][] newCells
-
-    for int x = 0; x < width; x += 1
-      int[] row
-
-      for int y = 0; y < height; y += 1
-        row.push(0)
-
-      newCells.push(row)
+    newCells.reserve(width, height)
 
     for int x = 0; x < width; x += 1
       for int y = 0; y < height; y += 1

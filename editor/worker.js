@@ -97,7 +97,8 @@ function postError(error) {
   function lookupMapping(offset, mappings) {
     let low = 0;
     let high = mappings.length - 1;
-    let closest = null;
+    let minimum = null;
+    let maximum = null;
 
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
@@ -106,14 +107,18 @@ function postError(error) {
       if (mapping.offset === offset) {
         return mapping;
       } else if (mapping.offset < offset) {
-        closest = mapping;
+        minimum = mapping;
         low = mid + 1;
       } else {
+        maximum = mapping;
         high = mid - 1;
       }
     }
 
-    return closest;
+    if (minimum && maximum && minimum.line == maximum.line && minimum.column == minimum.column)
+      return minimum;
+
+    return null;
   }
 
   let errorMessage = error.message + "\n";

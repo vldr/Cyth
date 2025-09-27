@@ -115,7 +115,7 @@ function postError(error) {
       }
     }
 
-    if (minimum && maximum && minimum.line == maximum.line && minimum.column == minimum.column)
+    if (minimum && maximum && minimum.line == maximum.line && minimum.column == maximum.column)
       return minimum;
 
     return null;

@@ -6,95 +6,141 @@ let canvas;
 let debug;
 
 function postError(error) {
-  const sourceMap = JSON.parse(textDecoder.decode(debug));
-  const base64Digits =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function decodeMappings(mappings) {
+    const A = "A".charCodeAt(0);
+    const Z = "Z".charCodeAt(0);
+    const a = "a".charCodeAt(0);
+    const z = "z".charCodeAt(0);
+    const zero = "0".charCodeAt(0);
+    const nine = "9".charCodeAt(0);
+    const plus = "+".charCodeAt(0);
+    const slash = "/".charCodeAt(0);
+    const comma = ",".charCodeAt(0);
 
-  const decode = (str, index) => {
-    let result = 0,
-      shift = 0,
-      digit,
-      continuation;
+    let offset = 0;
+    let file = 0;
+    let line = 0;
+    let column = 0;
+    let index = 0;
+    let result = [];
 
-    if (str) {
-      do {
-        digit = base64Digits.indexOf(str[index++]);
-        continuation = digit & 32;
-        result += (digit & 31) << shift;
-        shift += 5;
-      } while (continuation);
+    while (index < mappings.length) {
+      function decodeVLQ() {
+        let output = 0;
+        let shift = 0;
+        let sign = 1;
+
+        while (true) {
+          if (index >= mappings.length)
+            break;
+
+          const character = mappings.charCodeAt(index);
+          if (character == comma)
+            break;
+
+          let value;
+          if (character >= A && character <= Z)
+            value = character - A;
+          else if (character >= a && character <= z)
+            value = 26 + (character - a);
+          else if (character >= zero && character <= nine)
+            value = 52 + (character - zero);
+          else if (character == plus)
+            value = 62;
+          else if (character == slash)
+            value = 63;
+          else
+            throw new Error("Unknown character");
+
+          const continuation = value & 0b100000;
+
+          if (shift == 0) {
+            if (value & 0b1)
+              sign = -sign;
+
+            const digit = (value >>> 1) & 0b1111;
+            output |= digit;
+            shift += 4;
+          }
+          else {
+            const digit = value & 0b11111;
+            output |= digit << shift;
+            shift += 5;
+          }
+
+          index++;
+
+          if (!continuation)
+            break;
+        }
+
+        return sign * output;
+      }
+
+      offset += decodeVLQ();
+      file += decodeVLQ();
+      line += decodeVLQ();
+      column += decodeVLQ();
+      decodeVLQ();
+
+      result.push({ offset, line, column });
+
+      if (index < mappings.length && mappings.charCodeAt(index) != comma)
+        throw new Error("Expected a comma");
+
+      index++;
     }
-    return { value: (result & 1 ? -1 : 1) * (result >> 1), index };
-  };
 
-  const map = (sourceMap, stackTrace) => {
-    let generatedLine = 1,
-      generatedColumn = 0,
-      sourceIndex = 0,
-      originalLine = 0,
-      originalColumn = 0,
-      nameIndex = 0;
+    return result;
+  }
 
-    for (const segment of sourceMap.mappings.split(",")) {
-      let i = 0,
-        result = decode(segment, i);
-      generatedColumn += result.value;
-      let mapping = { line: generatedLine, column: generatedColumn };
-      i = result.index;
-      if (i < segment.length) {
-        result = decode(segment, i);
-        sourceIndex += result.value;
-        i = result.index;
-        result = decode(segment, i);
-        originalLine += result.value;
-        i = result.index;
-        result = decode(segment, i);
-        originalColumn += result.value;
-        i = result.index;
-        mapping.source = sourceIndex;
-        mapping.originalLine = originalLine + 1;
-        mapping.originalColumn = originalColumn;
-        if (i < segment.length) {
-          result = decode(segment, i);
-          nameIndex += result.value;
-          mapping.name = nameIndex;
-        }
+  function lookupMapping(offset, mappings) {
+    let low = 0;
+    let high = mappings.length - 1;
+    let closest = null;
 
-        if (mapping.column in stackTrace) {
-          stackTrace[mapping.column] +=
-            ":" + mapping.originalLine + ":" + mapping.originalColumn;
-        }
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const mapping = mappings[mid];
+
+      if (mapping.offset === offset) {
+        return mapping;
+      } else if (mapping.offset < offset) {
+        closest = mapping;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
       }
     }
-  };
+
+    return closest;
+  }
 
   let errorMessage = error.message + "\n";
 
+  const sourceMap = JSON.parse(textDecoder.decode(debug));
   const regex = /wasm-function\[([0-9]+)\]:(0[xX][0-9a-fA-F]+)/g;
   const stack = error.stack;
 
   if (regex.test(stack)) {
-    const stackTrace = {};
-    const stackTraceOffsets = [];
+    const strackTrace = [];
     regex.lastIndex = 0;
 
     for (const matches of stack.matchAll(regex)) {
       const location = sourceMap.functions[Number(matches[1])];
       const offset = Number(matches[2]);
 
-      stackTrace[offset] = location;
-      stackTraceOffsets.push(offset);
+      strackTrace.push([offset, location]);
     }
 
-    map(sourceMap, stackTrace);
+    const mappings = decodeMappings(sourceMap.mappings);
 
-    for (const offset of stackTraceOffsets) {
-      let error = stackTrace[offset].replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    for (const [offset, location] of strackTrace) {
+      let error = location.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-      const regex = /.*:([0-9]+):([0-9]+)/;
-      const matches = error.match(regex);
-      if (matches)
-        error = `<a onclick="Module.editor.goto(${matches[1]}, ${matches[2]})" href="#">${error}</a>`;
+      const mapping = lookupMapping(offset, mappings);
+      if (mapping)
+        error = `<a onclick="Module.editor.goto(${mapping.line + 1}, ${mapping.column})" href="#">${error}:${mapping.line + 1}:${mapping.column}</a>`;
 
       errorMessage +=
         "    at " + error + "\n";

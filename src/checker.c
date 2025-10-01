@@ -306,6 +306,13 @@ static void error_overload_conflict(Token token, const char* name)
     memory_sprintf("Cannot overload '%s', parameter types conflict with another function.", name));
 }
 
+static void error_ambiguous_call(Token token, const char* name)
+{
+  checker_error(token, memory_sprintf("Call of overloaded '%s' is ambiguous; "
+                                      "parameter types conflict with another function.",
+                                      name));
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -813,7 +820,8 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   return variable->data_type;
 }
 
-static DataType function_template_to_data_type(DataType template, DataTypeToken function_type)
+static DataType function_template_to_data_type(DataType template, DataTypeToken function_type,
+                                               bool overloaded)
 {
   const char* name = data_type_token_to_string(function_type, NULL);
   VarStmt* variable =
@@ -875,6 +883,13 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     init_function_declaration(function_statement);
 
   check_function_declaration(function_statement);
+
+  if (overloaded)
+  {
+    function_statement->name.lexeme = function_data_type_to_string(
+      function_statement->name.lexeme, function_statement->function_data_type);
+    function_statement->name.length = strlen(function_statement->name.lexeme);
+  }
 
   checker.class = previous_class;
   checker.function = previous_function;
@@ -1167,35 +1182,39 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
 
     array_foreach(&function_group, function_data_type)
     {
-      FuncStmt* function = function_data_type.type == TYPE_FUNCTION
-                             ? function_data_type.function
-                             : function_data_type.function_member.function;
-
-      int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
-      bool match = true;
-
-      if (function->parameters.size - offset == number_of_arguments)
+      if (function_data_type.type == TYPE_FUNCTION ||
+          function_data_type.type == TYPE_FUNCTION_MEMBER)
       {
-        for (unsigned int i = offset; i < function->parameters.size; i++)
-        {
-          DataType argument_data_type = argument_data_types[i - offset];
-          DataType parameter_data_type = function->parameters.elems[i]->data_type;
+        FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                               ? function_data_type.function
+                               : function_data_type.function_member.function;
 
-          if (!equal_data_type(parameter_data_type, argument_data_type) &&
-              !assignable_data_type(parameter_data_type, argument_data_type))
+        int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+        bool match = true;
+
+        if (function->parameters.size - offset == number_of_arguments)
+        {
+          for (unsigned int i = offset; i < function->parameters.size; i++)
           {
-            match = false;
-            break;
+            DataType argument_data_type = argument_data_types[i - offset];
+            DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+            if (!equal_data_type(parameter_data_type, argument_data_type) &&
+                !assignable_data_type(parameter_data_type, argument_data_type))
+            {
+              match = false;
+              break;
+            }
           }
         }
-      }
-      else
-      {
-        match = false;
-      }
+        else
+        {
+          match = false;
+        }
 
-      if (match)
-        *data_type = function_data_type;
+        if (match)
+          *data_type = function_data_type;
+      }
     }
   }
 }
@@ -1254,7 +1273,55 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
       .types = *types,
     };
 
-    *data_type = function_template_to_data_type(*data_type, function_type);
+    *data_type = function_template_to_data_type(*data_type, function_type, false);
+  }
+  else if (data_type->type == TYPE_FUNCTION_GROUP)
+  {
+    data_type_token_unalias(types);
+
+    DataType function_group_data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+    array_init(&function_group_data_type.function_group);
+
+    MapSInt function_set;
+    map_init_sint(&function_set, 0, 0);
+
+    DataType function_template_data_type;
+    array_foreach(&data_type->function_group, function_template_data_type)
+    {
+      if (function_template_data_type.type == TYPE_FUNCTION_TEMPLATE)
+      {
+        int expected = array_size(&function_template_data_type.function_template.function->types);
+        int got = array_size(types);
+
+        if (expected == got)
+        {
+          DataTypeToken function_type = {
+            .type = DATA_TYPE_TOKEN_PRIMITIVE,
+            .token = function_template_data_type.function_template.function->name,
+            .types = *types,
+          };
+
+          DataType function_data_type =
+            function_template_to_data_type(function_template_data_type, function_type, true);
+          FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
+                                 ? function_data_type.function_member.function
+                                 : function_data_type.function;
+
+          if (map_get_sint(&function_set, function->name.lexeme))
+          {
+            error_ambiguous_call(name, function->name.lexeme);
+          }
+          else
+          {
+            map_put_sint(&function_set, function->name.lexeme, true);
+            array_add(&function_group_data_type.function_group, function_data_type);
+          }
+        }
+      }
+    }
+
+    *data_type = function_group_data_type;
+    return;
   }
   else
   {
@@ -1338,18 +1405,24 @@ static void init_function_declaration(FuncStmt* statement)
 
     if (variable->data_type.type == TYPE_FUNCTION ||
         variable->data_type.type == TYPE_FUNCTION_MEMBER ||
+        variable->data_type.type == TYPE_FUNCTION_TEMPLATE ||
         variable->data_type.type == TYPE_FUNCTION_GROUP)
     {
       if (variable->data_type.type != TYPE_FUNCTION_GROUP)
       {
         DataType function_data_type = variable->data_type;
-        FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
-                               ? function_data_type.function_member.function
-                               : function_data_type.function;
 
-        function->name.lexeme =
-          function_data_type_to_string(function->name.lexeme, function_data_type);
-        function->name.length = strlen(statement->name.lexeme);
+        if (variable->data_type.type == TYPE_FUNCTION ||
+            variable->data_type.type == TYPE_FUNCTION_MEMBER)
+        {
+          FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
+                                 ? function_data_type.function_member.function
+                                 : function_data_type.function;
+
+          function->name.lexeme =
+            function_data_type_to_string(function->name.lexeme, function_data_type);
+          function->name.length = strlen(function->name.lexeme);
+        }
 
         variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
         array_init(&variable->data_type.function_group);
@@ -1359,28 +1432,32 @@ static void init_function_declaration(FuncStmt* statement)
       DataType function_data_type;
       array_foreach(&variable->data_type.function_group, function_data_type)
       {
-        FuncStmt* function = function_data_type.type == TYPE_FUNCTION
-                               ? function_data_type.function
-                               : function_data_type.function_member.function;
-
-        if (function->parameters.size == statement->parameters.size)
+        if (function_data_type.type == TYPE_FUNCTION ||
+            function_data_type.type == TYPE_FUNCTION_MEMBER)
         {
-          bool equal = true;
+          FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                                 ? function_data_type.function
+                                 : function_data_type.function_member.function;
 
-          for (unsigned int i = 0; i < function->parameters.size; i++)
+          if (function->parameters.size == statement->parameters.size)
           {
-            if (!equal_data_type(function->parameters.elems[i]->data_type,
-                                 statement->parameters.elems[i]->data_type))
+            bool equal = true;
+
+            for (unsigned int i = 0; i < function->parameters.size; i++)
             {
-              equal = false;
-              break;
+              if (!equal_data_type(function->parameters.elems[i]->data_type,
+                                   statement->parameters.elems[i]->data_type))
+              {
+                equal = false;
+                break;
+              }
             }
-          }
 
-          if (equal)
-          {
-            error_overload_conflict(statement->name, name);
-            return;
+            if (equal)
+            {
+              error_overload_conflict(statement->name, name);
+              return;
+            }
           }
         }
       }
@@ -1448,11 +1525,6 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
 static void init_function_template_declaration(FuncTemplateStmt* statement)
 {
   const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
   statement->function = checker.function;
   statement->class = checker.class;
   statement->loop = checker.loop;
@@ -1471,21 +1543,65 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
       map_put_sint(&type_set, type.lexeme, true);
   }
 
-  VarStmt* variable = ALLOC(VarStmt);
-  variable->name = statement->name;
-  variable->type = (DataTypeToken){
-    .type = DATA_TYPE_TOKEN_PRIMITIVE,
-    .token = statement->name,
-  };
-  variable->initializer = NULL;
-  variable->function = NULL;
-  variable->scope = SCOPE_GLOBAL;
-  variable->index = -1;
-  variable->data_type = DATA_TYPE(TYPE_FUNCTION_TEMPLATE);
-  variable->data_type.function_template.function = statement;
-  variable->data_type.function_template.this = NULL;
+  if (environment_check_variable(checker.environment, name))
+  {
+    VarStmt* variable = environment_get_variable(checker.environment, name);
 
-  environment_set_variable(checker.environment, name, variable);
+    if (variable->data_type.type == TYPE_FUNCTION ||
+        variable->data_type.type == TYPE_FUNCTION_MEMBER ||
+        variable->data_type.type == TYPE_FUNCTION_TEMPLATE ||
+        variable->data_type.type == TYPE_FUNCTION_GROUP)
+    {
+      if (variable->data_type.type != TYPE_FUNCTION_GROUP)
+      {
+        DataType function_data_type = variable->data_type;
+
+        if (variable->data_type.type == TYPE_FUNCTION ||
+            variable->data_type.type == TYPE_FUNCTION_MEMBER)
+        {
+          FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
+                                 ? function_data_type.function_member.function
+                                 : function_data_type.function;
+
+          function->name.lexeme =
+            function_data_type_to_string(function->name.lexeme, function_data_type);
+          function->name.length = strlen(function->name.lexeme);
+        }
+
+        variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+        array_init(&variable->data_type.function_group);
+        array_add(&variable->data_type.function_group, function_data_type);
+      }
+
+      DataType function_template_data_type = DATA_TYPE(TYPE_FUNCTION_TEMPLATE);
+      function_template_data_type.function_template.function = statement;
+      function_template_data_type.function_template.this = NULL;
+
+      array_add(&variable->data_type.function_group, function_template_data_type);
+    }
+    else
+    {
+      error_name_already_exists(statement->name, name);
+    }
+  }
+  else
+  {
+    VarStmt* variable = ALLOC(VarStmt);
+    variable->name = statement->name;
+    variable->type = (DataTypeToken){
+      .type = DATA_TYPE_TOKEN_PRIMITIVE,
+      .token = statement->name,
+    };
+    variable->initializer = NULL;
+    variable->function = NULL;
+    variable->scope = SCOPE_GLOBAL;
+    variable->index = -1;
+    variable->data_type = DATA_TYPE(TYPE_FUNCTION_TEMPLATE);
+    variable->data_type.function_template.function = statement;
+    variable->data_type.function_template.this = NULL;
+
+    environment_set_variable(checker.environment, name, variable);
+  }
 }
 
 static void init_class_declaration(ClassStmt* statement)

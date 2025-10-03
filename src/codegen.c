@@ -2459,9 +2459,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for +");
@@ -2475,9 +2478,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for -");
@@ -2491,9 +2497,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for *");
@@ -2507,9 +2516,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for /");
@@ -2549,9 +2561,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_CHAR)
       UNREACHABLE("Unsupported binary type for %, &, |, ^, <<, >>");
@@ -2571,9 +2586,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       if (function)
       {
         BinaryenExpressionRef operands[] = { left, right };
-        return BinaryenCall(codegen.module, function, operands,
-                            sizeof(operands) / sizeof_ptr(operands),
-                            data_type_to_binaryen_type(expression->return_data_type));
+        BinaryenExpressionRef call =
+          BinaryenCall(codegen.module, function, operands, sizeof(operands) / sizeof_ptr(operands),
+                       data_type_to_binaryen_type(expression->return_data_type));
+
+        generate_debug_info(expression->op, call, codegen.function);
+        return call;
       }
       else
         return BinaryenRefEq(codegen.module, left, right);
@@ -2601,9 +2619,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
       if (function)
       {
         BinaryenExpressionRef operands[] = { left, right };
-        return BinaryenCall(codegen.module, function, operands,
-                            sizeof(operands) / sizeof_ptr(operands),
-                            data_type_to_binaryen_type(expression->return_data_type));
+        BinaryenExpressionRef call =
+          BinaryenCall(codegen.module, function, operands, sizeof(operands) / sizeof_ptr(operands),
+                       data_type_to_binaryen_type(expression->return_data_type));
+
+        generate_debug_info(expression->op, call, codegen.function);
+        return call;
       }
       else
         return BinaryenUnary(codegen.module, BinaryenEqZInt32(),
@@ -2631,9 +2652,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for <=");
@@ -2649,9 +2673,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for <=");
@@ -2667,9 +2694,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for <");
@@ -2685,9 +2715,12 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
     else if (data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { left, right };
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->return_data_type));
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->return_data_type));
+
+      generate_debug_info(expression->op, call, codegen.function);
+      return call;
     }
     else
       UNREACHABLE("Unsupported binary type for >");
@@ -3054,10 +3087,12 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
     if (expression->target->index.expr_data_type.type == TYPE_OBJECT)
     {
       BinaryenExpressionRef operands[] = { ref, index, value };
+      BinaryenExpressionRef call = BinaryenCall(
+        codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
+        data_type_to_binaryen_type(expression->target->index.data_type));
 
-      return BinaryenCall(codegen.module, expression->function, operands,
-                          sizeof(operands) / sizeof_ptr(operands),
-                          data_type_to_binaryen_type(expression->target->index.data_type));
+      generate_debug_info(expression->target->index.index_token, call, codegen.function);
+      return call;
     }
     else
     {
@@ -3138,8 +3173,7 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
   {
     if (strcmp(expression->name.lexeme, "length") == 0)
     {
-      return BinaryenCall(codegen.module, generate_string_length_function(), &ref, 1,
-                          BinaryenTypeInt32());
+      return BinaryenArrayLen(codegen.module, ref);
     }
 
     UNREACHABLE("Unhandled string access name");
@@ -3184,9 +3218,10 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
   switch (expression->expr_data_type.type)
   {
   case TYPE_STRING: {
-    BinaryenExpressionRef operands[] = { ref, index };
-    return BinaryenCall(codegen.module, generate_string_at_function(), operands,
-                        sizeof(operands) / sizeof_ptr(operands), type);
+    BinaryenExpressionRef get = BinaryenArrayGet(codegen.module, ref, index, type, false);
+
+    generate_debug_info(expression->index_token, get, codegen.function);
+    return get;
   }
   case TYPE_ARRAY: {
     BinaryenExpressionRef array =
@@ -3211,8 +3246,11 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
       index,
     };
 
-    return BinaryenCall(codegen.module, expression->function, operands,
-                        sizeof(operands) / sizeof_ptr(operands), type);
+    BinaryenExpressionRef call = BinaryenCall(codegen.module, expression->function, operands,
+                                              sizeof(operands) / sizeof_ptr(operands), type);
+
+    generate_debug_info(expression->index_token, call, codegen.function);
+    return call;
   }
   default:
     UNREACHABLE("Unhandled index type");

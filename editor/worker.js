@@ -83,7 +83,7 @@ function postError(error) {
       column += decodeVLQ();
       decodeVLQ();
 
-      result.push({ offset, line, column });
+      result[offset] = { line, column };
 
       if (index < mappings.length && mappings.charCodeAt(index) != comma)
         throw new Error("Expected a comma");
@@ -92,33 +92,6 @@ function postError(error) {
     }
 
     return result;
-  }
-
-  function lookupMapping(offset, mappings) {
-    let low = 0;
-    let high = mappings.length - 1;
-    let minimum = null;
-    let maximum = null;
-
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const mapping = mappings[mid];
-
-      if (mapping.offset === offset) {
-        return mapping;
-      } else if (mapping.offset < offset) {
-        minimum = mapping;
-        low = mid + 1;
-      } else {
-        maximum = mapping;
-        high = mid - 1;
-      }
-    }
-
-    if (minimum && maximum && minimum.line == maximum.line && minimum.column == maximum.column)
-      return minimum;
-
-    return null;
   }
 
   let errorMessage = error.message + "\n";
@@ -143,7 +116,7 @@ function postError(error) {
     for (const [offset, location] of strackTrace) {
       let error = location.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-      const mapping = lookupMapping(offset, mappings);
+      const mapping = mappings[offset];
       if (mapping)
         error = `<a onclick="Module.editor.goto(${mapping.line + 1}, ${mapping.column})" href="#">${error}:${mapping.line + 1}:${mapping.column}</a>`;
 

@@ -450,6 +450,7 @@ static void doCodeInlining(Module* module,
                            PassOptions& options) {
   Function* from = action.contents;
   auto* call = (*action.callSite)->cast<Call>();
+  auto callDebugLocation = into->debugLocations[(Expression*)call];
 
   // Works for return_call, too
   Type retType = module->getFunction(call->target)->getResults();
@@ -584,6 +585,27 @@ static void doCodeInlining(Module* module,
   updater.walk(contents);
   block->list.push_back(contents);
   block->type = retType;
+
+  if (callDebugLocation) {
+    struct DebugAdder
+      : public PostWalker<DebugAdder, UnifiedExpressionVisitor<DebugAdder>> {
+
+      Function* function;
+      std::optional<Function::DebugLocation> debugLocation;
+
+      void visitExpression(Expression* curr) {
+        auto& debugLocations = function->debugLocations[curr];
+
+        if (!debugLocations)
+          debugLocations = debugLocation;
+      }
+    };
+
+    DebugAdder debugAdder;
+    debugAdder.function = into;
+    debugAdder.debugLocation = callDebugLocation;
+    debugAdder.walk(contents);
+  }
 
   // The ReFinalize below will handle propagating unreachability if we need to
   // do so, that is, if the call was reachable but now the inlined content we

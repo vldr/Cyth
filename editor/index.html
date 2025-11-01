@@ -86,6 +86,22 @@
       opacity: 0.8;
     }
 
+    #dragger {
+      height: 100vh;
+      width: 5px;
+      min-width: 5px;
+      user-select: none;
+      cursor: col-resize;
+      background: #151515;
+      border-left: 1px solid #232323;
+      transition: background 0.2s;
+    }
+
+    #dragger:hover,
+    #dragger:active {
+      background: #3b7df7;
+    }
+
     #wrapper {
       display: flex;
       flex-direction: row;
@@ -155,13 +171,12 @@
 
     #console {
       height: calc(100vh);
-      width: 50%;
-
+      overflow: auto;
       display: flex;
       flex-direction: column;
+      width: 50%;
       box-sizing: border-box;
       background: #151515;
-      border-left: 1px solid #232323;
     }
 
     #console-topbar {
@@ -266,6 +281,7 @@
       </div>
       <div id="editor"></div>
     </div>
+    <div id="dragger"></div>
     <div id="console">
       <div id="console-topbar">
         <button id="console-action">
@@ -287,6 +303,38 @@
       <div id="console-output"></div>
     </div>
   </div>
+
+  <script>
+    const draggable = document.querySelector('#dragger');
+    const leftPanel = document.querySelector('#editor-wrapper');
+    const rightPanel = document.querySelector('#console');
+
+    let isDragging = false;
+    let delta = 0;
+
+    draggable.addEventListener("pointerdown", (event) => {
+      isDragging = true;
+      delta = event.clientX - event.target.offsetLeft;
+    });
+
+    document.addEventListener("pointermove", (event) => {
+      if (!isDragging)
+        return;
+
+      const leftRatio = (event.clientX - delta) / document.body.clientWidth * 100;
+      const rightRatio = (event.clientX - delta + draggable.clientWidth) / document.body.clientWidth * 100;
+
+      if (leftRatio < 10 || rightRatio > 90)
+        return;
+
+      leftPanel.style.width = leftRatio + "%";
+      rightPanel.style.width = (100 - rightRatio) + "%";
+    });
+
+    document.addEventListener("pointerup", (event) => {
+      isDragging = false;
+    });
+  </script>
 </body>
 
 </html>

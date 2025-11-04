@@ -303,38 +303,6 @@
       <div id="console-output"></div>
     </div>
   </div>
-
-  <script>
-    const draggable = document.querySelector('#dragger');
-    const leftPanel = document.querySelector('#editor-wrapper');
-    const rightPanel = document.querySelector('#console');
-
-    let isDragging = false;
-    let delta = 0;
-
-    draggable.addEventListener("pointerdown", (event) => {
-      isDragging = true;
-      delta = event.clientX - event.target.offsetLeft;
-    });
-
-    document.addEventListener("pointermove", (event) => {
-      if (!isDragging)
-        return;
-
-      const leftRatio = (event.clientX - delta) / document.body.clientWidth * 100;
-      const rightRatio = (event.clientX - delta + draggable.clientWidth) / document.body.clientWidth * 100;
-
-      if (leftRatio < 10 || rightRatio > 90)
-        return;
-
-      leftPanel.style.width = leftRatio + "%";
-      rightPanel.style.width = (100 - rightRatio) + "%";
-    });
-
-    document.addEventListener("pointerup", (event) => {
-      isDragging = false;
-    });
-  </script>
 </body>
 
 </html>

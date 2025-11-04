@@ -10,6 +10,9 @@ class EditorConsole {
     this.stderr = "";
     this.running = false;
 
+    this.consoleDragger = document.getElementById("dragger");
+    this.consoleLeftPanel = document.getElementById("editor-wrapper");
+    this.consoleRightPanel = document.getElementById("console");
     this.consoleStatus = document.getElementById("console-status");
     this.consoleCanvas = document.getElementById("console-canvas");
     this.consoleOutput = document.getElementById("console-output");
@@ -23,6 +26,30 @@ class EditorConsole {
     );
 
     this.consoleButton.onclick = () => this.onClick();
+    this.draggingDelta = 0;
+
+    this.consoleDragger.addEventListener("pointerdown", (event) => {
+      this.draggingDelta = event.clientX - event.target.offsetLeft;
+      this.consoleDragger.setPointerCapture(event.pointerId);
+    });
+
+    this.consoleDragger.addEventListener("pointermove", (event) => {
+      if (!this.consoleDragger.hasPointerCapture(event.pointerId))
+        return;
+
+      const leftRatio = (event.clientX - this.draggingDelta) / document.body.clientWidth * 100;
+      const rightRatio = (event.clientX - this.draggingDelta + this.consoleDragger.clientWidth) / document.body.clientWidth * 100;
+
+      if (leftRatio < 10 || rightRatio > 90)
+        return;
+
+      this.consoleLeftPanel.style.width = leftRatio + "%";
+      this.consoleRightPanel.style.width = (100 - rightRatio) + "%";
+    });
+
+    this.consoleDragger.addEventListener("pointerup", () => {
+      this.consoleDragger.releasePointerCapture(event.pointerId);
+    });
   }
 
   upload(size, data, sourceMapSize, sourceMap) {

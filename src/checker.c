@@ -2831,6 +2831,29 @@ static DataType check_access_expression(AccessExpr* expression)
 
       return expression->data_type;
     }
+    else if (strcmp("join", name) == 0)
+    {
+      if (array_data_type_element(data_type).type != TYPE_STRING)
+      {
+        error_cannot_find_member_name(expression->name, name, data_type);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = "string.join";
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      expression->data_type.function_internal.return_type->type = TYPE_STRING;
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+      array_add(&expression->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_STRING));
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
 
     error_cannot_find_member_name(expression->name, name, data_type);
     return DATA_TYPE(TYPE_VOID);

@@ -23,20 +23,6 @@ string stringTrim(string s)
 
     return result.toString()
 
-string stringJoin(string[] parts, string delim)
-    string[] result
-    char[] buf
-
-    for string part in parts
-        for char c in part
-            buf.push(c)
-
-        if it != parts.length - 1
-            for char c in delim
-                buf.push(c)
-
-    return buf.toString()
-
 log("Empty" + stringTrim(""))
 log("Contains " + stringContains("", ""))
 log("Contains " + stringContains("abc", ""))
@@ -63,10 +49,10 @@ for string chunk in chunks
 # world
 # how are you
 
-log(stringJoin(chunks, ","))
-log("" + stringJoin(chunks, ",").indexOf("world"))
-log("" + stringJoin(chunks, ",").indexOf("space"))
-log("" + stringJoin(chunks, ",").indexOf(""))
+log(chunks.join(","))
+log("" + chunks.join(",").indexOf("world"))
+log("" + chunks.join(",").indexOf("space"))
+log("" + chunks.join(",").indexOf(""))
 
 # hello, world, how are you
 # 7
@@ -81,10 +67,10 @@ for string chunk in chunks
 # world
 # how are you
 
-log(stringJoin(chunks, "|"))
-log("" + stringJoin(chunks, "|").indexOf("you"))
-log("" + stringJoin(chunks, "|").indexOf("space"))
-log("" + stringJoin(chunks, "|").indexOf(""))
+log(chunks.join("|"))
+log("" + chunks.join("|").indexOf("you"))
+log("" + chunks.join("|").indexOf("space"))
+log("" + chunks.join("|").indexOf(""))
 
 # hello |   world   |         how are you
 # 36

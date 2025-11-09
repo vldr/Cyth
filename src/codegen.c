@@ -713,6 +713,176 @@ static const char* generate_string_split_function(DataType string_array_data_typ
 #undef CONSTANT
 }
 
+static const char* generate_string_join_function(DataType string_array_data_type)
+{
+#define INPUT() (BinaryenLocalGet(codegen.module, 0, string_array_type))
+#define INPUT_LEN() (BinaryenStructGet(codegen.module, 1, INPUT(), BinaryenTypeInt32(), false))
+#define INPUT_GET(index)                                                                           \
+  (BinaryenArrayGet(codegen.module,                                                                \
+                    BinaryenStructGet(codegen.module, 0, INPUT(), array_type, false), (index),     \
+                    BinaryenTypeInt32(), false))
+#define DELIM() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define DELIM_LEN() (BinaryenArrayLen(codegen.module, DELIM()))
+#define I() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define I_SET(value) (BinaryenLocalSet(codegen.module, 2, (value)))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define COUNTER_SET(value) (BinaryenLocalSet(codegen.module, 3, (value)))
+#define TEMP() (BinaryenLocalGet(codegen.module, 4, codegen.string_type))
+#define TEMP_SET(value) (BinaryenLocalSet(codegen.module, 4, (value)))
+#define RESULT() (BinaryenLocalGet(codegen.module, 5, codegen.string_type))
+#define RESULT_SET(value) (BinaryenLocalSet(codegen.module, 5, (value)))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.join";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType string_array_type = data_type_to_binaryen_type(string_array_data_type);
+    BinaryenType array_type = BinaryenExpressionGetType(
+      BinaryenStructGet(codegen.module, 0, INPUT(), BinaryenTypeAuto(), false));
+
+    BinaryenExpressionRef calculate_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        COUNTER_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(),
+                                   BinaryenArrayLen(codegen.module, INPUT_GET(I())))),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, NULL, block_list, sizeof(block_list) / sizeof_ptr(block_list),
+                      BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.join.calculate_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), I(), INPUT_LEN()), NULL),
+
+        block,
+
+        I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.join.calculate_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.join.calculate_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        I_SET(CONSTANT(0)),
+        COUNTER_SET(BinaryenBinary(
+          codegen.module, BinaryenMulInt32(),
+          BinaryenBinary(codegen.module, BinaryenSubInt32(), INPUT_LEN(), CONSTANT(1)),
+          DELIM_LEN())),
+
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.join.calculate_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      calculate_loop = break_block;
+    }
+
+    BinaryenExpressionRef populate_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        BinaryenArrayCopy(codegen.module, RESULT(), COUNTER(), DELIM(), CONSTANT(0), DELIM_LEN()),
+        COUNTER_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), DELIM_LEN())),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, NULL, block_list, sizeof(block_list) / sizeof_ptr(block_list),
+                      BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.join.populate_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), I(), INPUT_LEN()), NULL),
+
+        TEMP_SET(INPUT_GET(I())),
+        BinaryenArrayCopy(codegen.module, RESULT(), COUNTER(), TEMP(), CONSTANT(0),
+                          BinaryenArrayLen(codegen.module, TEMP())),
+
+        COUNTER_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(),
+                                   BinaryenArrayLen(codegen.module, TEMP()))),
+
+        BinaryenIf(
+          codegen.module,
+          BinaryenBinary(codegen.module, BinaryenLtSInt32(),
+                         BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1)),
+                         INPUT_LEN()),
+          block, NULL),
+
+        I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.join.populate_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.join.populate_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        I_SET(CONSTANT(0)),
+        COUNTER_SET(CONSTANT(0)),
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.join.populate_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      populate_loop = break_block;
+    }
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenIf(
+        codegen.module, BinaryenUnary(codegen.module, BinaryenEqZInt32(), INPUT_LEN()),
+        BinaryenReturn(codegen.module, generate_default_initialization(DATA_TYPE(TYPE_STRING))),
+        NULL),
+
+      calculate_loop,
+
+      RESULT_SET(
+        BinaryenArrayNew(codegen.module, codegen.string_heap_type, COUNTER(), CONSTANT(0))),
+
+      populate_loop,
+
+      RESULT(),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    codegen.string_type);
+
+    BinaryenType params_list[] = { string_array_type, codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { codegen.string_type };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32(), codegen.string_type,
+                                 codegen.string_type };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef INPUT
+#undef INPUT_LEN
+#undef INPUT_GET
+#undef DELIM
+#undef DELIM_LEN
+#undef I
+#undef I_SET
+#undef COUNTER
+#undef COUNTER_SET
+#undef TEMP
+#undef TEMP_SET
+#undef RESULT
+#undef RESULT_SET
+#undef CONSTANT
+}
+
 static const char* generate_string_int_cast_function(void)
 {
 #define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
@@ -2548,6 +2718,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_string_index_of_function();
   else if (strcmp(name, "string.split") == 0)
     return generate_string_split_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "string.join") == 0)
+    return generate_string_join_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "string.to_array") == 0)
     return generate_string_to_array_function(*data_type.function_internal.return_type);
 

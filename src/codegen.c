@@ -464,6 +464,140 @@ static const char* generate_string_float_cast_function(void)
 #undef CONSTANTF
 }
 
+static const char* generate_string_index_of_function(void)
+{
+#define INPUT() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define TARGET() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define I() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define J() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define INPUT_LEN() (BinaryenArrayLen(codegen.module, INPUT()))
+#define TARGET_LEN() (BinaryenArrayLen(codegen.module, TARGET()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.index_of";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef inner_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        BinaryenIf(codegen.module,
+                   BinaryenBinary(
+                     codegen.module, BinaryenNeInt32(),
+                     BinaryenArrayGet(codegen.module, INPUT(),
+                                      BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), J()),
+                                      codegen.string_type, false),
+                     BinaryenArrayGet(codegen.module, TARGET(), J(), codegen.string_type, false)),
+                   BinaryenBreak(codegen.module, "string.index_of.outer_loop.continue", NULL, NULL),
+                   NULL),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, NULL, block_list, sizeof(block_list) / sizeof_ptr(block_list),
+                      BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.index_of.inner_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), J(), TARGET_LEN()), NULL),
+
+        block,
+
+        BinaryenLocalSet(codegen.module, 3,
+                         BinaryenBinary(codegen.module, BinaryenAddInt32(), J(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.index_of.inner_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.index_of.inner_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        BinaryenLocalSet(codegen.module, 3, CONSTANT(0)),
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.index_of.inner_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      inner_loop = break_block;
+    }
+
+    BinaryenExpressionRef outer_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        inner_loop,
+        BinaryenReturn(codegen.module, I()),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, "string.index_of.outer_loop.continue", block_list,
+                      sizeof(block_list) / sizeof_ptr(block_list), BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.index_of.outer_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGtSInt32(), I(),
+                                     BinaryenBinary(codegen.module, BinaryenSubInt32(), INPUT_LEN(),
+                                                    TARGET_LEN())),
+                      NULL),
+
+        block,
+
+        BinaryenLocalSet(codegen.module, 2,
+                         BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.index_of.outer_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.index_of.outer_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.index_of.outer_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      outer_loop = break_block;
+    }
+
+    BinaryenExpressionRef body_list[] = {
+      BinaryenIf(codegen.module, BinaryenUnary(codegen.module, BinaryenEqZInt32(), TARGET_LEN()),
+                 BinaryenReturn(codegen.module, CONSTANT(0)), NULL),
+
+      outer_loop,
+
+      CONSTANT(-1),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { codegen.string_type, codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32() };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef INPUT
+#undef TARGET
+#undef I
+#undef J
+#undef INPUT_LEN
+#undef TARGET_LEN
+#undef CONSTANT
+}
+
 static const char* generate_string_int_cast_function(void)
 {
 #define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
@@ -2295,6 +2429,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_float_hash_function();
   else if (strcmp(name, "string.hash") == 0)
     return generate_string_hash_function();
+  else if (strcmp(name, "string.index_of") == 0)
+    return generate_string_index_of_function();
   else if (strcmp(name, "string.to_array") == 0)
     return generate_string_to_array_function(*data_type.function_internal.return_type);
 

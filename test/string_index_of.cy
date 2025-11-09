@@ -23,22 +23,6 @@ string stringTrim(string s)
 
     return result.toString()
 
-string[] stringSplit(string s, char delim)
-    string[] result
-    char[] current
-
-    for char c in s
-        if c != delim
-            current.push(c)
-        else
-            result.push(current.toString())
-            current.clear()
-
-    if current.length
-        result.push(current.toString())
-
-    return result
-
 string stringJoin(string[] parts, string delim)
     string[] result
     char[] buf
@@ -60,7 +44,7 @@ log("Contains " + stringContains("", "abc"))
 log("IndexOf " + "".indexOf(""))
 log("IndexOf " + "abc".indexOf(""))
 log("IndexOf " + "".indexOf("abc"))
-log("Length " + stringSplit("", '\\').length)
+log("Length " + "".split('\\').length)
 
 # Empty
 # Contains true
@@ -69,9 +53,9 @@ log("Length " + stringSplit("", '\\').length)
 # IndexOf 0
 # IndexOf 0
 # IndexOf -1
-# Length 0
+# Length 1
 
-string[] chunks = stringSplit("hello, world, how are you", ',')
+string[] chunks = "hello, world, how are you".split(',')
 for string chunk in chunks
     log(stringTrim(chunk))
 
@@ -89,7 +73,7 @@ log("" + stringJoin(chunks, ",").indexOf(""))
 # -1
 # 0
 
-chunks = stringSplit("hello |   world   |         how are you", '|')
+chunks = "hello |   world   |         how are you".split('|')
 for string chunk in chunks
     log(stringTrim(chunk))
 

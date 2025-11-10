@@ -30,7 +30,7 @@ log("Contains " + stringContains("", "abc"))
 log("IndexOf " + "".indexOf(""))
 log("IndexOf " + "abc".indexOf(""))
 log("IndexOf " + "".indexOf("abc"))
-log("Length " + "".split('\\').length)
+log("Length " + "".split("\\").length)
 
 # Empty
 # Contains true
@@ -41,7 +41,7 @@ log("Length " + "".split('\\').length)
 # IndexOf -1
 # Length 1
 
-string[] chunks = "hello, world, how are you".split(',')
+string[] chunks = "hello, world, how are you".split(",")
 for string chunk in chunks
     log(stringTrim(chunk))
 
@@ -59,7 +59,7 @@ log("" + chunks.join(",").indexOf(""))
 # -1
 # 0
 
-chunks = "hello |   world   |         how are you".split('|')
+chunks = "hello |   world   |         how are you".split("|")
 for string chunk in chunks
     log(stringTrim(chunk))
 

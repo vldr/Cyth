@@ -2916,7 +2916,7 @@ static DataType check_access_expression(AccessExpr* expression)
 
       array_init(&expression->data_type.function_internal.parameter_types);
       array_add(&expression->data_type.function_internal.parameter_types, data_type);
-      array_add(&expression->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_CHAR));
+      array_add(&expression->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_STRING));
 
       expression->variable = NULL;
       expression->expr_data_type = data_type;

@@ -1,32 +1,10 @@
 import "env"
     void log(string n)
 
-bool stringContains(string s, string target)
-    return s.indexOf(target) != -1
-
-string stringTrim(string s)
-    if not s
-        return s
-
-    int start = 0
-    int end = s.length - 1
-
-    while start < s.length and (s[start] == ' ' or s[start] == '\t' or s[start] == '\n' or s[start] == '\r')
-        start += 1
-
-    while end >= start and (s[end] == ' ' or s[end] == '\t' or s[end] == '\n' or s[end] == '\r')
-        end -= 1
-
-    char[] result
-    for int i = start; i <= end; i += 1
-        result.push(s[i])
-
-    return result.toString()
-
-log("Empty" + stringTrim(""))
-log("Contains " + stringContains("", ""))
-log("Contains " + stringContains("abc", ""))
-log("Contains " + stringContains("", "abc"))
+log("Empty" + "".trim())
+log("Contains " + "".contains(""))
+log("Contains " + "abc".contains(""))
+log("Contains " + "".contains("abc"))
 log("IndexOf " + "".indexOf(""))
 log("IndexOf " + "abc".indexOf(""))
 log("IndexOf " + "".indexOf("abc"))
@@ -43,7 +21,7 @@ log("Length " + "".split("\\").length)
 
 string[] chunks = "hello, world, how are you".split(",")
 for string chunk in chunks
-    log(stringTrim(chunk))
+    log(chunk.trim())
 
 # hello
 # world
@@ -61,7 +39,7 @@ log("" + chunks.join(",").indexOf(""))
 
 chunks = "hello |   world   |         how are you".split("|")
 for string chunk in chunks
-    log(stringTrim(chunk))
+    log(chunk.trim())
 
 # hello
 # world

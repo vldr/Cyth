@@ -908,6 +908,206 @@ static const char* generate_string_join_function(DataType string_array_data_type
 #undef CONSTANT
 }
 
+static const char* generate_string_trim_function(void)
+{
+#define INPUT() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define INPUT_LEN() (BinaryenArrayLen(codegen.module, INPUT()))
+#define INPUT_GET(_i) (BinaryenArrayGet(codegen.module, INPUT(), (_i), BinaryenTypeInt32(), false))
+#define I() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define I_SET(value) (BinaryenLocalSet(codegen.module, 1, (value)))
+#define LEFT() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define LEFT_SET(value) (BinaryenLocalSet(codegen.module, 2, (value)))
+#define RIGHT() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define RIGHT_SET(value) (BinaryenLocalSet(codegen.module, 3, (value)))
+#define RESULT() (BinaryenLocalGet(codegen.module, 4, codegen.string_type))
+#define RESULT_SET(value) (BinaryenLocalSet(codegen.module, 4, (value)))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.trim";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef left_loop;
+    {
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.trim.left_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), LEFT(), INPUT_LEN()),
+                      NULL),
+
+        I_SET(INPUT_GET(LEFT())),
+        BinaryenBreak(
+          codegen.module, "string.trim.left_loop.break",
+          BinaryenSelect(
+            codegen.module, BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT(' ')),
+            BinaryenSelect(
+              codegen.module,
+              BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT('\t')),
+              BinaryenSelect(codegen.module,
+                             BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT('\n')),
+                             BinaryenSelect(codegen.module,
+                                            BinaryenBinary(codegen.module, BinaryenNeInt32(), I(),
+                                                           CONSTANT('\r')),
+                                            CONSTANT(1), CONSTANT(0)),
+                             CONSTANT(0)),
+              CONSTANT(0)),
+            CONSTANT(0)),
+          NULL),
+
+        LEFT_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), LEFT(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.trim.left_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.trim.left_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        I_SET(CONSTANT(0)),
+        LEFT_SET(CONSTANT(0)),
+
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.trim.left_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      left_loop = break_block;
+    }
+
+    BinaryenExpressionRef right_loop;
+    {
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.trim.right_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenLtSInt32(), RIGHT(), LEFT()), NULL),
+
+        I_SET(INPUT_GET(RIGHT())),
+        BinaryenBreak(
+          codegen.module, "string.trim.right_loop.break",
+          BinaryenSelect(
+            codegen.module, BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT(' ')),
+            BinaryenSelect(
+              codegen.module,
+              BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT('\t')),
+              BinaryenSelect(codegen.module,
+                             BinaryenBinary(codegen.module, BinaryenNeInt32(), I(), CONSTANT('\n')),
+                             BinaryenSelect(codegen.module,
+                                            BinaryenBinary(codegen.module, BinaryenNeInt32(), I(),
+                                                           CONSTANT('\r')),
+                                            CONSTANT(1), CONSTANT(0)),
+                             CONSTANT(0)),
+              CONSTANT(0)),
+            CONSTANT(0)),
+          NULL),
+
+        RIGHT_SET(BinaryenBinary(codegen.module, BinaryenSubInt32(), RIGHT(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.trim.right_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.trim.right_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        I_SET(CONSTANT(0)),
+        RIGHT_SET(BinaryenBinary(codegen.module, BinaryenSubInt32(), INPUT_LEN(), CONSTANT(1))),
+
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.trim.right_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      right_loop = break_block;
+    }
+
+    BinaryenExpressionRef body_list[] = {
+      left_loop,
+      right_loop,
+
+      I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(),
+                           BinaryenBinary(codegen.module, BinaryenSubInt32(), RIGHT(), LEFT()),
+                           CONSTANT(1))),
+      RESULT_SET(BinaryenArrayNew(codegen.module, codegen.string_heap_type, I(), CONSTANT(0))),
+      BinaryenArrayCopy(codegen.module, RESULT(), CONSTANT(0), INPUT(), LEFT(), I()),
+
+      RESULT(),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    codegen.string_type);
+
+    BinaryenType params_list[] = { codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { codegen.string_type };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32(), BinaryenTypeInt32(),
+                                 codegen.string_type };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef INPUT
+#undef INPUT_LEN
+#undef INPUT_GET
+#undef I
+#undef I_SET
+#undef LEFT
+#undef LEFT_SET
+#undef RIGHT
+#undef RIGHT_SET
+#undef RESULT
+#undef RESULT_SET
+#undef CONSTANT
+}
+
+static const char* generate_string_contains_function(void)
+{
+#define INPUT() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define TARGET() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.contains";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenBinary(codegen.module, BinaryenNeInt32(),
+                     BinaryenCall(codegen.module, generate_string_index_of_function(),
+                                  (BinaryenExpressionRef[]){ INPUT(), TARGET() }, 2,
+                                  BinaryenTypeInt32()),
+                     CONSTANT(-1)),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { codegen.string_type, codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef INPUT
+#undef TARGET
+#undef CONSTANT
+}
+
 static const char* generate_string_int_cast_function(void)
 {
 #define NUMBER() (BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32()))
@@ -2741,6 +2941,10 @@ static const char* generate_function_internal(DataType data_type)
     return generate_string_hash_function();
   else if (strcmp(name, "string.index_of") == 0)
     return generate_string_index_of_function();
+  else if (strcmp(name, "string.trim") == 0)
+    return generate_string_trim_function();
+  else if (strcmp(name, "string.contains") == 0)
+    return generate_string_contains_function();
   else if (strcmp(name, "string.split") == 0)
     return generate_string_split_function(*data_type.function_internal.return_type);
   else if (strcmp(name, "string.join") == 0)

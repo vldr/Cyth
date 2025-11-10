@@ -171,24 +171,10 @@ static const char* generate_string_bool_cast_function(void)
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
-    BinaryenExpressionRef false_string[] = {
-      CONSTANT('f'), CONSTANT('a'), CONSTANT('l'), CONSTANT('s'), CONSTANT('e'),
-    };
-
-    BinaryenExpressionRef true_string[] = {
-      CONSTANT('t'),
-      CONSTANT('r'),
-      CONSTANT('u'),
-      CONSTANT('e'),
-    };
-
     BinaryenExpressionRef value = BinaryenLocalGet(codegen.module, 0, BinaryenTypeInt32());
     BinaryenExpressionRef body =
-      BinaryenSelect(codegen.module, value,
-                     BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, true_string,
-                                           sizeof(true_string) / sizeof_ptr(true_string)),
-                     BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, false_string,
-                                           sizeof(false_string) / sizeof_ptr(false_string)));
+      BinaryenSelect(codegen.module, value, generate_string_literal_expression("true", -1),
+                     generate_string_literal_expression("false", -1));
 
     BinaryenType params_list[] = { BinaryenTypeInt32() };
     BinaryenType params =
@@ -335,51 +321,22 @@ static const char* generate_string_float_cast_function(void)
 
     BinaryenExpressionRef inf_exit;
     {
-      BinaryenExpressionRef inf[] = {
-        CONSTANT('i'),
-        CONSTANT('n'),
-        CONSTANT('f'),
-      };
-
-      BinaryenExpressionRef negative_inf[] = {
-        CONSTANT('-'),
-        CONSTANT('i'),
-        CONSTANT('n'),
-        CONSTANT('f'),
-      };
-
-      inf_exit = BinaryenIf(
-        codegen.module,
-        BinaryenBinary(codegen.module, BinaryenEqFloat32(),
-                       BinaryenUnary(codegen.module, BinaryenAbsFloat32(), INPUT()),
-                       CONSTANTF(INFINITY)),
-        BinaryenReturn(
-          codegen.module,
-          BinaryenSelect(
-            codegen.module,
-            BinaryenBinary(codegen.module, BinaryenLtFloat32(), INPUT(), CONSTANTF(0.0f)),
-            BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, negative_inf,
-                                  sizeof(negative_inf) / sizeof_ptr(negative_inf)),
-            BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, inf,
-                                  sizeof(inf) / sizeof_ptr(inf)))),
-        NULL);
+      inf_exit =
+        BinaryenIf(codegen.module,
+                   BinaryenBinary(codegen.module, BinaryenEqFloat32(),
+                                  BinaryenUnary(codegen.module, BinaryenAbsFloat32(), INPUT()),
+                                  CONSTANTF(INFINITY)),
+                   BinaryenReturn(codegen.module,
+                                  BinaryenSelect(codegen.module,
+                                                 BinaryenBinary(codegen.module, BinaryenLtFloat32(),
+                                                                INPUT(), CONSTANTF(0.0f)),
+                                                 generate_string_literal_expression("-inf", -1),
+                                                 generate_string_literal_expression("inf", -1))),
+                   NULL);
     }
 
     BinaryenExpressionRef nan_exit;
     {
-      BinaryenExpressionRef nan[] = {
-        CONSTANT('n'),
-        CONSTANT('a'),
-        CONSTANT('n'),
-      };
-
-      BinaryenExpressionRef negative_nan[] = {
-        CONSTANT('-'),
-        CONSTANT('n'),
-        CONSTANT('a'),
-        CONSTANT('n'),
-      };
-
       nan_exit = BinaryenIf(
         codegen.module, BinaryenBinary(codegen.module, BinaryenNeFloat32(), INPUT(), INPUT()),
         BinaryenReturn(
@@ -389,10 +346,8 @@ static const char* generate_string_float_cast_function(void)
             BinaryenBinary(codegen.module, BinaryenShrUInt32(),
                            BinaryenUnary(codegen.module, BinaryenReinterpretFloat32(), INPUT()),
                            CONSTANT(31)),
-            BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, negative_nan,
-                                  sizeof(negative_nan) / sizeof_ptr(negative_nan)),
-            BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, nan,
-                                  sizeof(nan) / sizeof_ptr(nan)))),
+            generate_string_literal_expression("-nan", -1),
+            generate_string_literal_expression("nan", -1))),
         NULL);
     }
 
@@ -1933,7 +1888,7 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_ANY:
     return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
   case TYPE_STRING:
-    return BinaryenArrayNewFixed(codegen.module, codegen.string_heap_type, NULL, 0);
+    return generate_string_literal_expression("", 0);
   case TYPE_ARRAY:
     return BinaryenStructNew(codegen.module, NULL, 0,
                              generate_array_heap_binaryen_type(NULL, NULL, data_type));

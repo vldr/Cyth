@@ -4095,12 +4095,10 @@ static BinaryenExpressionRef generate_assignment_expression(AssignExpr* expressi
         BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
       BinaryenExpressionRef length = BinaryenStructGet(
         codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
-
-      BinaryenExpressionRef bounded_index = BinaryenBinary(
-        codegen.module, BinaryenOrInt32(), BinaryenExpressionCopy(index, codegen.module),
-        BinaryenBinary(codegen.module, BinaryenShlInt32(),
-                       BinaryenBinary(codegen.module, BinaryenGeUInt32(), index, length),
-                       BinaryenConst(codegen.module, BinaryenLiteralInt32(31))));
+      BinaryenExpressionRef bounded_index = BinaryenSelect(
+        codegen.module, BinaryenBinary(codegen.module, BinaryenLtSInt32(), index, length),
+        BinaryenExpressionCopy(index, codegen.module),
+        BinaryenConst(codegen.module, BinaryenLiteralInt32(-1)));
 
       BinaryenExpressionRef list[] = {
         BinaryenArraySet(codegen.module, array, bounded_index, value),
@@ -4223,12 +4221,10 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
       BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
     BinaryenExpressionRef length = BinaryenStructGet(
       codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(), false);
-
-    BinaryenExpressionRef bounded_index = BinaryenBinary(
-      codegen.module, BinaryenOrInt32(), BinaryenExpressionCopy(index, codegen.module),
-      BinaryenBinary(codegen.module, BinaryenShlInt32(),
-                     BinaryenBinary(codegen.module, BinaryenGeUInt32(), index, length),
-                     BinaryenConst(codegen.module, BinaryenLiteralInt32(31))));
+    BinaryenExpressionRef bounded_index = BinaryenSelect(
+      codegen.module, BinaryenBinary(codegen.module, BinaryenLtSInt32(), index, length),
+      BinaryenExpressionCopy(index, codegen.module),
+      BinaryenConst(codegen.module, BinaryenLiteralInt32(-1)));
 
     BinaryenExpressionRef get = BinaryenArrayGet(codegen.module, array, bounded_index, type, false);
     generate_debug_info(expression->index_token, get, codegen.function);

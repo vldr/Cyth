@@ -426,7 +426,9 @@ static const char* generate_string_index_of_function(void)
 #define INPUT() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
 #define TARGET() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
 #define I() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define I_SET(_v) (BinaryenLocalSet(codegen.module, 2, _v))
 #define J() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define J_SET(_v) (BinaryenLocalSet(codegen.module, 3, _v))
 #define INPUT_LEN() (BinaryenArrayLen(codegen.module, INPUT()))
 #define TARGET_LEN() (BinaryenArrayLen(codegen.module, TARGET()))
 #define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
@@ -458,8 +460,7 @@ static const char* generate_string_index_of_function(void)
 
         block,
 
-        BinaryenLocalSet(codegen.module, 3,
-                         BinaryenBinary(codegen.module, BinaryenAddInt32(), J(), CONSTANT(1))),
+        J_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), J(), CONSTANT(1))),
         BinaryenBreak(codegen.module, "string.index_of.inner_loop", NULL, NULL),
       };
       BinaryenExpressionRef loop_block =
@@ -469,7 +470,7 @@ static const char* generate_string_index_of_function(void)
         BinaryenLoop(codegen.module, "string.index_of.inner_loop", loop_block);
 
       BinaryenExpressionRef break_block_list[] = {
-        BinaryenLocalSet(codegen.module, 3, CONSTANT(0)),
+        J_SET(CONSTANT(0)),
         loop,
       };
       BinaryenExpressionRef break_block =
@@ -498,8 +499,7 @@ static const char* generate_string_index_of_function(void)
 
         block,
 
-        BinaryenLocalSet(codegen.module, 2,
-                         BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+        I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
         BinaryenBreak(codegen.module, "string.index_of.outer_loop", NULL, NULL),
       };
       BinaryenExpressionRef loop_block =
@@ -549,7 +549,152 @@ static const char* generate_string_index_of_function(void)
 #undef INPUT
 #undef TARGET
 #undef I
+#undef I_SET
 #undef J
+#undef J_SET
+#undef INPUT_LEN
+#undef TARGET_LEN
+#undef CONSTANT
+}
+
+static const char* generate_string_count_function(void)
+{
+#define INPUT() (BinaryenLocalGet(codegen.module, 0, codegen.string_type))
+#define TARGET() (BinaryenLocalGet(codegen.module, 1, codegen.string_type))
+#define I() (BinaryenLocalGet(codegen.module, 2, BinaryenTypeInt32()))
+#define I_SET(_v) (BinaryenLocalSet(codegen.module, 2, _v))
+#define J() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define J_SET(_v) (BinaryenLocalSet(codegen.module, 3, _v))
+#define COUNTER() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
+#define COUNTER_SET(_v) (BinaryenLocalSet(codegen.module, 4, _v))
+#define INPUT_LEN() (BinaryenArrayLen(codegen.module, INPUT()))
+#define TARGET_LEN() (BinaryenArrayLen(codegen.module, TARGET()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  const char* name = "string.count";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef inner_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        BinaryenIf(codegen.module,
+                   BinaryenBinary(
+                     codegen.module, BinaryenNeInt32(),
+                     BinaryenArrayGet(codegen.module, INPUT(),
+                                      BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), J()),
+                                      codegen.string_type, false),
+                     BinaryenArrayGet(codegen.module, TARGET(), J(), codegen.string_type, false)),
+                   BinaryenBreak(codegen.module, "string.count.outer_loop.continue", NULL, NULL),
+                   NULL),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, NULL, block_list, sizeof(block_list) / sizeof_ptr(block_list),
+                      BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.count.inner_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGeSInt32(), J(), TARGET_LEN()), NULL),
+
+        block,
+
+        J_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), J(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.count.inner_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.count.inner_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        J_SET(CONSTANT(0)),
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.count.inner_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      inner_loop = break_block;
+    }
+
+    BinaryenExpressionRef outer_loop;
+    {
+      BinaryenExpressionRef block_list[] = {
+        inner_loop,
+        COUNTER_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), COUNTER(), CONSTANT(1))),
+        BinaryenIf(codegen.module, BinaryenUnary(codegen.module, BinaryenEqZInt32(), TARGET_LEN()),
+                   I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+                   I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), TARGET_LEN()))),
+
+        BinaryenBreak(codegen.module, "string.count.outer_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef block =
+        BinaryenBlock(codegen.module, "string.count.outer_loop.continue", block_list,
+                      sizeof(block_list) / sizeof_ptr(block_list), BinaryenTypeNone());
+
+      BinaryenExpressionRef loop_block_list[] = {
+        BinaryenBreak(codegen.module, "string.count.outer_loop.break",
+                      BinaryenBinary(codegen.module, BinaryenGtSInt32(), I(),
+                                     BinaryenBinary(codegen.module, BinaryenSubInt32(), INPUT_LEN(),
+                                                    TARGET_LEN())),
+                      NULL),
+
+        block,
+
+        I_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), I(), CONSTANT(1))),
+        BinaryenBreak(codegen.module, "string.count.outer_loop", NULL, NULL),
+      };
+      BinaryenExpressionRef loop_block =
+        BinaryenBlock(codegen.module, NULL, loop_block_list,
+                      sizeof(loop_block_list) / sizeof_ptr(loop_block_list), BinaryenTypeNone());
+      BinaryenExpressionRef loop =
+        BinaryenLoop(codegen.module, "string.count.outer_loop", loop_block);
+
+      BinaryenExpressionRef break_block_list[] = {
+        loop,
+      };
+      BinaryenExpressionRef break_block =
+        BinaryenBlock(codegen.module, "string.count.outer_loop.break", break_block_list,
+                      sizeof(break_block_list) / sizeof_ptr(break_block_list), BinaryenTypeNone());
+
+      outer_loop = break_block;
+    }
+
+    BinaryenExpressionRef body_list[] = {
+
+      outer_loop,
+
+      COUNTER(),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { codegen.string_type, codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results_list[] = { BinaryenTypeInt32() };
+    BinaryenType results =
+      BinaryenTypeCreate(results_list, sizeof(results_list) / sizeof_ptr(results_list));
+
+    BinaryenType vars_list[] = { BinaryenTypeInt32(), BinaryenTypeInt32(), BinaryenTypeInt32() };
+
+    BinaryenAddFunction(codegen.module, name, params, results, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef INPUT
+#undef TARGET
+#undef I
+#undef I_SET
+#undef J
+#undef J_SET
+#undef COUNTER
+#undef COUNTER_SET
 #undef INPUT_LEN
 #undef TARGET_LEN
 #undef CONSTANT
@@ -3131,6 +3276,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_string_hash_function();
   else if (strcmp(name, "string.index_of") == 0)
     return generate_string_index_of_function();
+  else if (strcmp(name, "string.count") == 0)
+    return generate_string_count_function();
   else if (strcmp(name, "string.trim") == 0)
     return generate_string_trim_function();
   else if (strcmp(name, "string.starts_with") == 0)

@@ -345,8 +345,80 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
                                MIR_new_reg_op(codegen.ctx, right)));
 }
 
-static void generate_unary_expression(UnaryExpr* expression)
+static void generate_unary_expression(MIR_reg_t dest, UnaryExpr* expression)
 {
+
+  MIR_reg_t expr = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->data_type),
+                                     codegen.function->u.func);
+  generate_expression(expr, expression->expr);
+
+  switch (expression->op.type)
+  {
+  case TOKEN_TILDE:
+    if (expression->data_type.type == TYPE_INTEGER)
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_XORS, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_reg_op(codegen.ctx, expr),
+                                   MIR_new_int_op(codegen.ctx, 0xFFFFFFFF)));
+      break;
+    }
+    else
+      UNREACHABLE("Unsupported unary type for ~");
+
+  case TOKEN_MINUS:
+    if (expression->data_type.type == TYPE_INTEGER)
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_NEGS, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_reg_op(codegen.ctx, expr)));
+      break;
+    }
+    else if (expression->data_type.type == TYPE_FLOAT)
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_FNEG, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_reg_op(codegen.ctx, expr)));
+      break;
+    }
+    else
+      UNREACHABLE("Unsupported unary type for -");
+
+  case TOKEN_BANG:
+  case TOKEN_NOT:
+    if (expression->data_type.type == TYPE_BOOL)
+    {
+      MIR_label_t cont = MIR_new_label(codegen.ctx);
+      MIR_label_t if_false = MIR_new_label(codegen.ctx);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false),
+                                   MIR_new_reg_op(codegen.ctx, expr),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, if_false);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_int_op(codegen.ctx, 1)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, cont);
+
+      break;
+    }
+    else
+      UNREACHABLE("Unsupported unary type for !");
+
+  default:
+    UNREACHABLE("Unhandled unary expression");
+  }
 }
 
 static void generate_cast_expression(CastExpr* expression)
@@ -355,6 +427,38 @@ static void generate_cast_expression(CastExpr* expression)
 
 static void generate_variable_expression(VarExpr* expression)
 {
+  // BinaryenType type = data_type_to_binaryen_type(expression->data_type);
+  // if (type == BinaryenTypeNone())
+  // {
+  //   return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
+  // }
+
+  // if (expression->data_type.type == TYPE_FUNCTION ||
+  //     expression->data_type.type == TYPE_FUNCTION_MEMBER ||
+  //     expression->data_type.type == TYPE_FUNCTION_INTERNAL)
+  // {
+  //   return generate_function_pointer(expression->data_type);
+  // }
+
+  Scope scope = expression->variable->scope;
+  switch (scope)
+  {
+  // case SCOPE_LOCAL:
+  //   return BinaryenLocalGet(codegen.module, expression->variable->index, type);
+  case SCOPE_GLOBAL:
+
+    return;
+  // case SCOPE_CLASS: {
+  //   BinaryenExpressionRef get =
+  //     BinaryenStructGet(codegen.module, expression->variable->index,
+  //                       BinaryenLocalGet(codegen.module, 0, codegen.class), type, false);
+  //   generate_debug_info(expression->name, get, codegen.function);
+
+  //   return get;
+  // }
+  default:
+    UNREACHABLE("Unhandled scope type");
+  }
 }
 
 static void generate_assignment_expression(AssignExpr* expression)
@@ -398,9 +502,9 @@ static void generate_expression(MIR_reg_t dest, Expr* expression)
   case EXPR_GROUP:
     generate_group_expression(dest, &expression->group);
     return;
-    // case EXPR_UNARY:
-    //   generate_unary_expression(dest, &expression->unary);
-    //   return;
+  case EXPR_UNARY:
+    generate_unary_expression(dest, &expression->unary);
+    return;
   }
 
   UNREACHABLE("Unhandled expression");
@@ -438,6 +542,42 @@ static void generate_break_statement(void)
 
 static void generate_variable_declaration(VarStmt* statement)
 {
+
+  if (statement->scope == SCOPE_GLOBAL)
+  {
+    const char* name = statement->name.lexeme;
+    int a = 10;
+    MIR_item_t gv = MIR_new_data(codegen.ctx, "greetings", MIR_T_U32, 1, &a);
+    // MIR_append_insn(codegen.ctx, codegen.function,
+    //                 MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new(codegen.ctx, gv,),
+    //                              MIR_new_int_op(codegen.ctx, 0)));
+
+    // BinaryenType type = data_type_to_binaryen_type(statement->data_type);
+    // BinaryenAddGlobal(codegen.module, name, type, true, initializer);
+
+    // if (statement->initializer)
+    // {
+    //   return BinaryenGlobalSet(codegen.module, statement->name.lexeme,
+    //                            generate_expression(statement->initializer));
+    // }
+    // else
+    // {
+    //   return NULL;
+    // }
+  }
+  else if (statement->scope == SCOPE_LOCAL)
+  {
+    // if (statement->initializer)
+    // {
+    //   initializer = generate_expression(statement->initializer);
+    // }
+
+    // return BinaryenLocalSet(codegen.module, statement->index, initializer);
+  }
+  else
+  {
+    UNREACHABLE("Unexpected scope type");
+  }
 }
 
 static void generate_function_declaration(FuncStmt* statement)

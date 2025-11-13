@@ -40,7 +40,7 @@ else()
     )
 endif()
 
-add_subdirectory(third_party/binaryen)
+add_subdirectory(third_party/mir)
 add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/codegen.h
                     src/environment.c src/environment.h src/expression.h src/lexer.c
                     src/lexer.h src/main.c src/main.h src/map.c src/map.h src/memory.c
@@ -68,4 +68,4 @@ if (EMSCRIPTEN)
                 ${CMAKE_SOURCE_DIR}/editor/cyth.wasm)
 endif()
 
-target_link_libraries(cyth PRIVATE binaryen)
+target_link_libraries(cyth PRIVATE mir)

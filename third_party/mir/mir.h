@@ -635,6 +635,9 @@ typedef union {
   long double ld;
 } MIR_val_t;
 
+extern MIR_func_t MIR_get_curr_func (MIR_context_t ctx);
+extern void MIR_set_curr_func (MIR_context_t ctx, MIR_func_t func);
+
 extern void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
                         ...);
 extern void MIR_interp_arr (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results,

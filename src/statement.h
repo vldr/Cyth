@@ -99,6 +99,11 @@ typedef struct _VAR_STMT
   int index;
   Scope scope;
 
+  union {
+    MIR_item_t item;
+    MIR_reg_t reg;
+  };
+
   Token name;
   Token equals;
   Expr* initializer;
@@ -117,7 +122,8 @@ typedef struct _CLASS_STMT
   ArrayFuncStmt functions;
   ArrayFuncTemplateStmt function_templates;
 
-  uintptr_t ref;
+  int alignment;
+  int size;
 } ClassStmt;
 
 typedef struct _CLASS_TEMPLATE_STMT

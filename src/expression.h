@@ -4,6 +4,8 @@
 #include "lexer.h"
 #include "map.h"
 
+#include <mir.h>
+
 #define EXPR() (ALLOC(Expr))
 #define BINARY_EXPR(destination, op, l, r)                                                         \
   do                                                                                               \

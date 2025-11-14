@@ -313,6 +313,11 @@ static void error_ambiguous_call(Token token, const char* name)
                                       name));
 }
 
+static inline int align(int value, int alignment)
+{
+  return ((value + alignment - 1) / alignment) * alignment;
+}
+
 ArrayVarStmt global_locals(void)
 {
   return checker.global_locals;
@@ -628,6 +633,26 @@ bool assignable_data_type(DataType destination, DataType source)
     return source.type == TYPE_CHAR;
 
   return false;
+}
+
+int size_data_type(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_BOOL:
+  case TYPE_CHAR:
+    return 1;
+  case TYPE_INTEGER:
+  case TYPE_FLOAT:
+  case TYPE_STRING:
+  case TYPE_OBJECT:
+  case TYPE_ARRAY:
+  case TYPE_ANY:
+  case TYPE_FUNCTION_POINTER:
+    return 4;
+  default:
+    UNREACHABLE("Unexpected data type size");
+  }
 }
 
 DataType array_data_type_element(DataType array_data_type)
@@ -1719,12 +1744,9 @@ static void init_class_declaration_body(ClassStmt* statement)
     function_template->name.length = strlen(statement->name.lexeme);
   }
 
-  int count = 0;
   VarStmt* variable_statement;
   array_foreach(&statement->variables, variable_statement)
   {
-    variable_statement->index = count++;
-
     init_variable_declaration(variable_statement);
   }
 
@@ -3654,11 +3676,21 @@ static void check_class_declaration(ClassStmt* statement)
   Environment* previous_environment = checker.environment;
   checker.environment = statement->environment;
 
+  int offset = 0;
   VarStmt* variable_statement;
   array_foreach(&statement->variables, variable_statement)
   {
     check_variable_declaration(variable_statement);
+
+    const int size = size_data_type(variable_statement->data_type);
+    if (size > statement->alignment)
+      statement->alignment = size;
+
+    variable_statement->index = align(offset, size);
+    offset = size + variable_statement->index;
   }
+
+  statement->size = align(offset, statement->alignment);
 
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)

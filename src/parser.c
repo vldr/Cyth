@@ -1140,7 +1140,8 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->class.id = parser.classes++;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
-  stmt->class.ref = 0;
+  stmt->class.size = 0;
+  stmt->class.alignment = 1;
 
   array_init(&stmt->class.variables);
   array_init(&stmt->class.functions);

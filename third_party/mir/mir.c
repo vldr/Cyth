@@ -1553,6 +1553,14 @@ static reg_desc_t *find_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t 
   return &VARR_ADDR (reg_desc_t, func_regs->reg_descs)[rdn];
 }
 
+MIR_func_t MIR_get_curr_func(MIR_context_t ctx) {
+  return curr_func;
+}
+
+void MIR_set_curr_func(MIR_context_t ctx, MIR_func_t func) {
+  curr_func = func;
+}
+
 void MIR_finish_func (MIR_context_t ctx) {
   int expr_p = TRUE;
   MIR_insn_t insn, prev_insn;

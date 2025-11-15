@@ -33,7 +33,7 @@ typedef struct _BUCKET
   struct _BUCKET* next;
   size_t count;
   size_t capacity;
-  uintptr_t data[];
+  long double data[];
 } Bucket;
 
 static struct
@@ -44,7 +44,7 @@ static struct
 
 static Bucket* new_bucket(size_t capacity)
 {
-  Bucket* bucket = (Bucket*)malloc(sizeof(Bucket) + sizeof(uintptr_t) * capacity);
+  Bucket* bucket = (Bucket*)malloc(sizeof(Bucket) + sizeof(long double) * capacity);
   bucket->next = NULL;
   bucket->count = 0;
   bucket->capacity = capacity;
@@ -59,7 +59,7 @@ static void free_bucket(Bucket* bucket)
 
 void* memory_alloc(size_t size_bytes)
 {
-  size_t size = (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
+  size_t size = (size_bytes + sizeof(long double) - 1) / sizeof(long double);
 
   if (memory.end == NULL)
   {

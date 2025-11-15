@@ -32,6 +32,7 @@ static void generate_statements(ArrayStmt* statements);
 
 static void print_num(int n)
 {
+  printf("%d\n", n);
 }
 
 static MIR_insn_code_t data_type_to_mov_type(DataType data_type)

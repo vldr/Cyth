@@ -1,19 +1,13 @@
 
-int output = 20
-test(0)
+import "env"
+    void log(int n)
 
-int test(int a)
-    int poop = test2(20)
+int output = 2
 
-    return poop
+int test(int poop, float rrr)
+    output = 30
+    return output / poop
 
-int test2(int a)
-    int poop = 10 + a + output
-
-    return poop
-
-
-
-# int p = test(10)
-
-
+log(test(output, 0.0))
+log(test(output, 0.0))
+log(test(output, 0.0))

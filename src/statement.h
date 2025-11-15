@@ -66,6 +66,9 @@ typedef struct _FUNC_STMT
   ArrayVarStmt variables;
   ArrayVarStmt parameters;
   ArrayStmt body;
+
+  MIR_item_t item;
+  MIR_item_t proto;
 } FuncStmt;
 
 typedef struct _FUNC_TEMPLATE_STMT

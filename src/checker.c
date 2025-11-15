@@ -2480,7 +2480,7 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
-    expression->function = function->name.lexeme;
+    expression->function = function;
     expression->return_data_type = function->data_type;
     expression->callee_data_type = callee_data_type;
 
@@ -2516,7 +2516,7 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
-    expression->function = function->name.lexeme;
+    expression->function = function;
     expression->return_data_type = function->data_type;
     expression->callee_data_type = callee_data_type;
 
@@ -2575,7 +2575,7 @@ static DataType check_call_expression(CallExpr* expression)
     }
 
     if (callee_data_type.type == TYPE_FUNCTION_INTERNAL)
-      expression->function = callee_data_type.function_internal.name;
+      expression->function_name = callee_data_type.function_internal.name;
 
     expression->return_data_type = *callee_data_type.function_internal.return_type;
     expression->callee_data_type = callee_data_type;

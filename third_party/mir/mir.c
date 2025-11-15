@@ -3173,7 +3173,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (ctx, f, insn, func, TRUE);
-  fprintf (f, "\tendfunc\n");
+  fprintf (f, "\tendfunc\n\n");
 }
 
 void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {

@@ -954,6 +954,8 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
   stmt->func.name = name;
   stmt->func.name_raw = name.lexeme;
   stmt->func.import = NULL;
+  stmt->func.item = NULL;
+  stmt->func.proto = NULL;
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);

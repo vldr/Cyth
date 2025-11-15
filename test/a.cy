@@ -2,16 +2,13 @@
 import "env"
     void log(int n)
 
-int output = 2
+int fibonacci(int n)
+  if n == 0
+    return n
+  else if n == 1
+    return n
+  else
+    return fibonacci(n - 2) + fibonacci(n - 1)
 
-void test(int a)
-    if a > 10
-        log(1)
-    else
-        log(a)
-
-test(11)
-test(8)
-
-if output > 1
-    log(1)
+for int i = 0; i <= 42; i += 1
+  log(fibonacci(i))

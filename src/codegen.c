@@ -22,6 +22,8 @@ static struct
   MIR_module_t module;
   MIR_item_t function;
   ArrayStmt statements;
+  MIR_label_t continue_label;
+  MIR_label_t break_label;
 } codegen;
 
 static void generate_expression(MIR_reg_t dest, Expr* expression);
@@ -30,7 +32,6 @@ static void generate_statements(ArrayStmt* statements);
 
 static void print_num(int n)
 {
-  printf("%d\n", n);
 }
 
 static MIR_insn_code_t data_type_to_mov_type(DataType data_type)
@@ -314,30 +315,31 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
   case TOKEN_AND:
     if (data_type.type == TYPE_BOOL)
     {
-      MIR_label_t cont = MIR_new_label(codegen.ctx);
-      MIR_label_t if_false = MIR_new_label(codegen.ctx);
+      MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+      MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_BNES, MIR_new_label_op(codegen.ctx, if_false),
-                                   MIR_new_reg_op(codegen.ctx, left),
-                                   MIR_new_int_op(codegen.ctx, 0)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_BNES, MIR_new_label_op(codegen.ctx, if_false_label),
+                     MIR_new_reg_op(codegen.ctx, left), MIR_new_int_op(codegen.ctx, 0)));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_int_op(codegen.ctx, 0)));
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, if_false);
+      MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_reg_op(codegen.ctx, right)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, cont);
+      MIR_append_insn(codegen.ctx, codegen.function, cont_label);
 
       return;
     }
@@ -349,30 +351,31 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
   case TOKEN_OR:
     if (data_type.type == TYPE_BOOL)
     {
-      MIR_label_t cont = MIR_new_label(codegen.ctx);
-      MIR_label_t if_false = MIR_new_label(codegen.ctx);
+      MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+      MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_BNES, MIR_new_label_op(codegen.ctx, if_false),
-                                   MIR_new_reg_op(codegen.ctx, left),
-                                   MIR_new_int_op(codegen.ctx, 0)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_BNES, MIR_new_label_op(codegen.ctx, if_false_label),
+                     MIR_new_reg_op(codegen.ctx, left), MIR_new_int_op(codegen.ctx, 0)));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_reg_op(codegen.ctx, right)));
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, if_false);
+      MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_int_op(codegen.ctx, 1)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, cont);
+      MIR_append_insn(codegen.ctx, codegen.function, cont_label);
 
       return;
     }
@@ -433,30 +436,31 @@ static void generate_unary_expression(MIR_reg_t dest, UnaryExpr* expression)
   case TOKEN_NOT:
     if (expression->data_type.type == TYPE_BOOL)
     {
-      MIR_label_t cont = MIR_new_label(codegen.ctx);
-      MIR_label_t if_false = MIR_new_label(codegen.ctx);
+      MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+      MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false),
-                                   MIR_new_reg_op(codegen.ctx, expr),
-                                   MIR_new_int_op(codegen.ctx, 0)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false_label),
+                     MIR_new_reg_op(codegen.ctx, expr), MIR_new_int_op(codegen.ctx, 0)));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(expression->data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_int_op(codegen.ctx, 0)));
 
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, if_false);
+      MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, data_type_to_mov_type(expression->data_type),
                                    MIR_new_reg_op(codegen.ctx, dest),
                                    MIR_new_int_op(codegen.ctx, 1)));
 
-      MIR_append_insn(codegen.ctx, codegen.function, cont);
+      MIR_append_insn(codegen.ctx, codegen.function, cont_label);
 
       break;
     }
@@ -585,7 +589,8 @@ static void generate_assignment_expression(MIR_reg_t dest, AssignExpr* expressio
 
       //   generate_debug_info(expression->op, list[0], codegen.function);
 
-      //   return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list), type);
+      //   return BinaryenBlock(codegen.module, NULL, list, sizeof(list) / sizeof_ptr(list),
+      //   type);
       // }
 
     default:
@@ -610,8 +615,8 @@ static void generate_assignment_expression(MIR_reg_t dest, AssignExpr* expressio
   //   {
   //     BinaryenExpressionRef operands[] = { ref, index, value };
   //     BinaryenExpressionRef call = BinaryenCall(
-  //       codegen.module, expression->function, operands, sizeof(operands) / sizeof_ptr(operands),
-  //       data_type_to_binaryen_type(expression->target->index.data_type));
+  //       codegen.module, expression->function, operands, sizeof(operands) /
+  //       sizeof_ptr(operands), data_type_to_binaryen_type(expression->target->index.data_type));
 
   //     generate_debug_info(expression->target->index.index_token, call, codegen.function);
   //     return call;
@@ -791,29 +796,62 @@ static void generate_if_statement(IfStmt* statement)
                                           codegen.function->u.func);
   generate_expression(condition, statement->condition);
 
-  MIR_label_t cont = MIR_new_label(codegen.ctx);
-  MIR_label_t if_false = MIR_new_label(codegen.ctx);
+  MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+  MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
   MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false),
+                  MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false_label),
                                MIR_new_reg_op(codegen.ctx, condition),
                                MIR_new_int_op(codegen.ctx, 0)));
 
   generate_statements(&statement->then_branch);
 
   MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+                  MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
 
-  MIR_append_insn(codegen.ctx, codegen.function, if_false);
+  MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
   if (statement->else_branch.elems)
     generate_statements(&statement->else_branch);
 
-  MIR_append_insn(codegen.ctx, codegen.function, cont);
+  MIR_append_insn(codegen.ctx, codegen.function, cont_label);
 }
 
 static void generate_while_statement(WhileStmt* statement)
 {
+  MIR_label_t previous_continue_label = codegen.continue_label;
+  MIR_label_t previous_break_label = codegen.break_label;
+
+  codegen.continue_label = MIR_new_label(codegen.ctx);
+  codegen.break_label = MIR_new_label(codegen.ctx);
+
+  MIR_label_t loop_label = MIR_new_label(codegen.ctx);
+
+  generate_statements(&statement->initializer);
+
+  MIR_append_insn(codegen.ctx, codegen.function, loop_label);
+
+  MIR_reg_t condition = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(DATA_TYPE(TYPE_BOOL)),
+                                          codegen.function->u.func);
+  generate_expression(condition, statement->condition);
+  MIR_append_insn(
+    codegen.ctx, codegen.function,
+    MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, codegen.break_label),
+                 MIR_new_reg_op(codegen.ctx, condition), MIR_new_int_op(codegen.ctx, 0)));
+
+  generate_statements(&statement->body);
+
+  MIR_append_insn(codegen.ctx, codegen.function, codegen.continue_label);
+
+  generate_statements(&statement->incrementer);
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, loop_label)));
+
+  MIR_append_insn(codegen.ctx, codegen.function, codegen.break_label);
+
+  codegen.continue_label = previous_continue_label;
+  codegen.break_label = previous_break_label;
 }
 
 static void generate_return_statement(ReturnStmt* statement)
@@ -835,10 +873,16 @@ static void generate_return_statement(ReturnStmt* statement)
 
 static void generate_continue_statement(void)
 {
+  MIR_append_insn(
+    codegen.ctx, codegen.function,
+    MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, codegen.continue_label)));
 }
 
 static void generate_break_statement(void)
 {
+  MIR_append_insn(
+    codegen.ctx, codegen.function,
+    MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, codegen.break_label)));
 }
 
 static void generate_variable_declaration(VarStmt* statement)
@@ -1067,6 +1111,17 @@ void codegen_init(ArrayStmt statements)
   codegen.ctx = MIR_init();
   codegen.module = MIR_new_module(codegen.ctx, "main");
   codegen.function = MIR_new_func(codegen.ctx, "<start>", 0, 0, 0);
+  codegen.continue_label = NULL;
+  codegen.break_label = NULL;
+
+  VarStmt* global_local;
+  ArrayVarStmt global_local_statements = global_locals();
+  array_foreach(&global_local_statements, global_local)
+  {
+    global_local->reg = MIR_new_func_reg(
+      codegen.ctx, codegen.function->u.func, data_type_to_mir_type(global_local->data_type),
+      memory_sprintf("%s.%d", global_local->name.lexeme, global_local->index));
+  }
 }
 
 Codegen codegen_generate(bool logging)
@@ -1081,6 +1136,7 @@ Codegen codegen_generate(bool logging)
 
   MIR_load_module(codegen.ctx, codegen.module);
   MIR_gen_init(codegen.ctx);
+  MIR_gen_set_optimize_level(codegen.ctx, 4);
 
   void (*boo)(void) = NULL;
   MIR_load_external(codegen.ctx, "log", print_num);

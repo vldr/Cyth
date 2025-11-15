@@ -4,10 +4,14 @@ import "env"
 
 int output = 2
 
-int test(int poop, float rrr)
-    output = 30
-    return output / poop
+void test(int a)
+    if a > 10
+        log(1)
+    else
+        log(a)
 
-log(test(output, 0.0))
-log(test(output, 0.0))
-log(test(output, 0.0))
+test(11)
+test(8)
+
+if output > 1
+    log(1)

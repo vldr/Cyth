@@ -787,6 +787,29 @@ static void generate_expression_statement(ExprStmt* statement)
 
 static void generate_if_statement(IfStmt* statement)
 {
+  MIR_reg_t condition = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(DATA_TYPE(TYPE_BOOL)),
+                                          codegen.function->u.func);
+  generate_expression(condition, statement->condition);
+
+  MIR_label_t cont = MIR_new_label(codegen.ctx);
+  MIR_label_t if_false = MIR_new_label(codegen.ctx);
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_BEQS, MIR_new_label_op(codegen.ctx, if_false),
+                               MIR_new_reg_op(codegen.ctx, condition),
+                               MIR_new_int_op(codegen.ctx, 0)));
+
+  generate_statements(&statement->then_branch);
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont)));
+
+  MIR_append_insn(codegen.ctx, codegen.function, if_false);
+
+  if (statement->else_branch.elems)
+    generate_statements(&statement->else_branch);
+
+  MIR_append_insn(codegen.ctx, codegen.function, cont);
 }
 
 static void generate_while_statement(WhileStmt* statement)

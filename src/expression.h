@@ -232,6 +232,7 @@ typedef struct _INDEX_EXPR
 {
   DataType data_type;
   DataType expr_data_type;
+  DataType index_data_type;
 
   Expr* expr;
   Token expr_token;

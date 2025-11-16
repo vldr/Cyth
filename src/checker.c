@@ -3166,6 +3166,7 @@ static DataType check_index_expression(IndexExpr* expression)
 
     expression->data_type = DATA_TYPE(TYPE_CHAR);
     expression->expr_data_type = expr_data_type;
+    expression->index_data_type = index_data_type;
 
     return expression->data_type;
   }
@@ -3185,6 +3186,7 @@ static DataType check_index_expression(IndexExpr* expression)
 
     expression->data_type = array_data_type_element(expr_data_type);
     expression->expr_data_type = expr_data_type;
+    expression->index_data_type = index_data_type;
 
     return expression->data_type;
   }
@@ -3239,6 +3241,7 @@ static DataType check_index_expression(IndexExpr* expression)
     expression->function = function->name.lexeme;
     expression->data_type = function->data_type;
     expression->expr_data_type = expr_data_type;
+    expression->index_data_type = index_data_type;
 
     return checker.assignment ? value_data_type : function->data_type;
   }

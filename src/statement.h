@@ -67,8 +67,8 @@ typedef struct _FUNC_STMT
   ArrayVarStmt parameters;
   ArrayStmt body;
 
-  MIR_item_t item;
-  MIR_item_t proto;
+  struct MIR_item* item;
+  struct MIR_item* proto;
 } FuncStmt;
 
 typedef struct _FUNC_TEMPLATE_STMT
@@ -103,8 +103,8 @@ typedef struct _VAR_STMT
   Scope scope;
 
   union {
-    MIR_item_t item;
-    MIR_reg_t reg;
+    struct MIR_item* item;
+    uint32_t reg;
   };
 
   Token name;

@@ -88,6 +88,7 @@ map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
 map_dec_strkey(VarStmt, var_stmt, const char*, struct _VAR_STMT*)
 map_dec_strkey(Expr, expr, const char*, struct _EXPR*)
 map_dec_strkey(StringBinaryenHeapType, string_binaryen_heap_type, const char*, uintptr_t)
+map_dec_strkey(MIR_item, mir_item, const char*, struct MIR_item *)
 
 // clang-format on
 

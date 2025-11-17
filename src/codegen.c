@@ -10,6 +10,7 @@
 #include "statement.h"
 
 #include <mir-gen.h>
+#include <setjmp.h>
 
 array_def(MIR_type_t, MIR_type_t);
 array_def(MIR_var_t, MIR_var_t);
@@ -17,6 +18,7 @@ array_def(MIR_op_t, MIR_op_t);
 
 static struct
 {
+  jmp_buf jmp;
   MIR_context_t ctx;
   MIR_module_t module;
   MIR_item_t function;
@@ -25,6 +27,9 @@ static struct
   MIR_label_t break_label;
   MapMIR_item string_constants;
   int strings;
+
+  MIR_item_t panic_proto;
+  MIR_item_t panic_func;
 
   MIR_item_t malloc_proto;
   MIR_item_t malloc_func;
@@ -45,11 +50,20 @@ static struct
   MIR_item_t string_char_cast_func;
 } codegen;
 
+typedef void (*Start)(void);
+
 typedef struct
 {
   unsigned int size;
   char data[];
 } String;
+
+typedef struct
+{
+  unsigned int size;
+  unsigned int capacity;
+  void* data;
+} Array;
 
 static void generate_expression(MIR_reg_t dest, Expr* expression);
 static void generate_statement(Stmt* statement);
@@ -133,6 +147,12 @@ static String* string_bool_cast(bool n)
   static String false_string = { .size = sizeof("false") - 1, .data = "false" };
 
   return n ? &true_string : &false_string;
+}
+
+static void panic(String* n)
+{
+  printf("%.*s\n", n->size, n->data);
+  longjmp(codegen.jmp, 1);
 }
 
 static MIR_insn_code_t data_type_to_mov_type(DataType data_type)
@@ -239,18 +259,19 @@ static void generate_malloc_expression(MIR_reg_t dest, MIR_reg_t size)
                       MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, size)));
 }
 
-static void generate_crash(void)
+static void generate_panic(Token token, const char* what)
 {
-  MIR_reg_t zero = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+  const char* message =
+    memory_sprintf("%s at a.cy:%d:%d\n", what, token.start_line, token.start_column);
+
+  MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+  generate_string_literal_expression(ptr, message, strlen(message));
 
   MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, zero),
-                               MIR_new_int_op(codegen.ctx, 0)));
-
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV,
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, zero, 0, 1),
-                               MIR_new_int_op(codegen.ctx, 0)));
+                  MIR_new_call_insn(codegen.ctx, 3,
+                                    MIR_new_ref_op(codegen.ctx, codegen.panic_proto),
+                                    MIR_new_ref_op(codegen.ctx, codegen.panic_func),
+                                    MIR_new_reg_op(codegen.ctx, ptr)));
 }
 
 static MIR_op_t generate_string_length_op(MIR_reg_t base)
@@ -1370,7 +1391,7 @@ static void generate_index_expression(MIR_reg_t dest, IndexExpr* expression)
 
     MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
-    generate_crash();
+    generate_panic(expression->index_token, "Out of bounds access");
 
     MIR_append_insn(codegen.ctx, codegen.function, cont_label);
     return;
@@ -1795,6 +1816,11 @@ void codegen_init(ArrayStmt statements)
   codegen.continue_label = NULL;
   codegen.break_label = NULL;
 
+  MIR_load_external(codegen.ctx, "panic", (void*)panic);
+  codegen.panic_proto = MIR_new_proto_arr(codegen.ctx, "panic.proto", 0, NULL, 1,
+                                          (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+  codegen.panic_func = MIR_new_import(codegen.ctx, "panic");
+
   MIR_load_external(codegen.ctx, "malloc", (void*)malloc);
   codegen.malloc_proto =
     MIR_new_proto_arr(codegen.ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
@@ -1865,12 +1891,14 @@ Codegen codegen_generate(bool logging)
   MIR_gen_init(codegen.ctx);
   MIR_gen_set_optimize_level(codegen.ctx, 4);
 
-  void (*boo)(void) = NULL;
-
   MIR_link(codegen.ctx, MIR_set_gen_interface, NULL);
-  boo = MIR_gen(codegen.ctx, codegen.function);
 
-  boo();
+  Start start = (Start)MIR_gen(codegen.ctx, codegen.function);
+
+  if (setjmp(codegen.jmp) == 0)
+    start();
+  else
+    printf("Recovered from runtime error!\n");
 
   MIR_gen_finish(codegen.ctx);
   MIR_finish(codegen.ctx);

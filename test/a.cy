@@ -4,4 +4,5 @@ import "env"
     void log(float n)
     void log(char n)
 
-log("hello"[0])
+int global = -2
+log("hello"[global += 1])

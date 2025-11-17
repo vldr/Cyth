@@ -415,5 +415,6 @@ map_def_strkey(var_stmt, const char *, struct _VAR_STMT*, map_streq, murmurhash)
 map_def_strkey(expr, const char *, struct _EXPR*, map_streq, murmurhash)
 map_def_strkey(string_binaryen_heap_type, const char *, uintptr_t, map_streq, murmurhash)
 map_def_strkey(mir_item, const char *, struct MIR_item *, map_streq, murmurhash)
+map_def_strkey(function, const char *, struct _FUNCTION *, map_streq, murmurhash)
 
   // clang-format on

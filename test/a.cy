@@ -5,6 +5,8 @@ import "env"
     void log(char n)
     void log(string n)
 
-int[] a = [10, 4, 3]
+int[] a = []
+# a.push(10)
 
-log("hello " + a[3])
+# log(a[0])
+log(a.capacity)

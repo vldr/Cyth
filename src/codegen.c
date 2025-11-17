@@ -15,6 +15,7 @@
 array_def(MIR_type_t, MIR_type_t);
 array_def(MIR_var_t, MIR_var_t);
 array_def(MIR_op_t, MIR_op_t);
+array_def(MIR_reg_t, MIR_reg_t);
 
 static struct
 {
@@ -93,7 +94,7 @@ static String* string_concat(String* left, String* right)
 {
   uintptr_t size = sizeof(String) + left->size + right->size;
 
-  String* result = memory_alloc(size);
+  String* result = malloc(size);
   result->size = left->size + right->size;
 
   memcpy(result->data, left->data, left->size);
@@ -107,7 +108,7 @@ static String* string_int_cast(int n)
   int length = snprintf(NULL, 0, "%d", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = memory_alloc(size);
+  String* result = malloc(size);
   result->size = length;
 
   snprintf(result->data, length, "%d", n);
@@ -120,7 +121,7 @@ static String* string_float_cast(float n)
   int length = snprintf(NULL, 0, "%g", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = memory_alloc(size);
+  String* result = malloc(size);
   result->size = length;
 
   snprintf(result->data, length, "%g", n);
@@ -133,7 +134,7 @@ static String* string_char_cast(char n)
   int length = snprintf(NULL, 0, "%c", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = memory_alloc(size);
+  String* result = malloc(size);
   result->size = length;
 
   snprintf(result->data, length, "%c", n);
@@ -197,6 +198,39 @@ static MIR_type_t data_type_to_mir_type(DataType data_type)
   UNREACHABLE("Unhandled data type");
 }
 
+static MIR_type_t data_type_to_mir_array_type(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_VOID:
+  case TYPE_ALIAS:
+  case TYPE_PROTOTYPE:
+  case TYPE_PROTOTYPE_TEMPLATE:
+  case TYPE_FUNCTION_TEMPLATE:
+  case TYPE_FUNCTION_GROUP:
+    return MIR_T_UNDEF;
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL:
+  case TYPE_FUNCTION_POINTER:
+  case TYPE_NULL:
+  case TYPE_ANY:
+  case TYPE_STRING:
+  case TYPE_OBJECT:
+  case TYPE_ARRAY:
+    return MIR_T_I64;
+  case TYPE_BOOL:
+  case TYPE_CHAR:
+    return MIR_T_I8;
+  case TYPE_INTEGER:
+    return MIR_T_I32;
+  case TYPE_FLOAT:
+    return MIR_T_F;
+  }
+
+  UNREACHABLE("Unhandled data type");
+}
+
 static MIR_item_t data_type_to_proto(DataType data_type)
 {
   if (data_type.type == TYPE_FUNCTION || data_type.type == TYPE_FUNCTION_INTERNAL ||
@@ -228,13 +262,22 @@ static MIR_item_t data_type_to_proto(DataType data_type)
   UNREACHABLE("Unhandled data type");
 }
 
+static void generate_malloc_expression(MIR_reg_t dest, MIR_op_t size)
+{
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_call_insn(codegen.ctx, 4,
+                                    MIR_new_ref_op(codegen.ctx, codegen.malloc_proto),
+                                    MIR_new_ref_op(codegen.ctx, codegen.malloc_func),
+                                    MIR_new_reg_op(codegen.ctx, dest), size));
+}
+
 static void generate_string_literal_expression(MIR_reg_t dest, const char* literal, int length)
 {
   MIR_item_t item = map_get_mir_item(&codegen.string_constants, literal);
   if (!item)
   {
     uintptr_t size = sizeof(String) + length;
-    String* string = memory_alloc(size);
+    String* string = malloc(size);
     string->size = length;
     memcpy(string->data, literal, length);
 
@@ -250,13 +293,37 @@ static void generate_string_literal_expression(MIR_reg_t dest, const char* liter
                                MIR_new_ref_op(codegen.ctx, item)));
 }
 
-static void generate_malloc_expression(MIR_reg_t dest, MIR_reg_t size)
+static MIR_op_t generate_array_length_op(MIR_reg_t base)
 {
-  MIR_append_insn(
-    codegen.ctx, codegen.function,
-    MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.malloc_proto),
-                      MIR_new_ref_op(codegen.ctx, codegen.malloc_func),
-                      MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, size)));
+  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, 0, base, 0, 1);
+}
+
+static MIR_op_t generate_array_capacity_op(MIR_reg_t base)
+{
+  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, sizeof(unsigned int), base, 0, 1);
+}
+
+static MIR_op_t generate_array_data_op(MIR_reg_t base)
+{
+  return MIR_new_mem_op(codegen.ctx, MIR_T_I64, sizeof(unsigned int) + sizeof(unsigned int), base,
+                        0, 1);
+}
+
+static void generate_default_array_initialization(MIR_reg_t dest)
+{
+  generate_malloc_expression(dest, MIR_new_int_op(codegen.ctx, sizeof(Array)));
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_length_op(dest),
+                               MIR_new_int_op(codegen.ctx, 0)));
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_capacity_op(dest),
+                               MIR_new_int_op(codegen.ctx, 0)));
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_data_op(dest),
+                               MIR_new_int_op(codegen.ctx, 0)));
 }
 
 static void generate_panic(Token token, const char* what)
@@ -305,6 +372,9 @@ static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
     return;
   case TYPE_STRING:
     generate_string_literal_expression(dest, "", 0);
+    return;
+  case TYPE_ARRAY:
+    generate_default_array_initialization(dest);
     return;
   default:
     UNREACHABLE("Unexpected default initializer");
@@ -1329,25 +1399,27 @@ static void generate_access_expression(MIR_reg_t dest, AccessExpr* expression)
 
     UNREACHABLE("Unhandled string access name");
   }
-  // else if (expression->expr_data_type.type == TYPE_ARRAY)
-  // {
-  //   if (strcmp(expression->name.lexeme, "length") == 0)
-  //   {
-  //     return BinaryenStructGet(codegen.module, 1, ref, BinaryenTypeInt32(), false);
-  //   }
-  //   else if (strcmp(expression->name.lexeme, "capacity") == 0)
-  //   {
-  //     return BinaryenIf(
-  //       codegen.module,
-  //       BinaryenRefIsNull(codegen.module,
-  //                         BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeInt32(), false)),
-  //       BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
-  //       BinaryenArrayLen(codegen.module,
-  //                        BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeInt32(), false)));
-  //   }
+  else if (expression->expr_data_type.type == TYPE_ARRAY)
+  {
+    if (strcmp(expression->name.lexeme, "length") == 0)
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, data_type_to_mov_type(expression->data_type),
+                                   MIR_new_reg_op(codegen.ctx, dest),
+                                   generate_array_length_op(ptr)));
+      return;
+    }
+    else if (strcmp(expression->name.lexeme, "capacity") == 0)
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, data_type_to_mov_type(expression->data_type),
+                                   MIR_new_reg_op(codegen.ctx, dest),
+                                   generate_array_capacity_op(ptr)));
+      return;
+    }
 
-  //   UNREACHABLE("Unhandled array access name");
-  // }
+    UNREACHABLE("Unhandled array access name");
+  }
   // else
   // {
   //   BinaryenType type = data_type_to_binaryen_type(expression->data_type);
@@ -1396,22 +1468,40 @@ static void generate_index_expression(MIR_reg_t dest, IndexExpr* expression)
     MIR_append_insn(codegen.ctx, codegen.function, cont_label);
     return;
   }
-  // case TYPE_ARRAY: {
-  //   BinaryenExpressionRef array =
-  //     BinaryenStructGet(codegen.module, 0, ref, BinaryenTypeAuto(), false);
-  //   BinaryenExpressionRef length = BinaryenStructGet(
-  //     codegen.module, 1, BinaryenExpressionCopy(ref, codegen.module), BinaryenTypeInt32(),
-  //     false);
-  //   BinaryenExpressionRef bounded_index = BinaryenSelect(
-  //     codegen.module, BinaryenBinary(codegen.module, BinaryenLtSInt32(), index, length),
-  //     BinaryenExpressionCopy(index, codegen.module),
-  //     BinaryenConst(codegen.module, BinaryenLiteralInt32(-1)));
+  case TYPE_ARRAY: {
+    MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+    MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
-  //   BinaryenExpressionRef get = BinaryenArrayGet(codegen.module, array, bounded_index, type,
-  //   false); generate_debug_info(expression->index_token, get, codegen.function);
+    MIR_append_insn(
+      codegen.ctx, codegen.function,
+      MIR_new_insn(codegen.ctx, MIR_UBGES, MIR_new_label_op(codegen.ctx, if_false_label),
+                   MIR_new_reg_op(codegen.ctx, index), generate_array_length_op(ptr)));
 
-  //   return get;
-  // }
+    MIR_reg_t array_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, array_ptr),
+                                 generate_array_data_op(ptr)));
+
+    DataType element_data_type = array_data_type_element(expression->expr_data_type);
+
+    MIR_append_insn(
+      codegen.ctx, codegen.function,
+      MIR_new_insn(codegen.ctx, data_type_to_mov_type(element_data_type),
+                   MIR_new_reg_op(codegen.ctx, dest),
+                   MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(element_data_type), 0,
+                                  array_ptr, index, size_data_type(element_data_type))));
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
+
+    MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+    generate_panic(expression->index_token, "Out of bounds access");
+
+    MIR_append_insn(codegen.ctx, codegen.function, cont_label);
+    return;
+  }
   // case TYPE_OBJECT: {
   //   BinaryenExpressionRef operands[] = {
   //     ref,
@@ -1429,8 +1519,49 @@ static void generate_index_expression(MIR_reg_t dest, IndexExpr* expression)
   }
 }
 
-static void generate_array_expression(LiteralArrayExpr* expression)
+static void generate_array_expression(MIR_reg_t dest, LiteralArrayExpr* expression)
 {
+  if (expression->values.size)
+  {
+    MIR_reg_t array_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+    DataType element_data_type = array_data_type_element(expression->data_type);
+
+    generate_malloc_expression(dest, MIR_new_int_op(codegen.ctx, sizeof(Array)));
+    generate_malloc_expression(
+      array_ptr,
+      MIR_new_int_op(codegen.ctx, size_data_type(element_data_type) * expression->values.size));
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_length_op(dest),
+                                 MIR_new_int_op(codegen.ctx, expression->values.size)));
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_capacity_op(dest),
+                                 MIR_new_int_op(codegen.ctx, expression->values.size)));
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_data_op(dest),
+                                 MIR_new_reg_op(codegen.ctx, array_ptr)));
+
+    MIR_reg_t item = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(element_data_type),
+                                       codegen.function->u.func);
+    Expr* value;
+    array_foreach(&expression->values, value)
+    {
+      generate_expression(item, value);
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, data_type_to_mov_type(element_data_type),
+                     MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(element_data_type),
+                                    _i * size_data_type(element_data_type), array_ptr, 0, 1),
+                     MIR_new_reg_op(codegen.ctx, item)));
+    }
+  }
+  else
+  {
+    generate_default_array_initialization(dest);
+  }
 }
 
 static void generate_is_expression(IsExpr* expression)
@@ -1474,6 +1605,9 @@ static void generate_expression(MIR_reg_t dest, Expr* expression)
     return;
   case EXPR_INDEX:
     generate_index_expression(dest, &expression->index);
+    return;
+  case EXPR_ARRAY:
+    generate_array_expression(dest, &expression->array);
     return;
   }
 

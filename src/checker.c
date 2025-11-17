@@ -640,16 +640,19 @@ int size_data_type(DataType data_type)
   switch (data_type.type)
   {
   case TYPE_BOOL:
+    return sizeof(bool);
   case TYPE_CHAR:
-    return 1;
+    return sizeof(char);
   case TYPE_INTEGER:
+    return sizeof(int);
   case TYPE_FLOAT:
+    return sizeof(float);
   case TYPE_STRING:
   case TYPE_OBJECT:
   case TYPE_ARRAY:
   case TYPE_ANY:
   case TYPE_FUNCTION_POINTER:
-    return 4;
+    return sizeof(uintptr_t);
   default:
     UNREACHABLE("Unexpected data type size");
   }

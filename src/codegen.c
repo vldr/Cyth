@@ -310,20 +310,26 @@ static void generate_panic(Token token, const char* what)
                                     MIR_new_reg_op(codegen.ctx, ptr)));
 }
 
-static MIR_op_t generate_array_length_op(MIR_reg_t base)
+static MIR_op_t generate_array_length_op(MIR_reg_t ptr)
 {
-  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, 0, base, 0, 1);
+  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, 0, ptr, 0, 1);
 }
 
-static MIR_op_t generate_array_capacity_op(MIR_reg_t base)
+static MIR_op_t generate_array_capacity_op(MIR_reg_t ptr)
 {
-  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, sizeof(unsigned int), base, 0, 1);
+  return MIR_new_mem_op(codegen.ctx, MIR_T_U32, sizeof(unsigned int), ptr, 0, 1);
 }
 
-static MIR_op_t generate_array_data_op(MIR_reg_t base)
+static MIR_op_t generate_array_data_op(MIR_reg_t ptr)
 {
-  return MIR_new_mem_op(codegen.ctx, MIR_T_I64, sizeof(unsigned int) + sizeof(unsigned int), base,
-                        0, 1);
+  return MIR_new_mem_op(codegen.ctx, MIR_T_I64, sizeof(unsigned int) + sizeof(unsigned int), ptr, 0,
+                        1);
+}
+
+static MIR_op_t generate_object_field_op(VarStmt* field, MIR_reg_t ptr)
+{
+  return MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(field->data_type), field->index,
+                        ptr, 0, 1);
 }
 
 static void generate_default_array_initialization(MIR_reg_t dest)
@@ -2167,8 +2173,157 @@ static void generate_function_template_declaration(FuncTemplateStmt* statement)
   }
 }
 
-static void generate_class_body_declaration(ClassStmt* statement)
+static void generate_class_declaration(ClassStmt* statement)
 {
+  ArrayFuncStmt initializer_functions = {
+    .size = 0,
+    .cap = 1,
+    .elems = alloca(sizeof(FuncStmt)),
+  };
+
+  FuncStmt* function;
+  array_foreach(&statement->functions, function)
+  {
+    if (strcmp(function->name_raw, "__init__") == 0)
+      array_add(&initializer_functions, function);
+
+    generate_function_declaration(function);
+  }
+
+  FuncTemplateStmt* function_template;
+  array_foreach(&statement->function_templates, function_template)
+  {
+    generate_function_template_declaration(function_template);
+  }
+
+  unsigned int index = 0;
+
+  do
+  {
+    FuncStmt* initializer_function =
+      initializer_functions.size ? initializer_functions.elems[index] : NULL;
+
+    const char* initalizer_name = statement->name.lexeme;
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    // const char* previous_function = codegen.function;
+    // codegen.function = initalizer_name;
+
+    // VarStmt* variable;
+    // ArrayBinaryenExpressionRef default_initializers;
+    // array_init(&default_initializers);
+    // array_foreach(&statement->variables, variable)
+    // {
+    //   BinaryenExpressionRef default_initializer =
+    //     generate_default_initialization(variable->data_type);
+    //   array_add(&default_initializers, default_initializer);
+    // }
+
+    // ArrayBinaryenExpressionRef initializer_body;
+    // array_init(&initializer_body);
+    // array_add(&initializer_body,
+    //           BinaryenLocalSet(codegen.module, 0,
+    //                            BinaryenStructNew(codegen.module, default_initializers.elems,
+    //                                              default_initializers.size, heap_type)));
+
+    // array_foreach(&statement->variables, variable)
+    // {
+    //   if (variable->initializer)
+    //   {
+    //     BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, statement->ref);
+    //     BinaryenExpressionRef value = generate_expression(variable->initializer);
+    //     array_add(&initializer_body,
+    //               BinaryenStructSet(codegen.module, variable->index, ref, value));
+    //   }
+    // }
+
+    // ArrayBinaryenType parameter_types;
+    // array_init(&parameter_types);
+    // array_add(&parameter_types, statement->ref);
+
+    // if (initializer_function)
+    // {
+    //   const char* initalizer_function_name = initializer_function->name.lexeme;
+
+    //   ArrayBinaryenExpressionRef parameters;
+    //   array_init(&parameters);
+    //   array_add(&parameters, BinaryenLocalGet(codegen.module, 0, statement->ref));
+
+    //   for (unsigned int i = 1; i < initializer_function->parameters.size; i++)
+    //   {
+    //     VarStmt* parameter = array_at(&initializer_function->parameters, i);
+    //     BinaryenType parameter_type = data_type_to_binaryen_type(parameter->data_type);
+
+    //     array_add(&parameters, BinaryenLocalGet(codegen.module, i, parameter_type));
+    //     array_add(&parameter_types, parameter_type);
+    //   }
+
+    //   BinaryenExpressionRef call =
+    //     BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
+    //                  BinaryenTypeNone());
+    //   generate_debug_info(initializer_function->name, call, codegen.function);
+
+    //   array_add(&initializer_body, call);
+    // }
+
+    // array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, statement->ref));
+
+    // codegen.function = previous_function;
+
+    MIR_new_export(codegen.ctx, statement->name.lexeme);
+    MIR_finish_func(codegen.ctx);
+
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+
+    index++;
+
+  } while (index < initializer_functions.size);
+
+  //  ArrayMIR_var_t vars;
+  // array_init(&vars);
+
+  // VarStmt* parameter;
+  // array_foreach(&statement->parameters, parameter)
+  // {
+  //   MIR_var_t var;
+  //   var.name = memory_sprintf("%s.%d", parameter->name.lexeme, parameter->index);
+  //   var.type = data_type_to_mir_type(parameter->data_type);
+
+  //   array_add(&vars, var);
+  // }
+
+  // if (statement->item)
+  // {
+  //   codegen.function = statement->item;
+  //   MIR_set_curr_func(codegen.ctx, statement->item->u.func);
+  // }
+  // else
+  // {
+  //   codegen.function = MIR_new_func_arr(
+  //     codegen.ctx, statement->name.lexeme, statement->data_type.type != TYPE_VOID,
+  //     (MIR_type_t[]){ data_type_to_mir_type(statement->data_type) }, vars.size, vars.elems);
+  // }
+
+  // statement->item = codegen.function;
+
+  // array_foreach(&statement->parameters, parameter)
+  // {
+  //   parameter->reg = MIR_reg(codegen.ctx, vars.elems[_i].name, codegen.function->u.func);
+  // }
+
+  // VarStmt* variable;
+  // array_foreach(&statement->variables, variable)
+  // {
+  //   variable->reg = MIR_new_func_reg(
+  //     codegen.ctx, codegen.function->u.func, data_type_to_mir_type(variable->data_type),
+  //     memory_sprintf("%s.%d", variable->name.lexeme, variable->index));
+  // }
+
+  // generate_statements(&statement->body);
 }
 
 static void generate_class_template_declaration(ClassTemplateStmt* statement)
@@ -2218,8 +2373,9 @@ static void generate_statement(Stmt* statement)
   case STMT_FUNCTION_TEMPLATE_DECL:
     generate_function_template_declaration(&statement->func_template);
     return;
-  case STMT_CLASS_DECL: {
-  }
+  case STMT_CLASS_DECL:
+    generate_class_declaration(&statement->class);
+    return;
   }
 
   UNREACHABLE("Unhandled statement");

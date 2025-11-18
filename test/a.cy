@@ -5,9 +5,6 @@ import "env"
     void log(char n)
     void log(string n)
 
-int[] a = []
-a.push('a')
-a.push('c')
-
-log("Popped: " + (char)a.pop() + " -- " + a.length)
-log("Popped: " + (char)a.pop() + " -- " + a.length)
+class A
+    void test()
+        log("hello")

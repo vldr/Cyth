@@ -6,7 +6,8 @@ import "env"
     void log(string n)
 
 int[] a = []
-# a.push(10)
+a.push('a')
+a.push('c')
 
-# log(a[0])
-log(a.capacity)
+log("Popped: " + (char)a.pop() + " -- " + a.length)
+log("Popped: " + (char)a.pop() + " -- " + a.length)

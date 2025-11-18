@@ -103,7 +103,7 @@ static String* string_int_cast(int n)
   uintptr_t size = sizeof(String) + length;
 
   String* result = malloc(size);
-  result->size = length;
+  result->size = length - 1;
 
   snprintf(result->data, length, "%d", n);
 
@@ -116,7 +116,7 @@ static String* string_float_cast(float n)
   uintptr_t size = sizeof(String) + length;
 
   String* result = malloc(size);
-  result->size = length;
+  result->size = length - 1;
 
   snprintf(result->data, length, "%g", n);
 
@@ -129,7 +129,7 @@ static String* string_char_cast(char n)
   uintptr_t size = sizeof(String) + length;
 
   String* result = malloc(size);
-  result->size = length;
+  result->size = length - 1;
 
   snprintf(result->data, length, "%c", n);
 
@@ -295,6 +295,21 @@ static void generate_string_literal_expression(MIR_reg_t dest, const char* liter
                                MIR_new_ref_op(codegen.ctx, item)));
 }
 
+static void generate_panic(Token token, const char* what)
+{
+  const char* message =
+    memory_sprintf("%s at a.cy:%d:%d\n", what, token.start_line, token.start_column);
+
+  MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+  generate_string_literal_expression(ptr, message, strlen(message));
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_call_insn(codegen.ctx, 3,
+                                    MIR_new_ref_op(codegen.ctx, codegen.panic.proto),
+                                    MIR_new_ref_op(codegen.ctx, codegen.panic.func),
+                                    MIR_new_reg_op(codegen.ctx, ptr)));
+}
+
 static MIR_op_t generate_array_length_op(MIR_reg_t base)
 {
   return MIR_new_mem_op(codegen.ctx, MIR_T_U32, 0, base, 0, 1);
@@ -426,19 +441,82 @@ static Function* generate_array_push_function(DataType data_type, DataType eleme
   return function;
 }
 
-static void generate_panic(Token token, const char* what)
+static Function* generate_array_pop_function(DataType data_type)
 {
-  const char* message =
-    memory_sprintf("%s at a.cy:%d:%d\n", what, token.start_line, token.start_column);
+  const char* name = memory_sprintf("array.pop.%s", data_type_to_string(data_type));
 
-  MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  generate_string_literal_expression(ptr, message, strlen(message));
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    DataType element_data_type = array_data_type_element(data_type);
 
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_call_insn(codegen.ctx, 3,
-                                    MIR_new_ref_op(codegen.ctx, codegen.panic.proto),
-                                    MIR_new_ref_op(codegen.ctx, codegen.panic.func),
-                                    MIR_new_reg_op(codegen.ctx, ptr)));
+    MIR_type_t return_type = data_type_to_mir_type(element_data_type);
+    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) } };
+
+    MIR_item_t previous_funcion = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    codegen.function = function->func;
+
+    MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+
+    {
+      MIR_label_t finish_label = MIR_new_label(codegen.ctx);
+      MIR_label_t panic_label = MIR_new_label(codegen.ctx);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_BEQS,
+                                   MIR_new_label_op(codegen.ctx, panic_label),
+                                   generate_array_length_op(ptr), MIR_new_int_op(codegen.ctx, 0)));
+
+      MIR_reg_t array_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, array_ptr),
+                                   generate_array_data_op(ptr)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_SUBS, generate_array_length_op(ptr),
+                                   generate_array_length_op(ptr), MIR_new_int_op(codegen.ctx, 1)));
+
+      MIR_reg_t index = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, index),
+                                   generate_array_length_op(ptr)));
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_ret_insn(codegen.ctx, 1,
+                         MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(element_data_type),
+                                        0, array_ptr, index, size_data_type(element_data_type))));
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, finish_label)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, panic_label);
+
+      generate_panic((Token){ 0 }, "Out of bounds access");
+
+      MIR_append_insn(codegen.ctx, codegen.function, finish_label);
+    }
+
+    codegen.function = previous_funcion;
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
 }
 
 static MIR_op_t generate_string_length_op(MIR_reg_t base)
@@ -490,15 +568,14 @@ static Function* generate_function_internal(DataType data_type)
   if (strcmp(name, "array.push") == 0)
     return generate_array_push_function(array_at(&data_type.function_internal.parameter_types, 0),
                                         array_at(&data_type.function_internal.parameter_types, 1));
+  else if (strcmp(name, "array.pop") == 0)
+    return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
   // if (strcmp(name, "array.push_string") == 0)
   //   return generate_array_push_string_function(
   //     array_at(&data_type.function_internal.parameter_types, 0));
   // else if (strcmp(name, "array.to_string") == 0)
   //   return generate_array_to_string_function(
   //     array_at(&data_type.function_internal.parameter_types, 0));
-  // else if (strcmp(name, "array.pop") == 0)
-  //   return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types,
-  //   0));
   // else if (strcmp(name, "array.clear") == 0)
   //   return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types,
   //   0));

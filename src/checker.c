@@ -2639,10 +2639,7 @@ static DataType check_call_expression(CallExpr* expression)
         }
       }
 
-      expression->function =
-        variable->data_type.type == TYPE_FUNCTION_GROUP
-          ? function_data_type_to_string(class->name.lexeme, function_data_type)
-          : class->name.lexeme;
+      expression->function = function;
     }
     else
     {
@@ -2653,7 +2650,7 @@ static DataType check_call_expression(CallExpr* expression)
         return DATA_TYPE(TYPE_VOID);
       }
 
-      expression->function = class->name.lexeme;
+      expression->function = class->default_constructor;
     }
 
     expression->callee_data_type = callee_data_type;

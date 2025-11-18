@@ -69,6 +69,9 @@ typedef struct _FUNC_STMT
 
   struct MIR_item* item;
   struct MIR_item* proto;
+
+  struct MIR_item* item2;
+  struct MIR_item* proto2;
 } FuncStmt;
 
 typedef struct _FUNC_TEMPLATE_STMT
@@ -124,6 +127,7 @@ typedef struct _CLASS_STMT
   ArrayVarStmt variables;
   ArrayFuncStmt functions;
   ArrayFuncTemplateStmt function_templates;
+  struct _FUNC_STMT* default_constructor;
 
   int alignment;
   int size;

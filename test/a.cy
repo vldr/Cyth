@@ -1,72 +1,125 @@
 import "env"
-    void log(string n)
-    void log(int n)
+    void log(int n) 
 
-class TreeNode
-    TreeNode left
-    TreeNode right
-    
-TreeNode bottomUpTree(TreeNode this, int depth)
-    if depth > 0
-        TreeNode leftChild = bottomUpTree(this, depth - 1)
-        TreeNode rightChild = bottomUpTree(this, depth - 1)
-        TreeNode node = TreeNode()
-        node.left = leftChild
-        node.right = rightChild
-        return node
-    else
-        TreeNode node = TreeNode()
-        node.left = null
-        node.right = null
-        return node
+int[] array
+array.push(55)
+array.push(47)
+array.push(12)
+array.push(47)
+array.push(35)
+array.push(15)
+array.push(20)
+array.push(42)
+array.push(30)
+array.push(58)
+array.push(15)
+array.push(13)
+array.push(19)
+array.push(18)
+array.push(44)
+array.push(11)
+array.push(7)
+array.push(56)
+array.push(17)
+array.push(25)
+array.push(14)
+array.push(48)
+array.push(4)
+array.push(5)
+array.push(7)
+array.push(36)
+array.push(1)
+array.push(49)
+array.push(25)
+array.push(26)
+array.push(30)
+array.push(9)
 
-int itemCheck(TreeNode this) 
-    if this.left == null
-        return 1
-    else
-        return 1 + itemCheck(this.left) + itemCheck(this.right)
+qsort(0, array.length - 1)
 
-int minDepth = 4
-int n = 20
-int maxDepth
-if minDepth + 2 > n
-    maxDepth = minDepth + 2
-else
-    maxDepth = n
+for int i = 0; i < array.length; i += 1
+    log(array[i])
 
-int stretchDepth = maxDepth + 1
+int partition(int l, int h) 
+    void swap(int i, int j) 
+        int temp = array[i]
+        array[i] = array[j]
+        array[j] = temp
 
-TreeNode stretchTree = TreeNode()
-TreeNode temp = bottomUpTree(stretchTree, stretchDepth)
-int check = itemCheck(temp)
-log("stretch tree of depth ")
-log((string)stretchDepth)
-log(" check: ")
-log(check + "\n")
+    int x = array[h]
+    int i = l - 1
+  
+    for int j = l; j <= h - 1; j = j + 1
+        if array[j] <= x
+            i += 1
+            swap(i, j)
+         
+     
+    swap(i + 1, h)
 
-TreeNode longLivedTree = TreeNode()
-longLivedTree = bottomUpTree(longLivedTree, maxDepth)
+    return i + 1
+ 
 
-int depth = minDepth
-while depth <= maxDepth
-    int iterations = 1 << (maxDepth - depth + minDepth)
-    check = 0
-    
-    int i = 1
-    while i <= iterations
-        TreeNode tree = TreeNode()
-        tree = bottomUpTree(tree, depth)
-        check = check + itemCheck(tree)
-        i = i + 1
-    
-    log((string)iterations)
-    log(" trees of depth ")
-    log((string)depth)
-    log(" check: ")
-    log(check + "\n")
-    depth = depth + 2
+void qsort(int l, int h) 
+    int[] stack
+    stack.push(l)
+    stack.push(h)
 
-log("long lived tree of depth ")
-log((string)maxDepth)
-log(" check: ")
-log(itemCheck(longLivedTree) + "\n")
+    int top = 2
+  
+    while (top > 0) 
+     
+        h = stack.pop()
+        l = stack.pop()
+
+        top = top - 2
+ 
+        int p = partition(l, h) 
+
+        if p > 0 and p - 1 > l
+         
+            stack.push(l)
+            stack.push(p - 1)
+
+            top = top + 2
+         
+  
+        if (p + 1 < h) 
+         
+            stack.push(p + 1)
+            stack.push(h)
+
+            top = top + 2
+
+# 1
+# 4
+# 5
+# 7
+# 7
+# 9
+# 11
+# 12
+# 13
+# 14
+# 15
+# 15
+# 17
+# 18
+# 19
+# 20
+# 25
+# 25
+# 26
+# 30
+# 30
+# 35
+# 36
+# 42
+# 44
+# 47
+# 47
+# 48
+# 49
+# 55
+# 56
+# 58

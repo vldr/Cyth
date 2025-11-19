@@ -1416,6 +1416,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->vararg_p = vararg_p != 0;
   func->expr_p = func->jret_p = FALSE;
   func->n_inlines = 0;
+  func->length = 0;
   func->machine_code = func->call_addr = NULL;
   func->first_lref = NULL;
   func_regs_init (ctx, func);
@@ -2441,10 +2442,6 @@ static reg_desc_t *get_func_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_fun
 
 MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
   return get_func_rd_by_name (ctx, reg_name, func)->reg;
-}
-
-int MIR_reg_exists(MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
-  return find_rd_by_name (ctx, reg_name, func) != NULL;
 }
 
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {

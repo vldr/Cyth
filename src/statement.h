@@ -70,8 +70,8 @@ typedef struct _FUNC_STMT
   struct MIR_item* item;
   struct MIR_item* proto;
 
-  struct MIR_item* item2;
-  struct MIR_item* proto2;
+  struct MIR_item* item_prototype;
+  struct MIR_item* proto_prototype;
 } FuncStmt;
 
 typedef struct _FUNC_TEMPLATE_STMT

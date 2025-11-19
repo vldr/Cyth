@@ -6,6 +6,7 @@
 
 #define MIR_H
 
+#include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -313,6 +314,7 @@ typedef struct MIR_func {
   void *machine_code;             /* address of generated machine code or NULL */
   void *call_addr; /* address to call the function, it can be the same as machine_code */
   void *internal;  /* internal data structure */
+  size_t length;
   struct MIR_lref_data *first_lref; /* label addr data of the func: defined by module load */
 } *MIR_func_t;
 
@@ -557,7 +559,6 @@ extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_
 extern MIR_insn_t MIR_new_label (MIR_context_t ctx);
 
 extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
-extern int MIR_reg_exists (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
 extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_hard_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);

@@ -956,6 +956,8 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
   stmt->func.import = NULL;
   stmt->func.item = NULL;
   stmt->func.proto = NULL;
+  stmt->func.item_prototype = NULL;
+  stmt->func.proto_prototype = NULL;
 
   array_init(&stmt->func.parameters);
   array_init(&stmt->func.body);

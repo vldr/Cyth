@@ -7951,7 +7951,7 @@ struct rewrite_data {
   bitmap_t live, regs_to_save;
 };
 
-#define MAX_INSN_RELOAD_MEM_OPS 2
+#define MAX_INSN_RELOAD_MEM_OPS 64
 static int try_spilled_reg_mem (gen_ctx_t gen_ctx, MIR_insn_t insn, int nop, MIR_reg_t loc,
                                 MIR_reg_t base_reg) {
   MIR_context_t ctx = gen_ctx->ctx;

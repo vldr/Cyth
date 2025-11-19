@@ -2443,6 +2443,10 @@ MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
   return get_func_rd_by_name (ctx, reg_name, func)->reg;
 }
 
+int MIR_reg_exists(MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
+  return find_rd_by_name (ctx, reg_name, func) != NULL;
+}
+
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
   return get_func_rd_by_reg (ctx, reg, func)->type;
 }

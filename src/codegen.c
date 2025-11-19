@@ -44,7 +44,6 @@ static struct
   MIR_module_t module;
   MIR_item_t function;
   MIR_item_t callstack;
-  MIR_item_t callstack_index;
   ArrayStmt statements;
   MIR_label_t continue_label;
   MIR_label_t break_label;
@@ -83,12 +82,8 @@ static void log_char(char n)
 
 static void log_string(String* n)
 {
-  printf("%.*s\n", n->size, n->data);
-}
-
-static void* alloc(size_t size)
-{
-  return calloc(size, sizeof(unsigned char));
+  fwrite(n->data, 1, n->size, stdout);
+  putchar('\n');
 }
 
 static String* string_concat(String* left, String* right)
@@ -151,11 +146,11 @@ static String* string_bool_cast(bool n)
   return n ? &true_string : &false_string;
 }
 
-static void panic(String* n, String** callstack, uint64_t size)
+static void panic(String* n, String** callstack)
 {
   printf("%.*s", n->size, n->data);
-  for (int i = size - 1; i >= 0; i--)
-    printf("  at %.*s\n", callstack[i]->size, callstack[i]->data);
+  for (int i = *(uintptr_t*)callstack - 1; i >= 0; i--)
+    printf("  at %.*s\n", callstack[i + 1]->size, callstack[i + 1]->data);
 
   longjmp(codegen.jmp, 1);
 }
@@ -283,7 +278,7 @@ static void generate_realloc_expression(MIR_op_t dest, MIR_op_t ptr, MIR_op_t si
                       MIR_new_ref_op(codegen.ctx, codegen.realloc.func), dest, ptr, size));
 }
 
-static void generate_string_literal_expression(MIR_reg_t dest, const char* literal, int length)
+static void generate_string_literal_expression(MIR_op_t dest, const char* literal, int length)
 {
   MIR_item_t item = map_get_mir_item(&codegen.string_constants, literal);
   if (!item)
@@ -300,8 +295,7 @@ static void generate_string_literal_expression(MIR_reg_t dest, const char* liter
   }
 
   MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, data_type_to_mov_type(DATA_TYPE(TYPE_STRING)),
-                               MIR_new_reg_op(codegen.ctx, dest),
+                  MIR_new_insn(codegen.ctx, data_type_to_mov_type(DATA_TYPE(TYPE_STRING)), dest,
                                MIR_new_ref_op(codegen.ctx, item)));
 }
 
@@ -310,48 +304,59 @@ static void generate_callstack_push(Token token)
   const char* name = memory_sprintf("%s:%d:%d", codegen.function->u.func->name, token.start_line,
                                     token.start_column);
 
-  MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, ptr),
-                               MIR_new_ref_op(codegen.ctx, codegen.callstack)));
+  MIR_reg_t ptr;
+  if (!MIR_reg_exists(codegen.ctx, "<callstack_ptr>", codegen.function->u.func))
+  {
+    ptr = MIR_new_func_reg(codegen.ctx, codegen.function->u.func, MIR_T_I64, "<callstack_ptr>");
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, ptr),
+                                 MIR_new_ref_op(codegen.ctx, codegen.callstack)));
+  }
+  else
+  {
+    ptr = MIR_reg(codegen.ctx, "<callstack_ptr>", codegen.function->u.func);
+  }
 
-  MIR_reg_t index_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, index_ptr),
-                               MIR_new_ref_op(codegen.ctx, codegen.callstack_index)));
+  MIR_reg_t index;
+  if (!MIR_reg_exists(codegen.ctx, "<callstack_index>", codegen.function->u.func))
+    index = MIR_new_func_reg(codegen.ctx, codegen.function->u.func, MIR_T_I64, "<callstack_index>");
+  else
+    index = MIR_reg(codegen.ctx, "<callstack_index>", codegen.function->u.func);
 
-  MIR_reg_t index = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
   MIR_append_insn(codegen.ctx, codegen.function,
                   MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, index),
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, index_ptr, 0, 1)));
+                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, 0, 1)));
 
-  MIR_reg_t value = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  generate_string_literal_expression(value, name, strlen(name));
-
-  MIR_append_insn(
-    codegen.ctx, codegen.function,
-    MIR_new_insn(codegen.ctx, MIR_MOV,
-                 MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, index, sizeof(uintptr_t)),
-                 MIR_new_reg_op(codegen.ctx, value)));
+  generate_string_literal_expression(
+    MIR_new_mem_op(codegen.ctx, MIR_T_I64, sizeof(uintptr_t), ptr, index, sizeof(uintptr_t)), name,
+    strlen(name));
 
   MIR_append_insn(codegen.ctx, codegen.function,
                   MIR_new_insn(codegen.ctx, MIR_ADD,
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, index_ptr, 0, 1),
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, index_ptr, 0, 1),
+                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, 0, 1),
+                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, 0, 1),
                                MIR_new_int_op(codegen.ctx, 1)));
 }
 
 static void generate_callstack_pop(void)
 {
-  MIR_reg_t index_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, index_ptr),
-                               MIR_new_ref_op(codegen.ctx, codegen.callstack_index)));
+  MIR_reg_t ptr;
+  if (!MIR_reg_exists(codegen.ctx, "<callstack_ptr>", codegen.function->u.func))
+  {
+    ptr = MIR_new_func_reg(codegen.ctx, codegen.function->u.func, MIR_T_I64, "<callstack_ptr>");
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, ptr),
+                                 MIR_new_ref_op(codegen.ctx, codegen.callstack)));
+  }
+  else
+  {
+    ptr = MIR_reg(codegen.ctx, "<callstack_ptr>", codegen.function->u.func);
+  }
 
   MIR_append_insn(codegen.ctx, codegen.function,
                   MIR_new_insn(codegen.ctx, MIR_SUB,
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, index_ptr, 0, 1),
-                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, index_ptr, 0, 1),
+                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, 0, 1),
+                               MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, ptr, 0, 1),
                                MIR_new_int_op(codegen.ctx, 1)));
 }
 
@@ -365,30 +370,27 @@ static void generate_panic(Token token, const char* what)
                              token.start_line, token.start_column);
 
   MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  generate_string_literal_expression(ptr, message, strlen(message));
+  generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, ptr), message, strlen(message));
 
-  MIR_reg_t callstack_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+  MIR_reg_t callstack_ptr;
+  if (!MIR_reg_exists(codegen.ctx, "<callstack_ptr>", codegen.function->u.func))
+  {
+    callstack_ptr =
+      MIR_new_func_reg(codegen.ctx, codegen.function->u.func, MIR_T_I64, "<callstack_ptr>");
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, callstack_ptr),
+                                 MIR_new_ref_op(codegen.ctx, codegen.callstack)));
+  }
+  else
+  {
+    callstack_ptr = MIR_reg(codegen.ctx, "<callstack_ptr>", codegen.function->u.func);
+  }
+
   MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, callstack_ptr),
-                               MIR_new_ref_op(codegen.ctx, codegen.callstack)));
-
-  MIR_reg_t callstack_index_ptr =
-    _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
-  MIR_append_insn(codegen.ctx, codegen.function,
-                  MIR_new_insn(codegen.ctx, MIR_MOV,
-                               MIR_new_reg_op(codegen.ctx, callstack_index_ptr),
-                               MIR_new_ref_op(codegen.ctx, codegen.callstack_index)));
-  MIR_append_insn(
-    codegen.ctx, codegen.function,
-    MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, callstack_index_ptr),
-                 MIR_new_mem_op(codegen.ctx, MIR_T_I64, 0, callstack_index_ptr, 0, 1)));
-
-  MIR_append_insn(
-    codegen.ctx, codegen.function,
-    MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, codegen.panic.proto),
-                      MIR_new_ref_op(codegen.ctx, codegen.panic.func),
-                      MIR_new_reg_op(codegen.ctx, ptr), MIR_new_reg_op(codegen.ctx, callstack_ptr),
-                      MIR_new_reg_op(codegen.ctx, callstack_index_ptr)));
+                  MIR_new_call_insn(
+                    codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.panic.proto),
+                    MIR_new_ref_op(codegen.ctx, codegen.panic.func),
+                    MIR_new_reg_op(codegen.ctx, ptr), MIR_new_reg_op(codegen.ctx, callstack_ptr)));
 }
 
 static MIR_op_t generate_array_length_op(MIR_reg_t ptr)
@@ -637,7 +639,7 @@ static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
                                  MIR_new_float_op(codegen.ctx, 0.0)));
     return;
   case TYPE_STRING:
-    generate_string_literal_expression(dest, "", 0);
+    generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), "", 0);
     return;
   case TYPE_ARRAY:
     generate_default_array_initialization(dest);
@@ -791,7 +793,8 @@ static void generate_literal_expression(MIR_reg_t dest, LiteralExpr* expression)
                                  MIR_new_int_op(codegen.ctx, expression->string.data[0])));
     return;
   case TYPE_STRING:
-    generate_string_literal_expression(dest, expression->string.data, expression->string.length);
+    generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), expression->string.data,
+                                       expression->string.length);
     return;
   default:
     UNREACHABLE("Unhandled literal value");
@@ -1195,7 +1198,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
     case TYPE_PROTOTYPE:
     case TYPE_PROTOTYPE_TEMPLATE: {
       const char* name = data_type_to_string(expression->from_data_type);
-      generate_string_literal_expression(dest, name, strlen(name));
+      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), name, strlen(name));
 
       return;
     }
@@ -1935,8 +1938,29 @@ static void generate_is_expression(IsExpr* expression)
 {
 }
 
-static void generate_if_expression(IfExpr* expression)
+static void generate_if_expression(MIR_reg_t dest, IfExpr* expression)
 {
+  MIR_reg_t condition = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(DATA_TYPE(TYPE_BOOL)),
+                                          codegen.function->u.func);
+  generate_expression(condition, expression->condition);
+
+  MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+  MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_BFS, MIR_new_label_op(codegen.ctx, if_false_label),
+                               MIR_new_reg_op(codegen.ctx, condition)));
+
+  generate_expression(dest, expression->left);
+
+  MIR_append_insn(codegen.ctx, codegen.function,
+                  MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
+
+  MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+  generate_expression(dest, expression->right);
+
+  MIR_append_insn(codegen.ctx, codegen.function, cont_label);
 }
 
 static void generate_expression(MIR_reg_t dest, Expr* expression)
@@ -1975,6 +1999,9 @@ static void generate_expression(MIR_reg_t dest, Expr* expression)
     return;
   case EXPR_ARRAY:
     generate_array_expression(dest, &expression->array);
+    return;
+  case EXPR_IF:
+    generate_if_expression(dest, &expression->cond);
     return;
   }
 
@@ -2127,22 +2154,6 @@ static void generate_variable_declaration(VarStmt* statement)
       generate_default_initialization(statement->reg, statement->data_type);
     }
   }
-  else if (statement->scope == SCOPE_CLASS)
-  {
-    MIR_reg_t initializer = _MIR_new_temp_reg(
-      codegen.ctx, data_type_to_mir_type(statement->data_type), codegen.function->u.func);
-
-    if (statement->initializer)
-      generate_expression(initializer, statement->initializer);
-    else
-      generate_default_initialization(initializer, statement->data_type);
-
-    MIR_reg_t ptr = MIR_reg(codegen.ctx, "this.0", codegen.function->u.func);
-    MIR_append_insn(codegen.ctx, codegen.function,
-                    MIR_new_insn(codegen.ctx, data_type_to_mov_type(statement->data_type),
-                                 generate_object_field_op(statement, ptr),
-                                 MIR_new_reg_op(codegen.ctx, initializer)));
-  }
   else
   {
     UNREACHABLE("Unexpected scope type");
@@ -2207,45 +2218,12 @@ static void generate_function_declaration(FuncStmt* statement)
 
   generate_statements(&statement->body);
 
-  MIR_new_export(codegen.ctx, statement->name.lexeme);
-  MIR_finish_func(codegen.ctx);
+  if (statement->data_type.type == TYPE_VOID)
+    MIR_append_insn(codegen.ctx, codegen.function, MIR_new_ret_insn(codegen.ctx, 0));
 
+  MIR_finish_func(codegen.ctx);
   MIR_set_curr_func(codegen.ctx, previous_func);
   codegen.function = previous_function;
-
-  // const char* name = statement->name.lexeme;
-
-  // BinaryenType params = BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
-  // BinaryenType results = data_type_to_binaryen_type(statement->data_type);
-
-  // if (statement->import)
-  // {
-  //   BinaryenAddFunctionImport(codegen.module, name, statement->import, name, params, results);
-
-  //   if (parameters_contain_string)
-  //     generate_string_export_functions();
-
-  //   ArrayTypeBuilderSubtype subtypes;
-  //   array_init(&subtypes);
-
-  //   generate_function_heap_binaryen_type(NULL, &subtypes, statement->function_data_type);
-  // }
-  // else
-  // {
-  //   BinaryenExpressionRef body = generate_statements(&statement->body);
-  //   BinaryenFunctionRef func = BinaryenAddFunction(codegen.module, name, params, results,
-  //                                                  variable_types.elems, variable_types.size,
-  //                                                  body);
-  //   BinaryenAddFunctionExport(codegen.module, name, name);
-
-  //   ArrayTypeBuilderSubtype subtypes;
-  //   array_init(&subtypes);
-
-  //   BinaryenHeapType heap_type =
-  //     generate_function_heap_binaryen_type(NULL, &subtypes, statement->function_data_type);
-
-  //   BinaryenFunctionSetType(func, heap_type);
-  // }
 }
 
 static void generate_function_template_declaration(FuncTemplateStmt* statement)
@@ -2333,7 +2311,34 @@ static void generate_class_declaration(ClassStmt* statement)
     VarStmt* variable;
     array_foreach(&statement->variables, variable)
     {
-      generate_variable_declaration(variable);
+      if (!variable->initializer)
+      {
+        MIR_reg_t initializer = _MIR_new_temp_reg(
+          codegen.ctx, data_type_to_mir_type(variable->data_type), codegen.function->u.func);
+
+        generate_default_initialization(initializer, variable->data_type);
+
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, data_type_to_mov_type(variable->data_type),
+                                     generate_object_field_op(variable, ptr),
+                                     MIR_new_reg_op(codegen.ctx, initializer)));
+      }
+    }
+
+    array_foreach(&statement->variables, variable)
+    {
+      if (variable->initializer)
+      {
+        MIR_reg_t initializer = _MIR_new_temp_reg(
+          codegen.ctx, data_type_to_mir_type(variable->data_type), codegen.function->u.func);
+
+        generate_expression(initializer, variable->initializer);
+
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, data_type_to_mov_type(variable->data_type),
+                                     generate_object_field_op(variable, ptr),
+                                     MIR_new_reg_op(codegen.ctx, initializer)));
+      }
     }
 
     if (initializer_function)
@@ -2359,61 +2364,12 @@ static void generate_class_declaration(ClassStmt* statement)
     }
     else
     {
-      statement->default_constructor->item = codegen.function;
-      statement->default_constructor->proto = proto;
+      statement->default_constructor->item2 = codegen.function;
+      statement->default_constructor->proto2 = proto;
     }
 
     MIR_append_insn(codegen.ctx, codegen.function,
                     MIR_new_ret_insn(codegen.ctx, 1, MIR_new_reg_op(codegen.ctx, ptr)));
-
-    // ArrayBinaryenExpressionRef initializer_body;
-    // array_init(&initializer_body);
-    // array_add(&initializer_body,
-    //           BinaryenLocalSet(codegen.module, 0,
-    //                            BinaryenStructNew(codegen.module, default_initializers.elems,
-    //                                              default_initializers.size, heap_type)));
-
-    // array_foreach(&statement->variables, variable)
-    // {
-    //   if (variable->initializer)
-    //   {
-    //     BinaryenExpressionRef ref = BinaryenLocalGet(codegen.module, 0, statement->ref);
-    //     BinaryenExpressionRef value = generate_expression(variable->initializer);
-    //     array_add(&initializer_body,
-    //               BinaryenStructSet(codegen.module, variable->index, ref, value));
-    //   }
-    // }
-
-    // ArrayBinaryenType parameter_types;
-    // array_init(&parameter_types);
-    // array_add(&parameter_types, statement->ref);
-
-    //   const char* initalizer_function_name = initializer_function->name.lexeme;
-
-    //   ArrayBinaryenExpressionRef parameters;
-    //   array_init(&parameters);
-    //   array_add(&parameters, BinaryenLocalGet(codegen.module, 0, statement->ref));
-
-    //   for (unsigned int i = 1; i < initializer_function->parameters.size; i++)
-    //   {
-    //     VarStmt* parameter = array_at(&initializer_function->parameters, i);
-    //     BinaryenType parameter_type = data_type_to_binaryen_type(parameter->data_type);
-
-    //     array_add(&parameters, BinaryenLocalGet(codegen.module, i, parameter_type));
-    //     array_add(&parameter_types, parameter_type);
-    //   }
-
-    //   BinaryenExpressionRef call =
-    //     BinaryenCall(codegen.module, initalizer_function_name, parameters.elems, parameters.size,
-    //                  BinaryenTypeNone());
-    //   generate_debug_info(initializer_function->name, call, codegen.function);
-
-    //   array_add(&initializer_body, call);
-    // }
-
-    // array_add(&initializer_body, BinaryenLocalGet(codegen.module, 0, statement->ref));
-
-    // codegen.function = previous_function;
 
     MIR_new_export(codegen.ctx, statement->name.lexeme);
     MIR_finish_func(codegen.ctx);
@@ -2424,52 +2380,15 @@ static void generate_class_declaration(ClassStmt* statement)
     index++;
 
   } while (index < initializer_functions.size);
-
-  //  ArrayMIR_var_t vars;
-  // array_init(&vars);
-
-  // VarStmt* parameter;
-  // array_foreach(&statement->parameters, parameter)
-  // {
-  //   MIR_var_t var;
-  //   var.name = memory_sprintf("%s.%d", parameter->name.lexeme, parameter->index);
-  //   var.type = data_type_to_mir_type(parameter->data_type);
-
-  //   array_add(&vars, var);
-  // }
-
-  // if (statement->item)
-  // {
-  //   codegen.function = statement->item;
-  //   MIR_set_curr_func(codegen.ctx, statement->item->u.func);
-  // }
-  // else
-  // {
-  //   codegen.function = MIR_new_func_arr(
-  //     codegen.ctx, statement->name.lexeme, statement->data_type.type != TYPE_VOID,
-  //     (MIR_type_t[]){ data_type_to_mir_type(statement->data_type) }, vars.size, vars.elems);
-  // }
-
-  // statement->item = codegen.function;
-
-  // array_foreach(&statement->parameters, parameter)
-  // {
-  //   parameter->reg = MIR_reg(codegen.ctx, vars.elems[_i].name, codegen.function->u.func);
-  // }
-
-  // VarStmt* variable;
-  // array_foreach(&statement->variables, variable)
-  // {
-  //   variable->reg = MIR_new_func_reg(
-  //     codegen.ctx, codegen.function->u.func, data_type_to_mir_type(variable->data_type),
-  //     memory_sprintf("%s.%d", variable->name.lexeme, variable->index));
-  // }
-
-  // generate_statements(&statement->body);
 }
 
 static void generate_class_template_declaration(ClassTemplateStmt* statement)
 {
+  ClassStmt* class_declaration;
+  array_foreach(&statement->classes, class_declaration)
+  {
+    generate_class_declaration(class_declaration);
+  }
 }
 
 static void generate_import_declaration(ImportStmt* statement)
@@ -2512,11 +2431,14 @@ static void generate_statement(Stmt* statement)
   case STMT_IMPORT_DECL:
     generate_import_declaration(&statement->import);
     return;
-  case STMT_FUNCTION_TEMPLATE_DECL:
-    generate_function_template_declaration(&statement->func_template);
-    return;
   case STMT_CLASS_DECL:
     generate_class_declaration(&statement->class);
+    return;
+  case STMT_CLASS_TEMPLATE_DECL:
+    generate_class_template_declaration(&statement->class_template);
+    return;
+  case STMT_FUNCTION_TEMPLATE_DECL:
+    generate_function_template_declaration(&statement->func_template);
     return;
   }
 
@@ -2544,16 +2466,14 @@ void codegen_init(ArrayStmt statements)
   uintptr_t callstack[128] = { 0 };
   codegen.callstack = MIR_new_data(codegen.ctx, "<callstack>", MIR_T_P,
                                    sizeof(callstack) / sizeof_ptr(callstack), &callstack);
-  codegen.callstack_index = MIR_new_data(codegen.ctx, "<callstack_ptr>", MIR_T_I64, 1, &callstack);
 
   MIR_load_external(codegen.ctx, "panic", (void*)panic);
-  codegen.panic.proto = MIR_new_proto_arr(codegen.ctx, "panic.proto", 0, NULL, 3,
-                                          (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 },
-                                                         { .name = "n2", .type = MIR_T_I64 },
-                                                         { .name = "n3", .type = MIR_T_I64 } });
+  codegen.panic.proto = MIR_new_proto_arr(
+    codegen.ctx, "panic.proto", 0, NULL, 2,
+    (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "ptr2", .type = MIR_T_I64 } });
   codegen.panic.func = MIR_new_import(codegen.ctx, "panic");
 
-  MIR_load_external(codegen.ctx, "malloc", (void*)alloc);
+  MIR_load_external(codegen.ctx, "malloc", (void*)malloc);
   codegen.malloc.proto =
     MIR_new_proto_arr(codegen.ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                       (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
@@ -2624,7 +2544,7 @@ Codegen codegen_generate(bool logging)
   MIR_finish_module(codegen.ctx);
 
   if (logging)
-    MIR_output(codegen.ctx, stderr);
+    MIR_output(codegen.ctx, stdout);
 
   MIR_load_module(codegen.ctx, codegen.module);
   MIR_gen_init(codegen.ctx);

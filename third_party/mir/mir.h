@@ -557,6 +557,7 @@ extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_
 extern MIR_insn_t MIR_new_label (MIR_context_t ctx);
 
 extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
+extern int MIR_reg_exists (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
 extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_hard_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);

@@ -1,84 +1,72 @@
 import "env"
-    void log(bool n)
     void log(string n)
+    void log(int n)
 
-class Hashmap
-    char[] keys
-    char[] values
-
-    void __init__()
-        for int i = 0; i < 100; i += 1
-            this.keys.push((char)0)
-
-        for int i = 0; i < 100; i += 1
-            this.values.push((char)0)
+class TreeNode
+    TreeNode left
+    TreeNode right
     
-    int hash(char key)
-        return (int)key % this.keys.length
+TreeNode bottomUpTree(TreeNode this, int depth)
+    if depth > 0
+        TreeNode leftChild = bottomUpTree(this, depth - 1)
+        TreeNode rightChild = bottomUpTree(this, depth - 1)
+        TreeNode node = TreeNode()
+        node.left = leftChild
+        node.right = rightChild
+        return node
+    else
+        TreeNode node = TreeNode()
+        node.left = null
+        node.right = null
+        return node
 
-    char get(char key)
-        int index = hash(key)
+int itemCheck(TreeNode this) 
+    if this.left == null
+        return 1
+    else
+        return 1 + itemCheck(this.left) + itemCheck(this.right)
 
-        while this.keys[index] != (char)0
-            if this.keys[index] == key
-                return this.values[index]
+int minDepth = 4
+int n = 20
+int maxDepth
+if minDepth + 2 > n
+    maxDepth = minDepth + 2
+else
+    maxDepth = n
 
-            index = (index + 1) % this.keys.length
+int stretchDepth = maxDepth + 1
 
-        return (char)0
+TreeNode stretchTree = TreeNode()
+TreeNode temp = bottomUpTree(stretchTree, stretchDepth)
+int check = itemCheck(temp)
+log("stretch tree of depth ")
+log((string)stretchDepth)
+log(" check: ")
+log(check + "\n")
+
+TreeNode longLivedTree = TreeNode()
+longLivedTree = bottomUpTree(longLivedTree, maxDepth)
+
+int depth = minDepth
+while depth <= maxDepth
+    int iterations = 1 << (maxDepth - depth + minDepth)
+    check = 0
     
-    bool contains(char key)
-        return get(key) != (char)0
-
-    void set(char key, char value)
-        int index = hash(key)
-
-        while this.keys[index] != (char)0
-            if this.keys[index] == key
-                # log("about to go bye bye")
-                # this.values[index] = value
-                # log("about to go bye bye")
-
-                return
+    int i = 1
+    while i <= iterations
+        TreeNode tree = TreeNode()
+        tree = bottomUpTree(tree, depth)
+        check = check + itemCheck(tree)
+        i = i + 1
     
-            # index = (index + 1) % this.keys.length
-    
-        # this.keys[index] = key
-        # this.values[index] = value
+    log((string)iterations)
+    log(" trees of depth ")
+    log((string)depth)
+    log(" check: ")
+    log(check + "\n")
+    depth = depth + 2
 
-bool isIsomorphic(string s, string t)
-    if s.length != t.length
-        return false
-
-    Hashmap mapping_t = Hashmap()
-    Hashmap mapping_s = Hashmap()
-
-    for int i = 0; i < s.length; i += 1
-        char s_char = s[i]
-        char t_char = t[i]
-        
-        if mapping_s.contains(s_char)
-            if mapping_s.get(s_char) != t_char
-                return false
-        else
-            mapping_s.set(s_char, t_char)
-
-    #     if mapping_t.contains(t_char)
-    #         if mapping_t.get(t_char) != s_char
-    #             return false
-    #     else
-    #         mapping_t.set(t_char, s_char)
-
-    return true
-
-log(isIsomorphic("egg", "add"))
-# log(isIsomorphic("foo", "bar"))
-# log(isIsomorphic("paper", "title"))
-# log(isIsomorphic("ab", "ab"))
-# log(isIsomorphic("a", "a"))
-
-# 1
-# 0
-# 1
-# 1
-# 1
+log("long lived tree of depth ")
+log((string)maxDepth)
+log(" check: ")
+log(itemCheck(longLivedTree) + "\n")

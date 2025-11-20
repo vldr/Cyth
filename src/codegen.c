@@ -61,6 +61,7 @@ static struct
   Function malloc;
   Function realloc;
   Function string_concat;
+  Function string_equals;
   Function string_bool_cast;
   Function string_int_cast;
   Function string_float_cast;
@@ -106,6 +107,11 @@ static String* string_concat(String* left, String* right)
   memcpy(result->data + left->size, right->data, right->size);
 
   return result;
+}
+
+static bool string_equals(String* left, String* right)
+{
+  return left->size == right->size && memcmp(left->data, right->data, left->size) == 0;
 }
 
 static String* string_int_cast(int n)
@@ -339,7 +345,6 @@ static void generate_string_literal_expression(MIR_op_t dest, const char* litera
 
 static void generate_panic(Token token, const char* what)
 {
-
   MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
   generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, ptr), what, strlen(what));
 
@@ -802,6 +807,17 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
                           MIR_new_reg_op(codegen.ctx, right)));
       return;
     }
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
+
     else
       UNREACHABLE("Unsupported binary type for +");
 
@@ -811,6 +827,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_SUB;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FSUB;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for -");
 
@@ -820,6 +846,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_MULS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FMUL;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for *");
 
@@ -829,6 +865,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_DIVS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FDIV;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for /");
 
@@ -864,7 +910,17 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       UNREACHABLE("Unknown operator");
     }
 
-    if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_CHAR)
+    if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
+    else if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_CHAR)
       UNREACHABLE("Unsupported binary type for %, &, |, ^, <<, >>");
 
     break;
@@ -876,7 +932,32 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_EQS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FEQ;
-
+    else if (data_type.type == TYPE_STRING)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, codegen.string_equals.proto),
+                          MIR_new_ref_op(codegen.ctx, codegen.string_equals.func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      if (expression->function)
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_call_insn(
+                          codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      else
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, MIR_EQ, MIR_new_reg_op(codegen.ctx, dest),
+                                     MIR_new_reg_op(codegen.ctx, left),
+                                     MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for ==");
 
@@ -888,6 +969,22 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_NES;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FNE;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      if (expression->function)
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_call_insn(
+                          codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      else
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, MIR_NE, MIR_new_reg_op(codegen.ctx, dest),
+                                     MIR_new_reg_op(codegen.ctx, left),
+                                     MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for !=");
 
@@ -899,6 +996,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_LES;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FLE;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for <=");
 
@@ -910,6 +1017,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_GES;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FGE;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for <=");
 
@@ -921,6 +1038,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_LTS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FLT;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for <");
 
@@ -932,6 +1059,16 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_GTS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FGT;
+    else if (data_type.type == TYPE_OBJECT)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      return;
+    }
     else
       UNREACHABLE("Unsupported binary type for >");
 
@@ -1501,8 +1638,8 @@ static void generate_variable_expression(MIR_reg_t dest, VarExpr* expression)
 
 static void generate_assignment_expression(MIR_reg_t dest, AssignExpr* expression)
 {
-  MIR_reg_t value = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->data_type),
-                                      codegen.function->u.func);
+  MIR_reg_t value = _MIR_new_temp_reg(
+    codegen.ctx, data_type_to_mir_type(expression->value_data_type), codegen.function->u.func);
   generate_expression(value, expression->value);
 
   VarStmt* variable = expression->variable;
@@ -1608,17 +1745,24 @@ static void generate_assignment_expression(MIR_reg_t dest, AssignExpr* expressio
       codegen.function->u.func);
     generate_expression(index, expression->target->index.index);
 
-    // if (expression->target->index.expr_data_type.type == TYPE_OBJECT)
-    // {
-    //   BinaryenExpressionRef operands[] = { ref, index, value };
-    //   BinaryenExpressionRef call = BinaryenCall(
-    //     codegen.module, expression->function, operands, sizeof(operands) /
-    //     sizeof_ptr(operands), data_type_to_binaryen_type(expression->target->index.data_type));
-
-    //   generate_debug_info(expression->target->index.index_token, call, codegen.function);
-    //   return call;
-    // }
-    // else
+    if (expression->target->index.expr_data_type.type == TYPE_OBJECT)
+    {
+      if (expression->function->data_type.type == TYPE_VOID)
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_call_insn(
+                          codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, ptr), MIR_new_reg_op(codegen.ctx, index),
+                          MIR_new_reg_op(codegen.ctx, value)));
+      else
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_call_insn(
+                          codegen.ctx, 6, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, ptr),
+                          MIR_new_reg_op(codegen.ctx, index), MIR_new_reg_op(codegen.ctx, value)));
+    }
+    else
     {
       MIR_label_t cont_label = MIR_new_label(codegen.ctx);
       MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
@@ -1890,18 +2034,23 @@ static void generate_index_expression(MIR_reg_t dest, IndexExpr* expression)
     MIR_append_insn(codegen.ctx, codegen.function, cont_label);
     return;
   }
-  // case TYPE_OBJECT: {
-  //   BinaryenExpressionRef operands[] = {
-  //     ref,
-  //     index,
-  //   };
+  case TYPE_OBJECT: {
+    if (expression->function->data_type.type == TYPE_VOID)
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, ptr), MIR_new_reg_op(codegen.ctx, index)));
+    else
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, expression->function->proto),
+                          MIR_new_ref_op(codegen.ctx, expression->function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, ptr),
+                          MIR_new_reg_op(codegen.ctx, index)));
 
-  //   BinaryenExpressionRef call = BinaryenCall(codegen.module, expression->function, operands,
-  //                                             sizeof(operands) / sizeof_ptr(operands), type);
-
-  //   generate_debug_info(expression->index_token, call, codegen.function);
-  //   return call;
-  // }
+    return;
+  }
   default:
     UNREACHABLE("Unhandled index type");
   }
@@ -2278,18 +2427,15 @@ static void generate_class_declaration(ClassStmt* statement)
     VarStmt* variable;
     array_foreach(&statement->variables, variable)
     {
-      if (!variable->initializer)
-      {
-        MIR_reg_t initializer = _MIR_new_temp_reg(
-          codegen.ctx, data_type_to_mir_type(variable->data_type), codegen.function->u.func);
+      MIR_reg_t initializer = _MIR_new_temp_reg(
+        codegen.ctx, data_type_to_mir_type(variable->data_type), codegen.function->u.func);
 
-        generate_default_initialization(initializer, variable->data_type);
+      generate_default_initialization(initializer, variable->data_type);
 
-        MIR_append_insn(codegen.ctx, codegen.function,
-                        MIR_new_insn(codegen.ctx, data_type_to_mov_type(variable->data_type),
-                                     generate_object_field_op(variable, ptr),
-                                     MIR_new_reg_op(codegen.ctx, initializer)));
-      }
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, data_type_to_mov_type(variable->data_type),
+                                   generate_object_field_op(variable, ptr),
+                                   MIR_new_reg_op(codegen.ctx, initializer)));
     }
 
     array_foreach(&statement->variables, variable)
@@ -2657,6 +2803,12 @@ void codegen_init(ArrayStmt statements)
     codegen.ctx, "string.concat.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
     (MIR_var_t[]){ { .name = "left", .type = MIR_T_I64 }, { .name = "right", .type = MIR_T_I64 } });
   codegen.string_concat.func = MIR_new_import(codegen.ctx, "string.concat");
+
+  MIR_load_external(codegen.ctx, "string.equals", (void*)string_equals);
+  codegen.string_equals.proto = MIR_new_proto_arr(
+    codegen.ctx, "string.equals.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
+    (MIR_var_t[]){ { .name = "left", .type = MIR_T_I64 }, { .name = "right", .type = MIR_T_I64 } });
+  codegen.string_equals.func = MIR_new_import(codegen.ctx, "string.equals");
 
   MIR_load_external(codegen.ctx, "string.bool_cast", (void*)string_bool_cast);
   codegen.string_bool_cast.proto =

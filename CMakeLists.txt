@@ -49,7 +49,7 @@ add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/co
 if (MSVC)
     target_compile_options(cyth PRIVATE /MP)
 else()
-    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -Wno-gnu-flexible-array-initializer)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(cyth PRIVATE -fsanitize=address -fsanitize=undefined -D_DEBUG)

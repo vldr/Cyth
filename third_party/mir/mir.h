@@ -277,7 +277,7 @@ typedef struct {
 typedef struct MIR_insn *MIR_insn_t;
 
 /* Definition of link of double list of insns */
-DEF_DLIST_LINK (MIR_insn_t);
+DEF_DLIST_LINK (MIR_insn_t)
 
 struct MIR_insn {
   void *data; /* Aux data */
@@ -288,7 +288,7 @@ struct MIR_insn {
 };
 
 /* Definition of double list of insns */
-DEF_DLIST (MIR_insn_t, insn_link);
+DEF_DLIST (MIR_insn_t, insn_link)
 
 typedef struct MIR_var {
   MIR_type_t type; /* MIR_T_BLK .. MIR_T_RBLK can be used only args */
@@ -296,7 +296,7 @@ typedef struct MIR_var {
   size_t size; /* ignored for type != [MIR_T_BLK .. MIR_T_RBLK] */
 } MIR_var_t;
 
-DEF_VARR (MIR_var_t);
+DEF_VARR (MIR_var_t)
 
 /* Function definition */
 typedef struct MIR_func {
@@ -367,7 +367,7 @@ typedef struct MIR_bss {
 typedef struct MIR_module *MIR_module_t;
 
 /* Definition of link of double list of MIR_item_t type elements */
-DEF_DLIST_LINK (MIR_item_t);
+DEF_DLIST_LINK (MIR_item_t)
 
 #define ITEM_EL(i) MIR_##i##_item
 
@@ -413,10 +413,10 @@ struct MIR_item {
 };
 
 /* Definition of double list of MIR_item_t type elements */
-DEF_DLIST (MIR_item_t, item_link);
+DEF_DLIST (MIR_item_t, item_link)
 
 /* Definition of link of double list of MIR_module_t type elements */
-DEF_DLIST_LINK (MIR_module_t);
+DEF_DLIST_LINK (MIR_module_t)
 
 /* MIR module: */
 struct MIR_module {
@@ -428,7 +428,7 @@ struct MIR_module {
 };
 
 /* Definition of double list of MIR_item_t type elements */
-DEF_DLIST (MIR_module_t, module_link);
+DEF_DLIST (MIR_module_t, module_link)
 
 struct MIR_context;
 typedef struct MIR_context *MIR_context_t;

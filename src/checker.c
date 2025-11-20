@@ -2205,6 +2205,12 @@ static DataType check_binary_expression(BinaryExpr* expression)
     }
 
     FuncStmt* function = function_data_type.function_member.function;
+    if (function->parameters.size != 2)
+    {
+      error_missing_operator_overload(op, left, right, name);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type) &&
         !assignable_data_type(&expression->right, array_at(&function->parameters, 1)->data_type,
                               right))
@@ -2213,7 +2219,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    expression->function = function->name.lexeme;
+    expression->function = function;
     expression->return_data_type = function->data_type;
     expression->operand_data_type = left;
 
@@ -2402,6 +2408,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
     error_type_mismatch(expression->op, target_data_type, value_data_type);
     return DATA_TYPE(TYPE_VOID);
   }
+
+  expression->value_data_type = value_data_type;
 
   if (target->type == EXPR_VAR)
   {
@@ -3282,7 +3290,7 @@ static DataType check_index_expression(IndexExpr* expression)
       }
     }
 
-    expression->function = function->name.lexeme;
+    expression->function = function;
     expression->data_type = function->data_type;
     expression->expr_data_type = expr_data_type;
     expression->index_data_type = index_data_type;

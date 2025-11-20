@@ -149,7 +149,7 @@ typedef struct _BINARY_EXPR
   Token op;
   Expr* right;
 
-  const char* function;
+  struct _FUNC_STMT* function;
 } BinaryExpr;
 
 typedef struct _UNARY_EXPR
@@ -179,6 +179,7 @@ typedef struct _VAR_EXPR
 typedef struct _ASSIGN_EXPR
 {
   DataType data_type;
+  DataType value_data_type;
 
   Token op;
   Expr* target;
@@ -186,7 +187,7 @@ typedef struct _ASSIGN_EXPR
 
   VarStmt* variable;
 
-  const char* function;
+  struct _FUNC_STMT* function;
 } AssignExpr;
 
 typedef struct _CALL_EXPR
@@ -240,7 +241,7 @@ typedef struct _INDEX_EXPR
   Expr* index;
   Token index_token;
 
-  const char* function;
+  struct _FUNC_STMT* function;
 } IndexExpr;
 
 typedef struct _IS_EXPR

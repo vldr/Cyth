@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 log("\b\0\n\t\r\'\"\\")
 log("\xe0\xAD\xb4")

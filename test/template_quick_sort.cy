@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 class QuickSort<T>
     void sort(T[] array, bool(T, T) comparator)

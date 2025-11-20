@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 T functor<T>(T a, T b)
     log("functor " + a + " " + b)

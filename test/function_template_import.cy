@@ -10,5 +10,5 @@ log<string>("hello")
 # 10
 # 3.625
 # 1
-# 97
+# a
 # hello

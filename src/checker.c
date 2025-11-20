@@ -38,6 +38,9 @@ static void init_class_declaration_body(ClassStmt* statement);
 static bool analyze_statement(Stmt* statement);
 static bool analyze_statements(ArrayStmt statements);
 
+static bool autocast(Expr** expression, DataType from, DataType to);
+static bool autocast_int_literal_to_float_literal(Expr** expression);
+
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
 static DataType data_type_token_to_data_type(DataTypeToken type);
 
@@ -617,11 +620,15 @@ bool boolable_data_type(DataType data_type)
          data_type.type == TYPE_STRING || data_type.type == TYPE_BOOL;
 }
 
-bool assignable_data_type(DataType destination, DataType source)
+bool assignable_data_type(Expr** expression, DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY)
-    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
-           source.type == TYPE_NULL || source.type == TYPE_ANY;
+    return (source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
+            source.type == TYPE_NULL || source.type == TYPE_ANY) &&
+           autocast(expression, source, destination);
+
+  if (destination.type == TYPE_FLOAT)
+    return source.type == TYPE_INTEGER && autocast_int_literal_to_float_literal(expression);
 
   if (destination.type == TYPE_OBJECT)
     return source.type == TYPE_NULL;
@@ -703,7 +710,7 @@ static void data_type_inference(DataType* source, DataType* target)
       data_type_inference(&data_type, &element_data_type);
 
       if (!equal_data_type(element_data_type, data_type) &&
-          !assignable_data_type(element_data_type, data_type))
+          !assignable_data_type(&source->array.values.elems[i], element_data_type, data_type))
       {
         error_type_mismatch(token, element_data_type, data_type);
       }
@@ -1188,6 +1195,38 @@ static bool upcast(BinaryExpr* expression, DataType* left, DataType* right, Data
   return true;
 }
 
+static bool autocast(Expr** expression, DataType from, DataType to)
+{
+  if (expression == NULL)
+    return true;
+
+  Expr* cast_expression = EXPR();
+  cast_expression->type = EXPR_CAST;
+  cast_expression->cast.type = DATA_TYPE_TOKEN_EMPTY();
+  cast_expression->cast.from_data_type = from;
+  cast_expression->cast.to_data_type = to;
+  cast_expression->cast.expr = *expression;
+
+  *expression = cast_expression;
+  return true;
+}
+
+static bool autocast_int_literal_to_float_literal(Expr** expression)
+{
+  if (expression == NULL)
+    return false;
+
+  Expr* expr = *expression;
+  if (expr->type != EXPR_LITERAL)
+    return false;
+
+  float value = (float)expr->literal.integer;
+  expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
+  expr->literal.floating = value;
+
+  return true;
+}
+
 static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, DataType* right,
                                     DataType from)
 {
@@ -1228,7 +1267,7 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
             DataType parameter_data_type = function->parameters.elems[i]->data_type;
 
             if (!equal_data_type(parameter_data_type, argument_data_type) &&
-                !assignable_data_type(parameter_data_type, argument_data_type))
+                !assignable_data_type(NULL, parameter_data_type, argument_data_type))
             {
               match = false;
               break;
@@ -2167,7 +2206,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
 
     FuncStmt* function = function_data_type.function_member.function;
     if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type) &&
-        !assignable_data_type(array_at(&function->parameters, 1)->data_type, right))
+        !assignable_data_type(&expression->right, array_at(&function->parameters, 1)->data_type,
+                              right))
     {
       error_type_mismatch(op, array_at(&function->parameters, 1)->data_type, right);
       return DATA_TYPE(TYPE_VOID);
@@ -2357,7 +2397,7 @@ static DataType check_assignment_expression(AssignExpr* expression)
   data_type_inference(&value_data_type, &target_data_type);
 
   if (!equal_data_type(target_data_type, value_data_type) &&
-      !assignable_data_type(target_data_type, value_data_type))
+      !assignable_data_type(&expression->value, target_data_type, value_data_type))
   {
     error_type_mismatch(expression->op, target_data_type, value_data_type);
     return DATA_TYPE(TYPE_VOID);
@@ -2476,7 +2516,8 @@ static DataType check_call_expression(CallExpr* expression)
       data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
-          !assignable_data_type(parameter_data_type, argument_data_type))
+          !assignable_data_type(&expression->arguments.elems[i - 1], parameter_data_type,
+                                argument_data_type))
       {
         error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
                             argument_data_type);
@@ -2512,7 +2553,8 @@ static DataType check_call_expression(CallExpr* expression)
       data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
-          !assignable_data_type(parameter_data_type, argument_data_type))
+          !assignable_data_type(&expression->arguments.elems[i], parameter_data_type,
+                                argument_data_type))
       {
         error_type_mismatch(expression->argument_tokens.elems[i], parameter_data_type,
                             argument_data_type);
@@ -2564,7 +2606,8 @@ static DataType check_call_expression(CallExpr* expression)
       data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
-          !assignable_data_type(parameter_data_type, argument_data_type))
+          !assignable_data_type(&expression->arguments.elems[i - offset], parameter_data_type,
+                                argument_data_type))
       {
         Token argument_token;
 
@@ -2632,7 +2675,8 @@ static DataType check_call_expression(CallExpr* expression)
         data_type_inference(&argument_data_type, &parameter_data_type);
 
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
-            !assignable_data_type(parameter_data_type, argument_data_type))
+            !assignable_data_type(&expression->arguments.elems[i - 1], parameter_data_type,
+                                  argument_data_type))
         {
           error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
                               argument_data_type);
@@ -3273,7 +3317,7 @@ static DataType check_is_expression(IsExpr* expression)
   switch (expression->expr_data_type.type)
   {
   case TYPE_ANY:
-    if (!assignable_data_type(expression->expr_data_type, expression->is_data_type))
+    if (!assignable_data_type(NULL, expression->expr_data_type, expression->is_data_type))
     {
       error_type_is_not_assignable(expression->is_data_type_token.token, expression->is_data_type,
                                    expression->expr_data_type);
@@ -3305,7 +3349,7 @@ static DataType check_if_expression(IfExpr* expression)
   DataType right_data_type = check_expression(expression->right);
 
   if (!equal_data_type(left_data_type, right_data_type) &&
-      !assignable_data_type(left_data_type, right_data_type))
+      !assignable_data_type(&expression->right, left_data_type, right_data_type))
   {
     error_ternary_type_mismatch(expression->body_token, left_data_type, right_data_type);
   }
@@ -3379,7 +3423,7 @@ static void check_return_statement(ReturnStmt* statement)
     data_type_inference(&data_type, &checker.function->data_type);
 
     if (!equal_data_type(checker.function->data_type, data_type) &&
-        !assignable_data_type(checker.function->data_type, data_type))
+        !assignable_data_type(&statement->expr, checker.function->data_type, data_type))
     {
       error_type_mismatch(statement->keyword, checker.function->data_type, data_type);
       return;
@@ -3511,7 +3555,8 @@ static void check_variable_declaration(VarStmt* statement)
     data_type_inference(&statement->initializer_data_type, &statement->data_type);
 
     if (!equal_data_type(statement->data_type, statement->initializer_data_type) &&
-        !assignable_data_type(statement->data_type, statement->initializer_data_type))
+        !assignable_data_type(&statement->initializer, statement->data_type,
+                              statement->initializer_data_type))
     {
       error_type_mismatch(statement->equals, statement->data_type,
                           statement->initializer_data_type);

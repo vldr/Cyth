@@ -54,7 +54,6 @@ typedef struct _DATA_TYPE
     TYPE_CHAR,
     TYPE_INTEGER,
     TYPE_FLOAT,
-    TYPE_STRING,
     TYPE_ALIAS,
     TYPE_FUNCTION,
     TYPE_FUNCTION_MEMBER,
@@ -64,8 +63,9 @@ typedef struct _DATA_TYPE
     TYPE_FUNCTION_GROUP,
     TYPE_PROTOTYPE,
     TYPE_PROTOTYPE_TEMPLATE,
-    TYPE_OBJECT,
+    TYPE_STRING,
     TYPE_ARRAY,
+    TYPE_OBJECT,
   } type;
 
   union {

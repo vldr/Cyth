@@ -1636,6 +1636,8 @@ void parser_init(ArrayToken tokens)
 {
   parser.error = false;
   parser.tokens = tokens;
+  parser.classes = 0;
+
   seek(0);
 }
 

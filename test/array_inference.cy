@@ -1,5 +1,6 @@
 import "env"
     void log(string a)
+    void log(int n)
 
 class Printer<T>
     void print(T a)

@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 class A<K, T>
   void run(void(K, T) func, K a, T b)

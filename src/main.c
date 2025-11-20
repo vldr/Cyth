@@ -166,6 +166,9 @@ static void handle_error(int start_line, int start_column, int end_line, int end
 
 static void handle_result(size_t size, void* data, size_t source_map_size, void* source_map)
 {
+  if (!data)
+    return;
+
   (void)source_map_size;
 
   if (cyth.input_path && !cyth.output_path)

@@ -1,5 +1,6 @@
 import "env"
     void log(float n)
+    void log(int n)
 
 float(float) a
 int[] b

@@ -68,6 +68,7 @@ static struct
   Function string_char_cast;
 } codegen;
 
+static void generate_default_initialization(MIR_reg_t dest, DataType data_type);
 static void generate_expression(MIR_reg_t dest, Expr* expression);
 static void generate_statement(Stmt* statement);
 static void generate_statements(ArrayStmt* statements);
@@ -402,7 +403,7 @@ static Function* generate_array_push_function(DataType data_type, DataType eleme
   Function* function = map_get_function(&codegen.functions, name);
   if (!function)
   {
-    MIR_type_t return_type = MIR_T_UNDEF;
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
     MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) },
                            { .name = "value", .type = data_type_to_mir_type(element_data_type) } };
 
@@ -573,6 +574,197 @@ static Function* generate_array_pop_function(DataType data_type)
   return function;
 }
 
+static Function* generate_array_clear_function(DataType data_type)
+{
+  const char* name = "array.clear";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) } };
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    codegen.function = function->func;
+
+    MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_length_op(ptr),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
+static Function* generate_array_reserve_function(DataType data_type)
+{
+  const char* name = memory_sprintf("array.reserve.%s", data_type_to_string(data_type));
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    DataType element_data_type = array_data_type_element(data_type);
+
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    ArrayMIR_var_t params;
+    array_init(&params);
+
+    MIR_var_t this = { .name = "ptr", .type = data_type_to_mir_type(data_type) };
+    array_add(&params, this);
+
+    for (int i = 0; i < *data_type.array.count; i++)
+    {
+      MIR_var_t n = { .name = memory_sprintf("n.%d", i), .type = data_type_to_mir_type(data_type) };
+      array_add(&params, n);
+    }
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, params.size, params.elems);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      params.size, params.elems);
+
+    codegen.function = function->func;
+
+    MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+    MIR_reg_t n = MIR_reg(codegen.ctx, "n.0", codegen.function->u.func);
+    MIR_reg_t array_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+    {
+      MIR_label_t continue_label = MIR_new_label(codegen.ctx);
+      MIR_label_t panic_label = MIR_new_label(codegen.ctx);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_BLTS,
+                                   MIR_new_label_op(codegen.ctx, panic_label),
+                                   MIR_new_reg_op(codegen.ctx, n), MIR_new_int_op(codegen.ctx, 0)));
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, continue_label)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, panic_label);
+
+      generate_panic((Token){ 0 }, "Invalid reservation amount");
+
+      MIR_append_insn(codegen.ctx, codegen.function, continue_label);
+    }
+
+    {
+      MIR_reg_t size = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MUL, MIR_new_reg_op(codegen.ctx, size),
+                                   MIR_new_reg_op(codegen.ctx, n),
+                                   MIR_new_int_op(codegen.ctx, size_data_type(element_data_type))));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, array_ptr),
+                                   generate_array_data_op(ptr)));
+
+      generate_malloc_expression(array_ptr, MIR_new_reg_op(codegen.ctx, size));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_data_op(ptr),
+                                   MIR_new_reg_op(codegen.ctx, array_ptr)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_length_op(ptr),
+                                   MIR_new_reg_op(codegen.ctx, n)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_capacity_op(ptr),
+                                   MIR_new_reg_op(codegen.ctx, n)));
+    }
+
+    {
+      MIR_reg_t i = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, i),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+
+      MIR_label_t break_label = MIR_new_label(codegen.ctx);
+      MIR_label_t continue_label = MIR_new_label(codegen.ctx);
+
+      MIR_append_insn(codegen.ctx, codegen.function, continue_label);
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_BGE, MIR_new_label_op(codegen.ctx, break_label),
+                                   MIR_new_reg_op(codegen.ctx, i), MIR_new_reg_op(codegen.ctx, n)));
+
+      MIR_reg_t dest = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(element_data_type),
+                                         codegen.function->u.func);
+      generate_default_initialization(dest, element_data_type);
+
+      if (element_data_type.type == TYPE_ARRAY)
+      {
+        Function* function = generate_array_reserve_function(element_data_type);
+
+        ArrayMIR_op_t arguments;
+        array_init(&arguments);
+        array_add(&arguments, MIR_new_ref_op(codegen.ctx, function->proto));
+        array_add(&arguments, MIR_new_ref_op(codegen.ctx, function->func));
+        array_add(&arguments, MIR_new_reg_op(codegen.ctx, dest));
+
+        for (int i = 1; i < *data_type.array.count; i++)
+        {
+          MIR_reg_t n = MIR_reg(codegen.ctx, memory_sprintf("n.%d", i), codegen.function->u.func);
+          array_add(&arguments, MIR_new_reg_op(codegen.ctx, n));
+        }
+
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn_arr(codegen.ctx, MIR_INLINE, arguments.size, arguments.elems));
+      }
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_MOV,
+                     MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(element_data_type), 0,
+                                    array_ptr, i, size_data_type(element_data_type)),
+                     MIR_new_reg_op(codegen.ctx, dest)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_ADD, MIR_new_reg_op(codegen.ctx, i),
+                                   MIR_new_reg_op(codegen.ctx, i), MIR_new_int_op(codegen.ctx, 1)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, continue_label)));
+      MIR_append_insn(codegen.ctx, codegen.function, break_label);
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
 static MIR_op_t generate_string_length_op(MIR_reg_t base)
 {
   return MIR_new_mem_op(codegen.ctx, MIR_T_I32, 0, base, 0, 1);
@@ -633,12 +825,11 @@ static Function* generate_function_internal(DataType data_type)
   // else if (strcmp(name, "array.to_string") == 0)
   //   return generate_array_to_string_function(
   //     array_at(&data_type.function_internal.parameter_types, 0));
-  // else if (strcmp(name, "array.clear") == 0)
-  //   return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types,
-  //   0));
-  // else if (strcmp(name, "array.reserve") == 0)
-  //   return generate_array_reserve_function(
-  //     array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.clear") == 0)
+    return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.reserve") == 0)
+    return generate_array_reserve_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
   // else if (strcmp(name, "int.hash") == 0)
   //   return generate_int_hash_function();
   // else if (strcmp(name, "float.sqrt") == 0)

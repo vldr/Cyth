@@ -1,12 +1,11 @@
 import "env"
-  void log(string n)
-  void log(int n)
+    void log(string n)
+    void log(int n)
+char[] a
 
-int[][] a
+a.pushString("hello world")
+a.pushString("hello world")
+a.pushString("hello world")
 
-a.reserve(3, 3)
 
-for int[] i in a
-  for int j in i
-    log(j)
-  log("---")
+log(a.toString())

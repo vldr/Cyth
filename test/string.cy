@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 int stringIndexOf(string s, string target)
     if target.length == 0

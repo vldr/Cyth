@@ -1,5 +1,6 @@
 import "env"
   void log(string a)
+  void log(int n)
 
 class A
   B b = B()

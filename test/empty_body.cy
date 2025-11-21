@@ -1,5 +1,6 @@
 import "env"
     void log(float n)
+    void log(int n)
 
 bool test = false
 bool test2 = true

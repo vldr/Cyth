@@ -9,6 +9,7 @@
 #include "mir.h"
 #include "statement.h"
 
+#include <math.h>
 #include <mir-gen.h>
 #include <setjmp.h>
 
@@ -974,6 +975,240 @@ static Function* generate_array_reserve_function(DataType data_type)
   return function;
 }
 
+static int int_hash(int n)
+{
+  return n;
+}
+
+static Function* generate_int_hash_function(void)
+{
+  const char* name = "int.hash";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)int_hash);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static int float_hash(float n)
+{
+  return *(int*)&n;
+}
+
+static Function* generate_float_hash_function(void)
+{
+  const char* name = "float.hash";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)float_hash);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static float float_sqrt(float n)
+{
+  return sqrtf(n);
+}
+
+static Function* generate_float_sqrt_function(void)
+{
+  const char* name = "float.sqrt";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT));
+    MIR_var_t params[] = {
+      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)float_sqrt);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static int string_hash(String* n)
+{
+  uint32_t hash = 0x811c9dc5;
+
+  for (unsigned int i = 0; i < n->size; i++)
+  {
+    hash ^= n->data[i];
+    hash *= 0x01000193;
+  }
+
+  return hash;
+}
+
+static Function* generate_string_hash_function(void)
+{
+  const char* name = "string.hash";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_hash);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static int string_index_of(String* haystack, String* needle)
+{
+  if (needle->size == 0)
+    return 0;
+
+  for (unsigned int i = 0; i < haystack->size - needle->size; i++)
+  {
+    bool match = true;
+
+    for (unsigned int j = 0; j < needle->size; j++)
+    {
+      if (haystack->data[i + j] != needle->data[j])
+      {
+        match = false;
+        break;
+      }
+    }
+
+    if (match)
+      return i;
+  }
+
+  return -1;
+}
+
+static Function* generate_string_index_of_function(void)
+{
+  const char* name = "string.index_of";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "haystack", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_index_of);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static int string_count(String* haystack, String* needle)
+{
+  if (needle->size == 0)
+  {
+    return haystack->size + 1;
+  }
+
+  int count = 0;
+
+  for (unsigned int i = 0; i < haystack->size - needle->size; i++)
+  {
+    bool match = true;
+
+    for (unsigned int j = 0; j < needle->size; j++)
+    {
+      if (haystack->data[i + j] != needle->data[j])
+      {
+        match = false;
+        break;
+      }
+    }
+
+    if (match)
+      count++;
+  }
+
+  return count;
+}
+
+static Function* generate_string_count_function(void)
+{
+  const char* name = "string.count";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "haystack", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_count);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1029,18 +1264,18 @@ static Function* generate_function_internal(DataType data_type)
   else if (strcmp(name, "array.reserve") == 0)
     return generate_array_reserve_function(
       array_at(&data_type.function_internal.parameter_types, 0));
-  // else if (strcmp(name, "int.hash") == 0)
-  //   return generate_int_hash_function();
-  // else if (strcmp(name, "float.sqrt") == 0)
-  //   return generate_float_sqrt_function();
-  // else if (strcmp(name, "float.hash") == 0)
-  //   return generate_float_hash_function();
-  // else if (strcmp(name, "string.hash") == 0)
-  //   return generate_string_hash_function();
-  // else if (strcmp(name, "string.index_of") == 0)
-  //   return generate_string_index_of_function();
-  // else if (strcmp(name, "string.count") == 0)
-  //   return generate_string_count_function();
+  else if (strcmp(name, "int.hash") == 0)
+    return generate_int_hash_function();
+  else if (strcmp(name, "float.hash") == 0)
+    return generate_float_hash_function();
+  else if (strcmp(name, "float.sqrt") == 0)
+    return generate_float_sqrt_function();
+  else if (strcmp(name, "string.hash") == 0)
+    return generate_string_hash_function();
+  else if (strcmp(name, "string.index_of") == 0)
+    return generate_string_index_of_function();
+  else if (strcmp(name, "string.count") == 0)
+    return generate_string_count_function();
   // else if (strcmp(name, "string.replace") == 0)
   //   return generate_string_replace_function();
   // else if (strcmp(name, "string.trim") == 0)

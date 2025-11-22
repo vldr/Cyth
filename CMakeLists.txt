@@ -30,7 +30,7 @@ if (EMSCRIPTEN)
     )
 else()
     if (NOT MSVC)
-        add_link_options(-pthread)
+        add_link_options(-pthread -lm)
     endif()
 
     add_custom_target(test

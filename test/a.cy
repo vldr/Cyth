@@ -1,11 +1,15 @@
 import "env"
     void log(string n)
     void log(int n)
-char[] a
+class A
 
-a.pushString("hello world")
-a.pushString("hello world")
-a.pushString("hello world")
+int[] a = [1,2,3]
 
+any p = a
 
-log(a.toString())
+(A)p
+
+int[] q = (int[])p
+
+for int pp in q
+    log(pp)

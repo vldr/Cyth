@@ -51,6 +51,7 @@ static struct
   MIR_label_t continue_label;
   MIR_label_t break_label;
   ArrayStmt statements;
+  MapS64 typeids;
   MapMIR_item string_constants;
   MapMIR_item items;
   ArrayMIR_item_t function_items;
@@ -303,9 +304,25 @@ static MIR_item_t data_type_to_proto(DataType data_type)
       codegen.ctx, memory_sprintf("%s.proto", data_type_to_string(data_type)),
       return_data_type.type != TYPE_VOID, (MIR_type_t[]){ data_type_to_mir_type(return_data_type) },
       vars.size, vars.elems);
+
+    map_put_mir_item(&codegen.items, name, item);
   }
 
   return item;
+}
+
+static uint64_t data_type_to_typeid(DataType data_type)
+{
+  const char* name = data_type_to_string(data_type);
+  int id = map_get_s64(&codegen.typeids, name);
+
+  if (!id)
+  {
+    id = map_size_s64(&codegen.typeids) + 1;
+    map_put_s64(&codegen.typeids, name, id);
+  }
+
+  return id;
 }
 
 static void generate_malloc_expression(MIR_reg_t dest, MIR_op_t size)
@@ -1707,7 +1724,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
         codegen.ctx, codegen.function,
         MIR_new_insn(codegen.ctx, MIR_BNE, MIR_new_label_op(codegen.ctx, if_false_label),
                      MIR_new_reg_op(codegen.ctx, id),
-                     MIR_new_int_op(codegen.ctx, TYPE_STRING - TYPE_PROTOTYPE_TEMPLATE)));
+                     MIR_new_int_op(codegen.ctx, data_type_to_typeid(expression->to_data_type))));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, MIR_AND, MIR_new_reg_op(codegen.ctx, dest),
@@ -1821,10 +1838,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
     case TYPE_STRING:
     case TYPE_ARRAY:
     case TYPE_OBJECT: {
-      uint64_t id = (uint64_t)expression->from_data_type.type - (uint64_t)TYPE_PROTOTYPE_TEMPLATE;
-      if (expression->from_data_type.type == TYPE_OBJECT)
-        id += expression->from_data_type.class->id;
-      id <<= 48;
+      uint64_t id = data_type_to_typeid(expression->from_data_type) << 48;
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, MIR_OR, MIR_new_reg_op(codegen.ctx, dest),
@@ -1862,7 +1876,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
         codegen.ctx, codegen.function,
         MIR_new_insn(codegen.ctx, MIR_BNE, MIR_new_label_op(codegen.ctx, if_false_label),
                      MIR_new_reg_op(codegen.ctx, id),
-                     MIR_new_int_op(codegen.ctx, TYPE_ARRAY - TYPE_PROTOTYPE_TEMPLATE)));
+                     MIR_new_int_op(codegen.ctx, data_type_to_typeid(expression->to_data_type))));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, MIR_AND, MIR_new_reg_op(codegen.ctx, dest),
@@ -1905,8 +1919,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
         codegen.ctx, codegen.function,
         MIR_new_insn(codegen.ctx, MIR_BNE, MIR_new_label_op(codegen.ctx, if_false_label),
                      MIR_new_reg_op(codegen.ctx, id),
-                     MIR_new_int_op(codegen.ctx, TYPE_OBJECT - TYPE_PROTOTYPE_TEMPLATE +
-                                                   expression->to_data_type.class->id)));
+                     MIR_new_int_op(codegen.ctx, data_type_to_typeid(expression->to_data_type))));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_insn(codegen.ctx, MIR_AND, MIR_new_reg_op(codegen.ctx, dest),
@@ -2496,10 +2509,7 @@ static void generate_is_expression(MIR_reg_t dest, IsExpr* expression)
                   MIR_new_insn(codegen.ctx, MIR_URSH, MIR_new_reg_op(codegen.ctx, dest),
                                MIR_new_reg_op(codegen.ctx, dest), MIR_new_int_op(codegen.ctx, 48)));
 
-  uint64_t id = (uint64_t)expression->is_data_type.type - (uint64_t)TYPE_PROTOTYPE_TEMPLATE;
-  if (expression->is_data_type.type == TYPE_OBJECT)
-    id += expression->is_data_type.class->id;
-
+  uint64_t id = data_type_to_typeid(expression->is_data_type);
   MIR_append_insn(codegen.ctx, codegen.function,
                   MIR_new_insn(codegen.ctx, MIR_EQ, MIR_new_reg_op(codegen.ctx, dest),
                                MIR_new_reg_op(codegen.ctx, dest), MIR_new_int_op(codegen.ctx, id)));
@@ -3244,6 +3254,7 @@ void codegen_init(ArrayStmt statements)
   map_init_function(&codegen.functions, 0, 0);
   map_init_mir_item(&codegen.string_constants, 0, 0);
   map_init_mir_item(&codegen.items, 0, 0);
+  map_init_s64(&codegen.typeids, 0, 0);
 
   VarStmt* global_local;
   ArrayVarStmt global_local_statements = global_locals();

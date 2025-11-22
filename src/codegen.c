@@ -1304,6 +1304,173 @@ static Function* generate_string_replace_function(void)
   return function;
 }
 
+static String* string_trim(String* input)
+{
+  if (!input->size)
+    return input;
+
+  int start = 0;
+  int end = input->size - 1;
+
+  while (start < input->size && isspace(input->data[start]))
+    start++;
+
+  while (end >= start && isspace(input->data[end]))
+    end--;
+
+  int size = end - start + 1;
+
+  String* result = malloc(sizeof(String) + size);
+  result->size = size;
+
+  for (int i = start, j = 0; i <= end; i++, j++)
+    result->data[j] = input->data[i];
+
+  return result;
+}
+
+static Function* generate_string_trim_function(void)
+{
+  const char* name = "string.trim";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_trim);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static bool string_starts_with(String* input, String* target)
+{
+  if (target->size == 0)
+    return true;
+
+  if (input->size < target->size)
+    return false;
+
+  for (int i = 0; i < target->size; i++)
+  {
+    if (input->data[i] != target->data[i])
+      return false;
+  }
+
+  return true;
+}
+
+static Function* generate_string_starts_with_function(void)
+{
+  const char* name = "string.starts_with";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_starts_with);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static bool string_ends_with(String* input, String* target)
+{
+  if (target->size == 0)
+    return true;
+
+  if (input->size < target->size)
+    return false;
+
+  for (int i = 0; i < target->size; i++)
+  {
+    if (input->data[input->size - 1 - i] != target->data[target->size - 1 - i])
+      return false;
+  }
+
+  return true;
+}
+
+static Function* generate_string_ends_with_function(void)
+{
+  const char* name = "string.ends_with";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_ends_with);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static bool string_contains(String* input, String* target)
+{
+  return string_index_of(input, target) != -1;
+}
+
+static Function* generate_string_contains_function(void)
+{
+  const char* name = "string.contains";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_contains);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1373,14 +1540,14 @@ static Function* generate_function_internal(DataType data_type)
     return generate_string_count_function();
   else if (strcmp(name, "string.replace") == 0)
     return generate_string_replace_function();
-  // else if (strcmp(name, "string.trim") == 0)
-  //   return generate_string_trim_function();
-  // else if (strcmp(name, "string.starts_with") == 0)
-  //   return generate_string_starts_with_function();
-  // else if (strcmp(name, "string.ends_with") == 0)
-  //   return generate_string_ends_with_function();
-  // else if (strcmp(name, "string.contains") == 0)
-  //   return generate_string_contains_function();
+  else if (strcmp(name, "string.trim") == 0)
+    return generate_string_trim_function();
+  else if (strcmp(name, "string.starts_with") == 0)
+    return generate_string_starts_with_function();
+  else if (strcmp(name, "string.ends_with") == 0)
+    return generate_string_ends_with_function();
+  else if (strcmp(name, "string.contains") == 0)
+    return generate_string_contains_function();
   // else if (strcmp(name, "string.split") == 0)
   //   return generate_string_split_function(*data_type.function_internal.return_type);
   // else if (strcmp(name, "string.join") == 0)

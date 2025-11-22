@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 log((string)"applesauce".endsWith("sauce"))
 # true

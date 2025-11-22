@@ -3,4 +3,4 @@ import "env"
     void log(int n)
     void log(float n)
 
-log((string)"repeat repeat repeat".replace("repeat ", ""))
+log((string)"apple".contains("ppp"))

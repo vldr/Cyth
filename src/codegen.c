@@ -9,6 +9,7 @@
 #include "mir.h"
 #include "statement.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <mir-gen.h>
 #include <setjmp.h>
@@ -1471,6 +1472,178 @@ static Function* generate_string_contains_function(void)
   return function;
 }
 
+static Array* string_split(String* input, String* delim)
+{
+  if (delim->size == 0)
+  {
+    Array* result = malloc(sizeof(Array));
+    result->size = input->size;
+    result->capacity = input->size;
+    result->data = malloc(sizeof(String*) * input->size);
+
+    String** data = result->data;
+
+    for (int i = 0; i < input->size; i++)
+    {
+      String* item = malloc(sizeof(String) + 1);
+      item->size = 1;
+      item->data[0] = input->data[i];
+
+      *data = item;
+      data += 1;
+    }
+
+    return result;
+  }
+  else
+  {
+    int count = string_count(input, delim) + 1;
+
+    Array* result = malloc(sizeof(Array));
+    result->size = count;
+    result->capacity = count;
+    result->data = malloc(sizeof(String*) * count);
+
+    String** data = result->data;
+
+    int current = 0;
+    int previous = 0;
+
+    while (current <= input->size - delim->size)
+    {
+      bool match = true;
+
+      for (int j = 0; j < delim->size; j++)
+      {
+        if (input->data[current + j] != delim->data[j])
+        {
+          match = false;
+          break;
+        }
+      }
+
+      if (match)
+      {
+        const int size = current - previous;
+
+        String* item = malloc(sizeof(String) + size);
+        item->size = size;
+        memcpy(item->data, input->data + previous, size);
+
+        *data = item;
+        data += 1;
+
+        current += delim->size;
+        previous = current;
+      }
+      else
+      {
+        current++;
+      }
+    }
+
+    const int size = input->size - previous;
+
+    String* item = malloc(sizeof(String) + size);
+    item->size = size;
+    memcpy(item->data, input->data + previous, size);
+
+    *data = item;
+    data += 1;
+
+    return result;
+  }
+}
+
+static Function* generate_string_split_function(DataType return_data_type)
+{
+  const char* name = "string.split";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(return_data_type);
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "delim", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_split);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static String* string_join(Array* input, String* delim)
+{
+  if (input->size == 0)
+  {
+    String* result = malloc(sizeof(String));
+    result->size = 0;
+
+    return result;
+  }
+
+  String** data = (String**)input->data;
+
+  int size = delim->size * (input->size - 1);
+  for (int i = 0; i < input->size; i++)
+    size += data[i]->size;
+
+  String* result = malloc(sizeof(String) + size);
+  result->size = size;
+
+  for (int i = 0, k = 0; i < input->size; i++)
+  {
+    String* item = data[i];
+    memcpy((char*)result->data + k, item->data, item->size);
+
+    k += item->size;
+
+    if (i != input->size - 1)
+    {
+      memcpy((char*)result->data + k, delim->data, delim->size);
+
+      k += delim->size;
+    }
+  }
+
+  return result;
+}
+
+static Function* generate_string_join_function(DataType array_data_type)
+{
+  const char* name = "string.join";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(array_data_type) },
+      { .name = "delim", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_join);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1548,11 +1721,10 @@ static Function* generate_function_internal(DataType data_type)
     return generate_string_ends_with_function();
   else if (strcmp(name, "string.contains") == 0)
     return generate_string_contains_function();
-  // else if (strcmp(name, "string.split") == 0)
-  //   return generate_string_split_function(*data_type.function_internal.return_type);
-  // else if (strcmp(name, "string.join") == 0)
-  //   return generate_string_join_function(array_at(&data_type.function_internal.parameter_types,
-  //   0));
+  else if (strcmp(name, "string.split") == 0)
+    return generate_string_split_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "string.join") == 0)
+    return generate_string_join_function(array_at(&data_type.function_internal.parameter_types, 0));
   // else if (strcmp(name, "string.to_array") == 0)
   //   return generate_string_to_array_function(*data_type.function_internal.return_type);
 

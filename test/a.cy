@@ -3,4 +3,6 @@ import "env"
     void log(int n)
     void log(float n)
 
-log((string)"apple".contains("ppp"))
+string[] a = ["abc","123", "def"]
+
+log(a.join("-"))

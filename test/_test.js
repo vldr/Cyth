@@ -48,7 +48,7 @@ for (const filename of scripts) {
 
     const process = child_process.spawnSync(executable, [], { input: text });
     const status = process.status;
-    const logs = process.stdout.toString().split("\n").filter(Boolean);
+    const output = process.stdout.toString();
     const errors = process.stderr
       .toString()
       .trim()
@@ -70,6 +70,15 @@ for (const filename of scripts) {
           : line;
       });
 
+    const logs = [];
+
+    for (let i = 0, j = 0; i < output.length; i += 1) {
+      if (output[i] == "\n") {
+        logs.push(output.slice(j, i))
+        j = i + 1;
+
+      }
+    }
 
     assert.deepStrictEqual(errors, expectedErrors);
     assert.deepStrictEqual(logs, expectedLogs);

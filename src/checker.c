@@ -646,6 +646,8 @@ int size_data_type(DataType data_type)
 {
   switch (data_type.type)
   {
+  case TYPE_VOID:
+    return 1;
   case TYPE_BOOL:
     return sizeof(bool);
   case TYPE_CHAR:

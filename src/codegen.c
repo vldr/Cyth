@@ -20,14 +20,14 @@
 typedef void (*Start)(void);
 typedef struct _STRING
 {
-  unsigned int size;
+  int size;
   char data[];
 } String;
 
 typedef struct _ARRAY
 {
-  unsigned int size;
-  unsigned int capacity;
+  int size;
+  int capacity;
   void* data;
 } Array;
 
@@ -1069,7 +1069,7 @@ static int string_hash(String* n)
 {
   uint32_t hash = 0x811c9dc5;
 
-  for (unsigned int i = 0; i < n->size; i++)
+  for (int i = 0; i < n->size; i++)
   {
     hash ^= n->data[i];
     hash *= 0x01000193;
@@ -1108,11 +1108,11 @@ static int string_index_of(String* haystack, String* needle)
   if (needle->size == 0)
     return 0;
 
-  for (unsigned int i = 0; i < haystack->size - needle->size; i++)
+  for (int i = 0; i <= haystack->size - needle->size; i++)
   {
     bool match = true;
 
-    for (unsigned int j = 0; j < needle->size; j++)
+    for (int j = 0; j < needle->size; j++)
     {
       if (haystack->data[i + j] != needle->data[j])
       {
@@ -1157,17 +1157,15 @@ static Function* generate_string_index_of_function(void)
 static int string_count(String* haystack, String* needle)
 {
   if (needle->size == 0)
-  {
     return haystack->size + 1;
-  }
 
   int count = 0;
 
-  for (unsigned int i = 0; i < haystack->size - needle->size; i++)
+  for (int i = 0; i <= haystack->size - needle->size; i++)
   {
     bool match = true;
 
-    for (unsigned int j = 0; j < needle->size; j++)
+    for (int j = 0; j < needle->size; j++)
     {
       if (haystack->data[i + j] != needle->data[j])
       {
@@ -1177,7 +1175,10 @@ static int string_count(String* haystack, String* needle)
     }
 
     if (match)
+    {
       count++;
+      i += needle->size - 1;
+    }
   }
 
   return count;
@@ -1203,6 +1204,100 @@ static Function* generate_string_count_function(void)
     function->func = MIR_new_import(codegen.ctx, name);
 
     MIR_load_external(codegen.ctx, name, (void*)string_count);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static String* string_replace(String* input, String* old, String* new)
+{
+  if (old == new)
+    return input;
+
+  int count = string_count(input, old);
+  if (count == 0)
+    return input;
+
+  int size = input->size + count * (new->size - old->size);
+
+  String* result = malloc(sizeof(String) + size);
+  result->size = size;
+
+  if (old->size > 0)
+  {
+    for (int i = 0, k = 0; i < input->size;)
+    {
+      bool match = true;
+
+      for (int j = 0; j < old->size; j++)
+      {
+        if (i + j >= input->size || input->data[i + j] != old->data[j])
+        {
+          match = false;
+          break;
+        }
+      }
+
+      if (match)
+      {
+        for (int j = 0; j < new->size; j++)
+          result->data[k + j] = new->data[j];
+
+        i += old->size;
+        k += new->size;
+      }
+      else
+      {
+        result->data[k] = input->data[i];
+
+        i++;
+        k++;
+      }
+    }
+  }
+  else
+  {
+    for (int i = 0, k = 0; i <= input->size;)
+    {
+      for (int j = 0; j < new->size; j++)
+        result->data[k + j] = new->data[j];
+
+      if (i < input->size)
+      {
+        k += new->size;
+        result->data[k] = input->data[i];
+      }
+
+      k++;
+      i++;
+    }
+  }
+
+  return result;
+}
+
+static Function* generate_string_replace_function(void)
+{
+  const char* name = "string.replace";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "old", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "new", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_replace);
     map_put_function(&codegen.functions, name, function);
   }
 
@@ -1276,8 +1371,8 @@ static Function* generate_function_internal(DataType data_type)
     return generate_string_index_of_function();
   else if (strcmp(name, "string.count") == 0)
     return generate_string_count_function();
-  // else if (strcmp(name, "string.replace") == 0)
-  //   return generate_string_replace_function();
+  else if (strcmp(name, "string.replace") == 0)
+    return generate_string_replace_function();
   // else if (strcmp(name, "string.trim") == 0)
   //   return generate_string_trim_function();
   // else if (strcmp(name, "string.starts_with") == 0)

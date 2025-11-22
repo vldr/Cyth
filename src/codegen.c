@@ -113,7 +113,8 @@ static String* string_concat(String* left, String* right)
 
 static bool string_equals(String* left, String* right)
 {
-  return left->size == right->size && memcmp(left->data, right->data, left->size) == 0;
+  return left == right ||
+         (left->size == right->size && memcmp(left->data, right->data, left->size) == 0);
 }
 
 static String* string_int_cast(int n)
@@ -274,7 +275,7 @@ static MIR_type_t data_type_to_mir_array_type(DataType data_type)
 static MIR_item_t data_type_to_proto(DataType data_type)
 {
   const char* name = data_type_to_string(data_type);
-  MIR_item_t item = map_get_mir_item(&codegen.string_constants, name);
+  MIR_item_t item = map_get_mir_item(&codegen.items, name);
 
   if (!item)
   {
@@ -1341,6 +1342,20 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_NES;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FNE;
+    else if (data_type.type == TYPE_STRING)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, codegen.string_equals.proto),
+                          MIR_new_ref_op(codegen.ctx, codegen.string_equals.func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
+                          MIR_new_reg_op(codegen.ctx, right)));
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_EQ, MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_reg_op(codegen.ctx, dest),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+      return;
+    }
     else if (data_type.type == TYPE_OBJECT)
     {
       if (expression->function)

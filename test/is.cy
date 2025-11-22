@@ -1,5 +1,6 @@
 import "env"
     void log(bool n)
+    void log(int n)
 
 class A
     int field

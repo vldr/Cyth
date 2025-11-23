@@ -1644,6 +1644,43 @@ static Function* generate_string_join_function(DataType array_data_type)
   return function;
 }
 
+static Array* string_to_array(String* input)
+{
+  Array* result = malloc(sizeof(Array));
+  result->size = input->size;
+  result->capacity = input->size;
+  result->data = malloc(sizeof(char) * input->size);
+
+  memcpy(result->data, input->data, input->size);
+
+  return result;
+}
+
+static Function* generate_string_to_array_function(DataType return_data_type)
+{
+  const char* name = "string.to_array";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(return_data_type);
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)string_to_array);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1725,8 +1762,8 @@ static Function* generate_function_internal(DataType data_type)
     return generate_string_split_function(*data_type.function_internal.return_type);
   else if (strcmp(name, "string.join") == 0)
     return generate_string_join_function(array_at(&data_type.function_internal.parameter_types, 0));
-  // else if (strcmp(name, "string.to_array") == 0)
-  //   return generate_string_to_array_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "string.to_array") == 0)
+    return generate_string_to_array_function(*data_type.function_internal.return_type);
 
   // else if (strcmp(name, "alloc") == 0)
   //   return generate_alloc_function();

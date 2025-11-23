@@ -1,5 +1,6 @@
 import "env"
     void log(string a)
+    void log(int n)
 
 log("Length: " + "".toArray().length)
 log("Length: " + "hello".toArray().length)

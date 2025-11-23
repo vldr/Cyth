@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 float f = 360.0
 for int i = 0; i < 10; i += 1

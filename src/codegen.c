@@ -64,7 +64,6 @@ static struct
   Function malloc;
   Function memcpy;
   Function realloc;
-  Function string_concat;
   Function string_equals;
   Function string_bool_cast;
   Function string_int_cast;
@@ -99,19 +98,6 @@ static void log_string(String* n)
 {
   fwrite(n->data, 1, n->size, stdout);
   putchar('\n');
-}
-
-static String* string_concat(String* left, String* right)
-{
-  uintptr_t size = sizeof(String) + left->size + right->size;
-
-  String* result = malloc(size);
-  result->size = left->size + right->size;
-
-  memcpy(result->data, left->data, left->size);
-  memcpy(result->data + left->size, right->data, right->size);
-
-  return result;
 }
 
 static bool string_equals(String* left, String* right)
@@ -349,6 +335,9 @@ static void generate_string_literal_expression(MIR_op_t dest, const char* litera
   MIR_item_t item = map_get_mir_item(&codegen.string_constants, literal);
   if (!item)
   {
+    if (length == -1)
+      length = strlen(literal);
+
     uintptr_t size = sizeof(String) + length;
     String* string = malloc(size);
     string->size = length;
@@ -1681,6 +1670,114 @@ static Function* generate_string_to_array_function(DataType return_data_type)
   return function;
 }
 
+static Function* generate_string_concat_function(int count)
+{
+  assert(count >= 2);
+
+  const char* name = count == 2 ? "string.concat" : memory_sprintf("string.concat.%d", count);
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+
+    ArrayMIR_var_t params;
+    array_init(&params);
+
+    for (int i = 0; i < count; i++)
+    {
+      MIR_var_t param;
+      param.name = memory_sprintf("n.%d", i);
+      param.type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+
+      array_add(&params, param);
+    }
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, params.size, params.elems);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      params.size, params.elems);
+    codegen.function = function->func;
+
+    MIR_reg_t ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+    MIR_reg_t size = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+    {
+      for (int i = 0; i < count; i++)
+      {
+        MIR_reg_t n_ptr = MIR_reg(codegen.ctx, params.elems[i].name, codegen.function->u.func);
+        MIR_append_insn(
+          codegen.ctx, codegen.function,
+          MIR_new_insn(codegen.ctx, MIR_ADD, MIR_new_reg_op(codegen.ctx, size),
+                       i == 0 ? MIR_new_int_op(codegen.ctx, 4) : MIR_new_reg_op(codegen.ctx, size),
+                       generate_string_length_op(n_ptr)));
+      }
+
+      generate_malloc_expression(ptr, MIR_new_reg_op(codegen.ctx, size));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_SUB, generate_string_length_op(ptr),
+                                   MIR_new_reg_op(codegen.ctx, size),
+                                   MIR_new_int_op(codegen.ctx, sizeof(unsigned int))));
+    }
+
+    {
+      MIR_reg_t dest_ptr = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_ADD, MIR_new_reg_op(codegen.ctx, dest_ptr),
+                                   MIR_new_reg_op(codegen.ctx, ptr),
+                                   MIR_new_int_op(codegen.ctx, sizeof(unsigned int))));
+
+      for (int i = 0; i < count; i++)
+      {
+        MIR_reg_t n_ptr = MIR_reg(codegen.ctx, params.elems[i].name, codegen.function->u.func);
+
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, MIR_MOV, MIR_new_reg_op(codegen.ctx, size),
+                                     generate_string_length_op(n_ptr)));
+
+        MIR_append_insn(codegen.ctx, codegen.function,
+                        MIR_new_insn(codegen.ctx, MIR_ADD, MIR_new_reg_op(codegen.ctx, n_ptr),
+                                     MIR_new_reg_op(codegen.ctx, n_ptr),
+                                     MIR_new_int_op(codegen.ctx, sizeof(unsigned int))));
+
+        MIR_append_insn(
+          codegen.ctx, codegen.function,
+          MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, codegen.memcpy.proto),
+                            MIR_new_ref_op(codegen.ctx, codegen.memcpy.func),
+                            MIR_new_reg_op(codegen.ctx, dest_ptr),
+                            MIR_new_reg_op(codegen.ctx, n_ptr), MIR_new_reg_op(codegen.ctx, size)));
+
+        if (i + 1 != count)
+        {
+          MIR_append_insn(codegen.ctx, codegen.function,
+                          MIR_new_insn(codegen.ctx, MIR_ADD, MIR_new_reg_op(codegen.ctx, dest_ptr),
+                                       MIR_new_reg_op(codegen.ctx, dest_ptr),
+                                       MIR_new_reg_op(codegen.ctx, size)));
+        }
+      }
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_ret_insn(codegen.ctx, 1, MIR_new_reg_op(codegen.ctx, ptr)));
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1871,20 +1968,24 @@ static void generate_literal_expression(MIR_reg_t dest, LiteralExpr* expression)
 
 static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
 {
-  MIR_reg_t left = _MIR_new_temp_reg(
-    codegen.ctx, data_type_to_mir_type(expression->operand_data_type), codegen.function->u.func);
-  MIR_reg_t right = _MIR_new_temp_reg(
-    codegen.ctx, data_type_to_mir_type(expression->operand_data_type), codegen.function->u.func);
+  MIR_reg_t left = 0;
+  MIR_reg_t right = 0;
 
-  if (expression->op.type != TOKEN_OR && expression->op.type != TOKEN_AND)
+  DataType data_type = expression->operand_data_type;
+
+  if (expression->op.type != TOKEN_OR && expression->op.type != TOKEN_AND &&
+      !(expression->op.type == TOKEN_PLUS && data_type.type == TYPE_STRING))
   {
+    left = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                             codegen.function->u.func);
+    right = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                              codegen.function->u.func);
+
     generate_expression(left, expression->left);
     generate_expression(right, expression->right);
   }
 
   int op = 0;
-
-  DataType data_type = expression->operand_data_type;
 
   switch (expression->op.type)
   {
@@ -1895,12 +1996,55 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       op = MIR_FADD;
     else if (data_type.type == TYPE_STRING)
     {
-      MIR_append_insn(
-        codegen.ctx, codegen.function,
-        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, codegen.string_concat.proto),
-                          MIR_new_ref_op(codegen.ctx, codegen.string_concat.func),
-                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, left),
-                          MIR_new_reg_op(codegen.ctx, right)));
+      ArrayExpr strings;
+      array_init(&strings);
+
+      ArrayExpr stack;
+      array_init(&stack);
+      array_add(&stack, expression->right);
+      array_add(&stack, expression->left);
+
+      while (array_size(&stack))
+      {
+        Expr* expr = array_at(&stack, stack.size - 1);
+        array_del_last(&stack);
+
+        if (expr->type == EXPR_BINARY && expr->binary.op.type == TOKEN_PLUS)
+        {
+          array_add(&stack, expr->binary.right);
+          array_add(&stack, expr->binary.left);
+        }
+        else if (expr->type == EXPR_GROUP)
+        {
+          array_add(&stack, expr->group.expr);
+        }
+        else
+        {
+          array_add(&strings, expr);
+        }
+      }
+
+      Function* string_concat = generate_string_concat_function(strings.size);
+
+      ArrayMIR_op_t arguments;
+      array_init(&arguments);
+      array_add(&arguments, MIR_new_ref_op(codegen.ctx, string_concat->proto));
+      array_add(&arguments, MIR_new_ref_op(codegen.ctx, string_concat->func));
+      array_add(&arguments, MIR_new_reg_op(codegen.ctx, dest));
+
+      Expr* string;
+      array_foreach(&strings, string)
+      {
+        MIR_reg_t n =
+          _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                            codegen.function->u.func);
+        generate_expression(n, string);
+
+        array_add(&arguments, MIR_new_reg_op(codegen.ctx, n));
+      }
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn_arr(codegen.ctx, MIR_CALL, arguments.size, arguments.elems));
       return;
     }
     else if (data_type.type == TYPE_OBJECT)
@@ -2190,6 +2334,8 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       MIR_label_t cont_label = MIR_new_label(codegen.ctx);
       MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
+      left = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                               codegen.function->u.func);
       generate_expression(left, expression->left);
 
       MIR_append_insn(
@@ -2208,6 +2354,8 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
 
       MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
+      right = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                                codegen.function->u.func);
       generate_expression(right, expression->right);
 
       MIR_append_insn(codegen.ctx, codegen.function,
@@ -2230,6 +2378,8 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
       MIR_label_t cont_label = MIR_new_label(codegen.ctx);
       MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
 
+      left = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                               codegen.function->u.func);
       generate_expression(left, expression->left);
 
       MIR_append_insn(
@@ -2237,6 +2387,8 @@ static void generate_binary_expression(MIR_reg_t dest, BinaryExpr* expression)
         MIR_new_insn(codegen.ctx, MIR_BNES, MIR_new_label_op(codegen.ctx, if_false_label),
                      MIR_new_reg_op(codegen.ctx, left), MIR_new_int_op(codegen.ctx, 0)));
 
+      right = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->operand_data_type),
+                                codegen.function->u.func);
       generate_expression(right, expression->right);
 
       MIR_append_insn(codegen.ctx, codegen.function,
@@ -2352,6 +2504,121 @@ static void generate_unary_expression(MIR_reg_t dest, UnaryExpr* expression)
   }
 }
 
+static Function* generate_string_array_cast_function(DataType data_type)
+{
+  const char* name = memory_sprintf("string.array_cast.%s", data_type_to_string(data_type));
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    DataType element_data_type = array_data_type_element(data_type);
+    MIR_type_t element_type = data_type_to_mir_type(element_data_type);
+    bool multiline = element_data_type.type == TYPE_ARRAY || element_data_type.type == TYPE_OBJECT;
+
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_var_t params[] = {
+      { .name = "ptr", .type = data_type_to_mir_type(data_type) },
+      { .name = "indent", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+    };
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+    codegen.function = function->func;
+
+    MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+
+    {
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_MOV, generate_array_length_op(ptr),
+                                   MIR_new_int_op(codegen.ctx, 0)));
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
+static void generate_string_cast_function(MIR_reg_t dest, MIR_reg_t expr, DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_BOOL:
+    MIR_append_insn(
+      codegen.ctx, codegen.function,
+      MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_bool_cast.proto),
+                        MIR_new_ref_op(codegen.ctx, codegen.string_bool_cast.func),
+                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+    return;
+  case TYPE_FLOAT:
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_call_insn(
+                      codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_float_cast.proto),
+                      MIR_new_ref_op(codegen.ctx, codegen.string_float_cast.func),
+                      MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+    return;
+  case TYPE_INTEGER:
+    MIR_append_insn(
+      codegen.ctx, codegen.function,
+      MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.proto),
+                        MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.func),
+                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+    return;
+  case TYPE_CHAR:
+    MIR_append_insn(
+      codegen.ctx, codegen.function,
+      MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_char_cast.proto),
+                        MIR_new_ref_op(codegen.ctx, codegen.string_char_cast.func),
+                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+    return;
+  case TYPE_ARRAY: {
+    // return BinaryenCall(codegen.module,
+    //                     generate_string_array_cast_function(data_type, list_data_type),
+    //                     (BinaryenExpressionRef[]){ value, depth, list }, 3, codegen.string_type);
+  }
+  case TYPE_OBJECT: {
+    // const char* name = get_function_member(data_type, "__str__");
+    // if (name)
+    //   return BinaryenCall(codegen.module, name, &value, 1, codegen.string_type);
+    // else
+    //   return BinaryenCall(codegen.module,
+    //                       generate_string_object_cast_function(data_type, list_data_type),
+    //                       (BinaryenExpressionRef[]){
+    //                         value,
+    //                         depth,
+    //                         list,
+    //                       },
+    //                       3, codegen.string_type);
+  }
+
+  case TYPE_ANY:
+  case TYPE_FUNCTION_POINTER: {
+    // const char* name = data_type_to_string(data_type);
+    // return BinaryenSelect(codegen.module, BinaryenRefIsNull(codegen.module, value),
+    //                       generate_string_literal_expression("null", -1),
+    //                       generate_string_literal_expression(name, -1));
+  }
+
+  default: {
+    const char* name = data_type_to_string(data_type);
+    generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), name, -1);
+    return;
+  }
+  }
+}
+
 static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
 {
   MIR_reg_t expr = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->from_data_type),
@@ -2371,34 +2638,9 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
     switch (expression->from_data_type.type)
     {
     case TYPE_BOOL:
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_call_insn(
-                        codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_bool_cast.proto),
-                        MIR_new_ref_op(codegen.ctx, codegen.string_bool_cast.func),
-                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
-      return;
     case TYPE_FLOAT:
-      MIR_append_insn(
-        codegen.ctx, codegen.function,
-        MIR_new_call_insn(codegen.ctx, 4,
-                          MIR_new_ref_op(codegen.ctx, codegen.string_float_cast.proto),
-                          MIR_new_ref_op(codegen.ctx, codegen.string_float_cast.func),
-                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
-      return;
     case TYPE_INTEGER:
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_call_insn(
-                        codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.proto),
-                        MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.func),
-                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
-      return;
     case TYPE_CHAR:
-      MIR_append_insn(codegen.ctx, codegen.function,
-                      MIR_new_call_insn(
-                        codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_char_cast.proto),
-                        MIR_new_ref_op(codegen.ctx, codegen.string_char_cast.func),
-                        MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
-      return;
     case TYPE_ARRAY:
     case TYPE_OBJECT:
     case TYPE_ALIAS:
@@ -2409,12 +2651,9 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
     case TYPE_FUNCTION_TEMPLATE:
     case TYPE_FUNCTION_GROUP:
     case TYPE_PROTOTYPE:
-    case TYPE_PROTOTYPE_TEMPLATE: {
-      const char* name = data_type_to_string(expression->from_data_type);
-      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), name, strlen(name));
-
+    case TYPE_PROTOTYPE_TEMPLATE:
+      generate_string_cast_function(dest, expr, expression->from_data_type);
       return;
-    }
     case TYPE_ANY: {
       MIR_label_t cont_label = MIR_new_label(codegen.ctx);
       MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
@@ -3209,6 +3448,17 @@ static void generate_array_expression(MIR_reg_t dest, LiteralArrayExpr* expressi
 
 static void generate_is_expression(MIR_reg_t dest, IsExpr* expression)
 {
+  if (expression->is_data_type.type == TYPE_ANY)
+  {
+    generate_expression(dest, expression->expr);
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_NE, MIR_new_reg_op(codegen.ctx, dest),
+                                 MIR_new_reg_op(codegen.ctx, dest),
+                                 MIR_new_int_op(codegen.ctx, 0)));
+    return;
+  }
+
   generate_expression(dest, expression->expr);
 
   MIR_append_insn(codegen.ctx, codegen.function,
@@ -3908,12 +4158,6 @@ void codegen_init(ArrayStmt statements)
     codegen.ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
     (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "size", .type = MIR_T_I64 } });
   codegen.realloc.func = MIR_new_import(codegen.ctx, "realloc");
-
-  MIR_load_external(codegen.ctx, "string.concat", (void*)string_concat);
-  codegen.string_concat.proto = MIR_new_proto_arr(
-    codegen.ctx, "string.concat.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
-    (MIR_var_t[]){ { .name = "left", .type = MIR_T_I64 }, { .name = "right", .type = MIR_T_I64 } });
-  codegen.string_concat.func = MIR_new_import(codegen.ctx, "string.concat");
 
   MIR_load_external(codegen.ctx, "string.equals", (void*)string_equals);
   codegen.string_equals.proto = MIR_new_proto_arr(

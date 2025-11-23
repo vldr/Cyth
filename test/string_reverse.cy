@@ -1,5 +1,6 @@
 import "env"
     void log(string n) 
+    void log(int n)
 
 string reverseWords(string s)
     string output

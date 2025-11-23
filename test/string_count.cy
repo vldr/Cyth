@@ -1,5 +1,7 @@
 import "env"
     void log(string n)
+    void log(int n)
+
 log((string)"applesauce".count("a"))
 # 2
 

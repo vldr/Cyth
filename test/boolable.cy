@@ -8,7 +8,7 @@ int a = -1
 string b = "hello"
 any c = Object()
 Object d = Object()
-void(string) e = log
+void(string) e = (void(string))log
 
 if a
     log("integer")

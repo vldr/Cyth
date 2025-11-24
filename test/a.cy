@@ -3,77 +3,19 @@ import "env"
     void log(int n)
     void log(string n)
 
-class A
-    int field
+int[][][] a = [[[1,2,3]],[[1,2,3]]]
 
-class B
-    float field
+log((string)a)
 
-class C
-    int field
 
-any a = null
+int[][] b = [[1,2,3],[1,2,3]]
 
-log(a is A)
-log(a is B)
-log(a is C)
-log(a is any)
-log(a is string)
-log(a is int[])
-log("poop")
+log((string)b)
 
-# 0
-# 0
-# 0
-# 0
-# 0
-# 0
+int[] c = [1,2,3]
 
-a = A()
+bool[] q = [true, false, true, true]
 
-log(a is A)
-log(a is B)
-log(a is any)
-log(a is string)
-log(a is int[])
-log("poop")
+log((string)c)
 
-# 1
-# 0
-# 1
-# 0
-# 0
-
-a = "hello"
-
-log(a is A)
-log(a is B)
-log(a is C)
-log(a is any)
-log(a is string)
-log(a is int[])
-log("poop")
-
-# 0
-# 0
-# 0
-# 1
-# 1
-# 0
-
-a = (int[]) [1, 2, 3]
-
-log(a is A)
-log(a is B)
-log(a is C)
-log(a is any)
-log(a is string)
-log(a is int[])
-log("poop")
-
-# 0
-# 0
-# 0
-# 1
-# 0
-# 1
+log((string)q)

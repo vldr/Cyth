@@ -10,7 +10,6 @@
 #include "statement.h"
 
 #include <ctype.h>
-#include <math.h>
 #include <mir-gen.h>
 #include <setjmp.h>
 
@@ -72,8 +71,8 @@ static struct
 } codegen;
 
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type);
-static void generate_string_cast_function(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth,
-                                          MIR_reg_t list, DataType data_type);
+static void generate_string_cast(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth, MIR_reg_t list,
+                                 DataType data_type);
 static void generate_expression(MIR_reg_t dest, Expr* expression);
 static void generate_statement(Stmt* statement);
 static void generate_statements(ArrayStmt* statements);
@@ -313,6 +312,21 @@ static uint64_t data_type_to_typeid(DataType data_type)
   }
 
   return id;
+}
+
+static FuncStmt* get_function_member(DataType data_type, const char* name)
+{
+  if (data_type.type != TYPE_OBJECT)
+    return NULL;
+
+  ClassStmt* class = data_type.class;
+  VarStmt* variable = map_get_var_stmt(class->members, name);
+
+  if (!variable || variable->data_type.type != TYPE_FUNCTION_MEMBER)
+    return NULL;
+
+  FuncStmt* function = variable->data_type.function_member.function;
+  return function;
 }
 
 static void generate_malloc_expression(MIR_reg_t dest, MIR_op_t size)
@@ -1029,7 +1043,10 @@ static Function* generate_float_hash_function(void)
 
 static float float_sqrt(float n)
 {
-  return sqrtf(n);
+  float y = n;
+  for (int i = 0; i < 5; i++)
+    y = 0.5f * (y + n / y);
+  return y;
 }
 
 static Function* generate_float_sqrt_function(void)
@@ -2594,8 +2611,32 @@ static Function* generate_string_array_cast_function(DataType data_type)
     MIR_reg_t tmp = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
 
     {
-      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), multiline ? "[\n" : "[",
-                                         -1);
+      if (multiline)
+      {
+        MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
+        MIR_label_t continue_label = MIR_new_label(codegen.ctx);
+
+        MIR_append_insn(
+          codegen.ctx, codegen.function,
+          MIR_new_insn(codegen.ctx, MIR_BEQ, MIR_new_label_op(codegen.ctx, if_false_label),
+                       generate_array_length_op(ptr), MIR_new_int_op(codegen.ctx, 0)));
+
+        generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "[\n", -1);
+
+        MIR_append_insn(
+          codegen.ctx, codegen.function,
+          MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, continue_label)));
+
+        MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+        generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "[", -1);
+
+        MIR_append_insn(codegen.ctx, codegen.function, continue_label);
+      }
+      else
+      {
+        generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "[", -1);
+      }
 
       MIR_append_insn(
         codegen.ctx, codegen.function,
@@ -2642,7 +2683,7 @@ static Function* generate_string_array_cast_function(DataType data_type)
                                     array_ptr, i, size_data_type(element_data_type))));
 
       generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "", -1);
-      generate_string_cast_function(tmp, expr, depth, list, element_data_type);
+      generate_string_cast(tmp, expr, depth, list, element_data_type);
 
       MIR_append_insn(
         codegen.ctx, codegen.function,
@@ -2741,8 +2782,8 @@ static Function* generate_string_array_cast_function(DataType data_type)
   return function;
 }
 
-static void generate_string_cast_function(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth,
-                                          MIR_reg_t list, DataType data_type)
+static void generate_string_cast(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth, MIR_reg_t list,
+                                 DataType data_type)
 {
   switch (data_type.type)
   {
@@ -2793,9 +2834,16 @@ static void generate_string_cast_function(MIR_reg_t dest, MIR_reg_t expr, MIR_re
     return;
   }
   case TYPE_OBJECT: {
-    // const char* name = get_function_member(data_type, "__str__");
-    // if (name)
-    //   return BinaryenCall(codegen.module, name, &value, 1, codegen.string_type);
+    FuncStmt* function = get_function_member(data_type, "__str__");
+    if (function)
+    {
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, function->proto),
+                          MIR_new_ref_op(codegen.ctx, function->item),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+      return;
+    }
     // else
     //   return BinaryenCall(codegen.module,
     //                       generate_string_object_cast_function(data_type, list_data_type),
@@ -2877,7 +2925,7 @@ static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
         generate_default_initialization(dest, DATA_TYPE(TYPE_STRING));
       }
 
-      generate_string_cast_function(dest, expr, depth, list, expression->from_data_type);
+      generate_string_cast(dest, expr, depth, list, expression->from_data_type);
       return;
     }
     case TYPE_ANY: {

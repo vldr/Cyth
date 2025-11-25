@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 log("A: " + (int[]) [1,2,3])
 log((string) (int[]) [1,2,3])
@@ -24,7 +25,7 @@ log("C: " + object)
 log((string) object)
 
 object.f = "test"
-object.g = log
+object.g = (void(string))log
 
 log("D: " + object)
 log((string) object)

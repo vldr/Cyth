@@ -1,5 +1,6 @@
 import "env"
     void log(string n)
+    void log(int n)
 
 class Entry<K, V>
   K key
@@ -144,7 +145,7 @@ log("c: " + c)
 
 Map<string, string> d = Map<string, string>()
 d["10.0"] = "100"
-d["26.0"] = "200"
+d["26.0"] = "200" 
 d["costarring"] = "200"
 d["liquid"] = "100"
 

@@ -101,10 +101,9 @@ static void log_string(String* n)
   putchar('\n');
 }
 
-static bool string_equals(String* left, String* right)
+static int string_equals(String* left, String* right)
 {
-  return left == right ||
-         (left->size == right->size && memcmp(left->data, right->data, left->size) == 0);
+  return (left->size == right->size && memcmp(left->data, right->data, left->size) == 0) ? 1 : 0;
 }
 
 static String* string_int_cast(int n)
@@ -1365,7 +1364,7 @@ static Function* generate_string_trim_function(void)
   return function;
 }
 
-static bool string_starts_with(String* input, String* target)
+static int string_starts_with(String* input, String* target)
 {
   if (target->size == 0)
     return true;
@@ -1408,7 +1407,7 @@ static Function* generate_string_starts_with_function(void)
   return function;
 }
 
-static bool string_ends_with(String* input, String* target)
+static int string_ends_with(String* input, String* target)
 {
   if (target->size == 0)
     return true;
@@ -1451,7 +1450,7 @@ static Function* generate_string_ends_with_function(void)
   return function;
 }
 
-static bool string_contains(String* input, String* target)
+static int string_contains(String* input, String* target)
 {
   return string_index_of(input, target) != -1;
 }
@@ -2755,7 +2754,6 @@ static Function* generate_string_array_cast_function(DataType data_type)
 
       if (multiline)
       {
-
         MIR_append_insn(
           codegen.ctx, codegen.function,
           MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_pad->proto),
@@ -2827,7 +2825,6 @@ static Function* generate_string_object_cast_function(DataType data_type)
     Function* string_concat_4 = generate_string_concat_function(4);
     Function* string_pad = generate_string_pad_function();
     Function* array_push = generate_array_push_function(list_data_type, list_element_data_type);
-    Function* array_pop = generate_array_pop_function(list_data_type);
 
     MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
     MIR_reg_t dest = MIR_reg(codegen.ctx, "dest", codegen.function->u.func);
@@ -2853,7 +2850,14 @@ static Function* generate_string_object_cast_function(DataType data_type)
 
       MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
-      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), "null", -1);
+      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "null", -1);
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                          MIR_new_ref_op(codegen.ctx, string_concat->func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                          MIR_new_reg_op(codegen.ctx, tmp)));
 
       MIR_append_insn(codegen.ctx, codegen.function,
                       MIR_new_ret_insn(codegen.ctx, 1, MIR_new_reg_op(codegen.ctx, dest)));
@@ -2905,14 +2909,62 @@ static Function* generate_string_object_cast_function(DataType data_type)
 
         MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
 
-        // generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), "--", -1);
+        {
+          MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+          MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
+
+          MIR_append_insn(codegen.ctx, codegen.function,
+                          MIR_new_insn(codegen.ctx, MIR_BT,
+                                       MIR_new_label_op(codegen.ctx, if_false_label),
+                                       MIR_new_reg_op(codegen.ctx, i)));
+
+          generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), class->name.lexeme,
+                                             -1);
+          MIR_append_insn(
+            codegen.ctx, codegen.function,
+            MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                              MIR_new_ref_op(codegen.ctx, string_concat->func),
+                              MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                              MIR_new_reg_op(codegen.ctx, tmp)));
+          MIR_append_insn(
+            codegen.ctx, codegen.function,
+            MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
+
+          MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+          generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp),
+                                             memory_sprintf("%s$", class->name.lexeme), -1);
+          MIR_append_insn(
+            codegen.ctx, codegen.function,
+            MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                              MIR_new_ref_op(codegen.ctx, string_concat->func),
+                              MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                              MIR_new_reg_op(codegen.ctx, tmp)));
+
+          MIR_append_insn(
+            codegen.ctx, codegen.function,
+            MIR_new_call_insn(codegen.ctx, 4,
+                              MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.proto),
+                              MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.func),
+                              MIR_new_reg_op(codegen.ctx, tmp), MIR_new_reg_op(codegen.ctx, i)));
+          MIR_append_insn(
+            codegen.ctx, codegen.function,
+            MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                              MIR_new_ref_op(codegen.ctx, string_concat->func),
+                              MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                              MIR_new_reg_op(codegen.ctx, tmp)));
+
+          MIR_append_insn(codegen.ctx, codegen.function, cont_label);
+        }
+
+        generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), "(...)", -1);
 
         MIR_append_insn(
           codegen.ctx, codegen.function,
-          MIR_new_call_insn(codegen.ctx, 4,
-                            MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.proto),
-                            MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.func),
-                            MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+          MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                            MIR_new_ref_op(codegen.ctx, string_concat->func),
+                            MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                            MIR_new_reg_op(codegen.ctx, tmp)));
 
         MIR_append_insn(codegen.ctx, codegen.function,
                         MIR_new_ret_insn(codegen.ctx, 1, MIR_new_reg_op(codegen.ctx, dest)));
@@ -2927,13 +2979,59 @@ static Function* generate_string_object_cast_function(DataType data_type)
       MIR_append_insn(
         codegen.ctx, codegen.function,
         MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, continue_label)));
+
       MIR_append_insn(codegen.ctx, codegen.function, break_label);
     }
 
     {
-      generate_string_literal_expression(
-        MIR_new_reg_op(codegen.ctx, tmp),
-        memory_sprintf(class->variables.size ? "%s(\n" : "%s(", class->name.lexeme), -1);
+      MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+      MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_insn(codegen.ctx, MIR_BT,
+                                   MIR_new_label_op(codegen.ctx, if_false_label),
+                                   generate_array_length_op(list)));
+
+      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), class->name.lexeme, -1);
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                          MIR_new_ref_op(codegen.ctx, string_concat->func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                          MIR_new_reg_op(codegen.ctx, tmp)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp),
+                                         memory_sprintf("%s$", class->name.lexeme), -1);
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                          MIR_new_ref_op(codegen.ctx, string_concat->func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                          MIR_new_reg_op(codegen.ctx, tmp)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_call_insn(
+                        codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.proto),
+                        MIR_new_ref_op(codegen.ctx, codegen.string_int_cast.func),
+                        MIR_new_reg_op(codegen.ctx, tmp), generate_array_length_op(list)));
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                          MIR_new_ref_op(codegen.ctx, string_concat->func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                          MIR_new_reg_op(codegen.ctx, tmp)));
+
+      MIR_append_insn(codegen.ctx, codegen.function, cont_label);
+    }
+
+    {
+      generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp),
+                                         class->variables.size ? "(\n" : "(", -1);
 
       MIR_append_insn(
         codegen.ctx, codegen.function,
@@ -2947,6 +3045,13 @@ static Function* generate_string_object_cast_function(DataType data_type)
                                    MIR_new_reg_op(codegen.ctx, depth),
                                    MIR_new_int_op(codegen.ctx, 1)));
     }
+
+    if (data_type.type == TYPE_OBJECT)
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, array_push->proto),
+                          MIR_new_ref_op(codegen.ctx, array_push->func),
+                          MIR_new_reg_op(codegen.ctx, list), MIR_new_reg_op(codegen.ctx, ptr)));
 
     VarStmt* variable;
     array_foreach(&class->variables, variable)
@@ -2969,22 +3074,8 @@ static Function* generate_string_object_cast_function(DataType data_type)
                           MIR_new_reg_op(codegen.ctx, tmp), MIR_new_reg_op(codegen.ctx, tmp),
                           MIR_new_reg_op(codegen.ctx, depth)));
 
-      if (data_type.type == TYPE_OBJECT)
-        MIR_append_insn(
-          codegen.ctx, codegen.function,
-          MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, array_push->proto),
-                            MIR_new_ref_op(codegen.ctx, array_push->func),
-                            MIR_new_reg_op(codegen.ctx, list), MIR_new_reg_op(codegen.ctx, expr)));
-
       generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp2), "", -1);
       generate_string_cast(tmp2, expr, depth, list, variable->data_type);
-
-      if (data_type.type == TYPE_OBJECT)
-        MIR_append_insn(
-          codegen.ctx, codegen.function,
-          MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, array_pop->proto),
-                            MIR_new_ref_op(codegen.ctx, array_pop->func),
-                            MIR_new_reg_op(codegen.ctx, expr), MIR_new_reg_op(codegen.ctx, list)));
 
       if (_i + 1 == class->variables.size)
         generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp3),
@@ -3010,12 +3101,13 @@ static Function* generate_string_object_cast_function(DataType data_type)
 
       generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, tmp), ")", -1);
 
-      MIR_append_insn(
-        codegen.ctx, codegen.function,
-        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_pad->proto),
-                          MIR_new_ref_op(codegen.ctx, string_pad->func),
-                          MIR_new_reg_op(codegen.ctx, tmp), MIR_new_reg_op(codegen.ctx, tmp),
-                          MIR_new_reg_op(codegen.ctx, depth)));
+      if (class->variables.size)
+        MIR_append_insn(
+          codegen.ctx, codegen.function,
+          MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_pad->proto),
+                            MIR_new_ref_op(codegen.ctx, string_pad->func),
+                            MIR_new_reg_op(codegen.ctx, tmp), MIR_new_reg_op(codegen.ctx, tmp),
+                            MIR_new_reg_op(codegen.ctx, depth)));
 
       MIR_append_insn(
         codegen.ctx, codegen.function,
@@ -3091,11 +3183,21 @@ static void generate_string_cast(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth
     FuncStmt* function = get_function_member(data_type, "__str__");
     if (function)
     {
+      Function* string_concat = generate_string_concat_function(2);
+      MIR_reg_t tmp = _MIR_new_temp_reg(codegen.ctx, MIR_T_I64, codegen.function->u.func);
+
       MIR_append_insn(
         codegen.ctx, codegen.function,
         MIR_new_call_insn(codegen.ctx, 4, MIR_new_ref_op(codegen.ctx, function->proto),
                           MIR_new_ref_op(codegen.ctx, function->item),
-                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, expr)));
+                          MIR_new_reg_op(codegen.ctx, tmp), MIR_new_reg_op(codegen.ctx, expr)));
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_call_insn(codegen.ctx, 5, MIR_new_ref_op(codegen.ctx, string_concat->proto),
+                          MIR_new_ref_op(codegen.ctx, string_concat->func),
+                          MIR_new_reg_op(codegen.ctx, dest), MIR_new_reg_op(codegen.ctx, dest),
+                          MIR_new_reg_op(codegen.ctx, tmp)));
       return;
     }
     else

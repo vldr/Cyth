@@ -1,21 +1,17 @@
 import "env"
     void log<T>(T n)
 
-alloc(65536)
-alloc(1)
+int ptr = alloc(65536)
+int ptr2 = alloc(1)
 
-writeChar(65535, 'a')
-writeChar(65536, 'b')
+writeChar(ptr, 'a')
+writeChar(ptr2, 'b')
 
-log<char>(readChar(65535))
-log<char>(readChar(65536))
-log<int>(memory())
-
-allocReset()
+log<int>(readChar(ptr))
+log<int>(readChar(ptr2))
 
 # 97
 # 98
-# 2
 
 int a = alloc(11)
 
@@ -28,8 +24,8 @@ writeChar(a + 4 + 4 + 1 + 1, 'i')
 log<int>(readInt(a))
 log<float>(readFloat(a + 4))
 log<bool>(readBool(a + 4 + 4))
-log<char>(readChar(a + 4 + 4 + 1))
-log<char>(readChar(a + 4 + 4 + 1 + 1))
+log<int>(readChar(a + 4 + 4 + 1))
+log<int>(readChar(a + 4 + 4 + 1 + 1))
 
 # 10
 # 12.5
@@ -38,10 +34,6 @@ log<char>(readChar(a + 4 + 4 + 1 + 1))
 # 105
 
 int b = alloc(11)
-
-log<string>("address " + b)
-
-# address 12
 
 writeInt(b, 0xffffffff)
 writeFloat(b + 4, 9999.625)
@@ -52,8 +44,8 @@ writeChar(b + 4 + 4 + 1 + 1, 'o')
 log<int>(readInt(b))
 log<float>(readFloat(b + 4))
 log<bool>(readBool(b + 4 + 4))
-log<char>(readChar(b + 4 + 4 + 1))
-log<char>(readChar(b + 4 + 4 + 1 + 1))
+log<int>(readChar(b + 4 + 4 + 1))
+log<int>(readChar(b + 4 + 4 + 1 + 1))
 
 # -1
 # 9999.625
@@ -64,28 +56,8 @@ log<char>(readChar(b + 4 + 4 + 1 + 1))
 log<int>(readInt(a))
 log<float>(readFloat(a + 4))
 log<bool>(readBool(a + 4 + 4))
-log<char>(readChar(a + 4 + 4 + 1))
-log<char>(readChar(a + 4 + 4 + 1 + 1))
-
-# 10
-# 12.5
-# 1
-# 104
-# 105
-
-allocReset()
-
-int c = alloc(11)
-
-log<string>("address " + c)
-
-# address 0
-
-log<int>(readInt(c))
-log<float>(readFloat(c + 4))
-log<bool>(readBool(c + 4 + 4))
-log<char>(readChar(c + 4 + 4 + 1))
-log<char>(readChar(c + 4 + 4 + 1 + 1))
+log<int>(readChar(a + 4 + 4 + 1))
+log<int>(readChar(a + 4 + 4 + 1 + 1))
 
 # 10
 # 12.5

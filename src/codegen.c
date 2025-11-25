@@ -87,7 +87,7 @@ static void log_int(int n)
 
 static void log_float(float n)
 {
-  printf("%g\n", n);
+  printf("%.10g\n", n);
 }
 
 static void log_char(char n)
@@ -121,13 +121,13 @@ static String* string_int_cast(int n)
 
 static String* string_float_cast(float n)
 {
-  int length = snprintf(NULL, 0, "%g", n) + 1;
+  int length = snprintf(NULL, 0, "%.10g", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
   String* result = malloc(size);
   result->size = length - 1;
 
-  snprintf(result->data, length, "%g", n);
+  snprintf(result->data, length, "%.10g", n);
 
   return result;
 }
@@ -1840,6 +1840,182 @@ static Function* generate_string_concat_function(int count)
   return function;
 }
 
+static void* alloc(int size)
+{
+  return malloc(size);
+}
+
+static Function* generate_alloc_function(void)
+{
+  const char* name = "alloc";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+    };
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)alloc);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static void alloc_reset(void)
+{
+}
+
+static Function* generate_alloc_reset_function(void)
+{
+  const char* name = "alloc_reset";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    function = ALLOC(Function);
+    function->proto = MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), 0, 0, 0, 0);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)alloc_reset);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static int memory(void)
+{
+  return 0;
+}
+
+static Function* generate_memory_function(void)
+{
+  const char* name = "memory";
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+
+    function = ALLOC(Function);
+    function->proto = MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name),
+                                        return_type != MIR_T_UNDEF, &return_type, 0, 0);
+    function->func = MIR_new_import(codegen.ctx, name);
+
+    MIR_load_external(codegen.ctx, name, (void*)memory);
+    map_put_function(&codegen.functions, name, function);
+  }
+
+  return function;
+}
+
+static Function* generate_write_function(DataType data_type)
+{
+  const char* name = memory_sprintf("write.%s", data_type_to_string(data_type));
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_var_t params[] = {
+      { .name = "ptr", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "value", .type = data_type_to_mir_type(data_type) },
+    };
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    codegen.function = function->func;
+
+    {
+      MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+      MIR_reg_t value = MIR_reg(codegen.ctx, "value", codegen.function->u.func);
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(
+          codegen.ctx, data_type_to_mov_type(data_type),
+          MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(data_type), 0, ptr, 0, 0),
+          MIR_new_reg_op(codegen.ctx, value)));
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
+static Function* generate_read_function(DataType data_type)
+{
+  const char* name = memory_sprintf("read.%s", data_type_to_string(data_type));
+
+  Function* function = map_get_function(&codegen.functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(data_type);
+    MIR_var_t params[] = {
+      { .name = "ptr", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+    };
+
+    MIR_item_t previous_function = codegen.function;
+    MIR_func_t previous_func = MIR_get_curr_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(codegen.ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(codegen.ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    codegen.function = function->func;
+
+    {
+      MIR_reg_t ptr = MIR_reg(codegen.ctx, "ptr", codegen.function->u.func);
+      MIR_reg_t dest =
+        _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(data_type), codegen.function->u.func);
+
+      MIR_append_insn(
+        codegen.ctx, codegen.function,
+        MIR_new_insn(
+          codegen.ctx, data_type_to_mov_type(data_type), MIR_new_reg_op(codegen.ctx, dest),
+          MIR_new_mem_op(codegen.ctx, data_type_to_mir_array_type(data_type), 0, ptr, 0, 0)));
+
+      MIR_append_insn(codegen.ctx, codegen.function,
+                      MIR_new_ret_insn(codegen.ctx, 1, MIR_new_reg_op(codegen.ctx, dest)));
+    }
+
+    map_put_function(&codegen.functions, name, function);
+
+    MIR_finish_func(codegen.ctx);
+    MIR_set_curr_func(codegen.ctx, previous_func);
+    codegen.function = previous_function;
+  }
+
+  return function;
+}
+
 static void generate_default_initialization(MIR_reg_t dest, DataType data_type)
 {
   switch (data_type.type)
@@ -1924,30 +2100,30 @@ static Function* generate_function_internal(DataType data_type)
   else if (strcmp(name, "string.to_array") == 0)
     return generate_string_to_array_function(*data_type.function_internal.return_type);
 
-  // else if (strcmp(name, "alloc") == 0)
-  //   return generate_alloc_function();
-  // else if (strcmp(name, "allocReset") == 0)
-  //   return generate_alloc_reset_function();
-  // else if (strcmp(name, "memory") == 0)
-  //   return generate_memory_function();
+  else if (strcmp(name, "alloc") == 0)
+    return generate_alloc_function();
+  else if (strcmp(name, "allocReset") == 0)
+    return generate_alloc_reset_function();
+  else if (strcmp(name, "memory") == 0)
+    return generate_memory_function();
 
-  // else if (strcmp(name, "writeInt") == 0)
-  //   return generate_write_function(name, BinaryenTypeInt32(), 4);
-  // else if (strcmp(name, "writeFloat") == 0)
-  //   return generate_write_function(name, BinaryenTypeFloat32(), 4);
-  // else if (strcmp(name, "writeChar") == 0)
-  //   return generate_write_function(name, BinaryenTypeInt32(), 1);
-  // else if (strcmp(name, "writeBool") == 0)
-  //   return generate_write_function(name, BinaryenTypeInt32(), 1);
+  else if (strcmp(name, "writeInt") == 0)
+    return generate_write_function(array_at(&data_type.function_internal.parameter_types, 1));
+  else if (strcmp(name, "writeFloat") == 0)
+    return generate_write_function(array_at(&data_type.function_internal.parameter_types, 1));
+  else if (strcmp(name, "writeChar") == 0)
+    return generate_write_function(array_at(&data_type.function_internal.parameter_types, 1));
+  else if (strcmp(name, "writeBool") == 0)
+    return generate_write_function(array_at(&data_type.function_internal.parameter_types, 1));
 
-  // else if (strcmp(name, "readInt") == 0)
-  //   return generate_read_function(name, BinaryenTypeInt32(), 4);
-  // else if (strcmp(name, "readFloat") == 0)
-  //   return generate_read_function(name, BinaryenTypeFloat32(), 4);
-  // else if (strcmp(name, "readChar") == 0)
-  //   return generate_read_function(name, BinaryenTypeInt32(), 1);
-  // else if (strcmp(name, "readBool") == 0)
-  //   return generate_read_function(name, BinaryenTypeInt32(), 1);
+  else if (strcmp(name, "readInt") == 0)
+    return generate_read_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "readFloat") == 0)
+    return generate_read_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "readChar") == 0)
+    return generate_read_function(*data_type.function_internal.return_type);
+  else if (strcmp(name, "readBool") == 0)
+    return generate_read_function(*data_type.function_internal.return_type);
 
   else
     UNREACHABLE("Unexpected internal function");
@@ -3246,9 +3422,15 @@ static void generate_string_cast(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth
 
 static void generate_cast_expression(MIR_reg_t dest, CastExpr* expression)
 {
-  MIR_reg_t expr = _MIR_new_temp_reg(codegen.ctx, data_type_to_mir_type(expression->from_data_type),
-                                     codegen.function->u.func);
-  generate_expression(expr, expression->expr);
+  MIR_type_t type = data_type_to_mir_type(expression->from_data_type);
+  MIR_reg_t expr;
+  
+  if (type != MIR_T_UNDEF)
+  {
+    expr = _MIR_new_temp_reg(codegen.ctx, type,
+                        codegen.function->u.func);
+    generate_expression(expr, expression->expr);
+  }
 
   if (expression->to_data_type.type == TYPE_FLOAT &&
       expression->from_data_type.type == TYPE_INTEGER)

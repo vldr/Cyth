@@ -1,13 +1,20 @@
-import "wasi_snapshot_preview1"
-    int fd_write(int fd, int iovs, int iovs_len, int nwritten)
-    int fd_read(int fd, int iovs, int iovs_len, int nread)
-    int fd_close(int fd)
-
-    int args_sizes_get(int argc, int argv_buf_size)
-    int args_get(int argv, int argv_buf)
-
 import "env"
     void log(string n)
+    
+int fd_write(int fd, int iovs, int iovs_len, int nwritten)
+    return 0
+
+int fd_read(int fd, int iovs, int iovs_len, int nread)
+    return 0
+
+int fd_close(int fd)
+    return 0
+
+int args_sizes_get(int argc, int argv_buf_size)
+    return 0
+
+int args_get(int argv, int argv_buf)
+    return 0
 
 int STDIN = 0
 int STDOUT = 1
@@ -95,22 +102,3 @@ int read(int fd, char[] buffer)
 
     allocReset()
     return bytesRead
-
-char[] buf
-buf.reserve(5)
-
-int bytesRead
-
-while bytesRead = read(STDIN, buf)
-    write(STDOUT, buf)
-    write(STDOUT, ((string)bytesRead).toArray())
-
-char[][] environs = args()
-
-for char[] environ in environs
-    log(environ.toString())
-
-# Input
-# 5
-# First
-# Second

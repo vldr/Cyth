@@ -24,11 +24,19 @@ for (const filename of scripts) {
           .replaceAll("\\0", "\0")
           .replaceAll("\\t", "\t")
           .replaceAll("\\b", "\b")
-          .replaceAll("\\n", "\n")
           .replaceAll("\\r", "\r")
           .replaceAll("\\f", "\f")
           .trimStart()
       );
+
+    for (let i = 0; i < expectedLogs.length; i++) {
+      if (expectedLogs[i].includes("\\n")) {
+        const parts = expectedLogs[i].split("\\n");
+        expectedLogs.splice(i, 1, ...parts);
+        i += parts.length - 1;
+      }
+    }
+
 
     const expectedErrors = text
       .split("\n")

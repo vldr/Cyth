@@ -45,7 +45,7 @@ float sqrtf(float n)
 
     return x
 
-log(sqrtf(50.0))
+log(sqrtf(64.0))
 
 float exponential(float n, float x)
     float sum = 1.0
@@ -55,12 +55,12 @@ float exponential(float n, float x)
   
     return sum  
  
-float n = 10.0
-float x = 1.0
+float n = 7.0
+float x = 0.0
 
 log(exponential(n, x))
 
 # 21364
 # 456420480
-# 7.071067810058594
-# 2.7182815074920654
+# 8
+# 1

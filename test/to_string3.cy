@@ -1,8 +1,8 @@
 import "env"
     void log(string n)
+    void log(int n)
 
-    void overload()
-    void overload(int a)
+void not_overload()
 
 any a = (any)null
 
@@ -33,7 +33,7 @@ log("" + c)
 # null
 
 b = Object()
-c = log
+c = (void(string))log
 
 log((string)b)
 log((string)c)
@@ -52,26 +52,26 @@ log((string)b.test)
 log((string)test)
 log((string)"".toArray)
 log(test<string>())
-log((string)overload)
+log((string)not_overload)
 
-# void(string)
+# void(string), void(int)
 # void(Object, int)
 # string<T>()
 # char[](string)
 # string string
-# void(), void(int)
+# void()
 
 log("" + log)
 log("" + b.test)
 log("" + test)
 log("" + "".toArray)
-log("" + overload)
+log("" + not_overload)
 
-# void(string)
+# void(string), void(int)
 # void(Object, int)
 # string<T>()
 # char[](string)
-# void(), void(int)
+# void()
 
 log((string)Object)
 log((string)Object2)

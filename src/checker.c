@@ -2526,7 +2526,7 @@ static DataType check_call_expression(CallExpr* expression)
       data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
-          !assignable_data_type(&expression->arguments.elems[i - 1], parameter_data_type,
+          !assignable_data_type(&expression->arguments.elems[i], parameter_data_type,
                                 argument_data_type))
       {
         error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
@@ -2616,7 +2616,7 @@ static DataType check_call_expression(CallExpr* expression)
       data_type_inference(&argument_data_type, &parameter_data_type);
 
       if (!equal_data_type(argument_data_type, parameter_data_type) &&
-          !assignable_data_type(&expression->arguments.elems[i - offset], parameter_data_type,
+          !assignable_data_type(&expression->arguments.elems[i], parameter_data_type,
                                 argument_data_type))
       {
         Token argument_token;

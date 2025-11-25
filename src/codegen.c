@@ -3216,10 +3216,24 @@ static void generate_string_cast(MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth
 
   case TYPE_ANY:
   case TYPE_FUNCTION_POINTER: {
-    // const char* name = data_type_to_string(data_type);
-    // return BinaryenSelect(codegen.module, BinaryenRefIsNull(codegen.module, value),
-    //                       generate_string_literal_expression("null", -1),
-    //                       generate_string_literal_expression(name, -1));
+    MIR_label_t cont_label = MIR_new_label(codegen.ctx);
+    MIR_label_t if_false_label = MIR_new_label(codegen.ctx);
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_BF, MIR_new_label_op(codegen.ctx, if_false_label),
+                                 MIR_new_reg_op(codegen.ctx, expr)));
+
+    const char* name = data_type_to_string(data_type);
+    generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), name, -1);
+
+    MIR_append_insn(codegen.ctx, codegen.function,
+                    MIR_new_insn(codegen.ctx, MIR_JMP, MIR_new_label_op(codegen.ctx, cont_label)));
+    MIR_append_insn(codegen.ctx, codegen.function, if_false_label);
+
+    generate_string_literal_expression(MIR_new_reg_op(codegen.ctx, dest), "null", -1);
+
+    MIR_append_insn(codegen.ctx, codegen.function, cont_label);
+    return;
   }
 
   default: {

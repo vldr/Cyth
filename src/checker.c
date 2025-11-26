@@ -23,7 +23,7 @@ static struct
   IfStmt* cond;
   ClassTemplateStmt* class_template;
   WhileStmt* loop;
-  DataType* assignment;
+  AssignExpr* assignment;
 } checker;
 
 static void check_statement(Stmt* statement, bool synchronize);
@@ -2384,12 +2384,13 @@ static DataType check_variable_expression(VarExpr* expression)
 
 static DataType check_assignment_expression(AssignExpr* expression)
 {
-  Expr* target = expression->target;
   DataType value_data_type = check_expression(expression->value);
+  expression->value_data_type = value_data_type;
 
-  DataType* previous_assignment = checker.assignment;
-  checker.assignment = &value_data_type;
+  AssignExpr* previous_assignment = checker.assignment;
+  checker.assignment = expression;
 
+  Expr* target = expression->target;
   DataType target_data_type = check_expression(target);
 
   checker.assignment = previous_assignment;
@@ -3257,7 +3258,8 @@ static DataType check_index_expression(IndexExpr* expression)
     ClassStmt* class = expr_data_type.class;
     VarStmt* variable =
       map_get_var_stmt(class->members, checker.assignment ? "__set__" : "__get__");
-    DataType value_data_type = checker.assignment ? *checker.assignment : DATA_TYPE(TYPE_VOID);
+    DataType value_data_type =
+      checker.assignment ? checker.assignment->value_data_type : DATA_TYPE(TYPE_VOID);
 
     if (!variable || (variable->data_type.type != TYPE_FUNCTION_MEMBER &&
                       variable->data_type.type != TYPE_FUNCTION_GROUP))
@@ -3283,7 +3285,9 @@ static DataType check_index_expression(IndexExpr* expression)
     }
 
     FuncStmt* function = function_data_type.function_member.function;
-    if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type))
+    if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type) &&
+        !assignable_data_type(&expression->index, array_at(&function->parameters, 1)->data_type,
+                              index_data_type))
     {
       error_not_indexable_missing_overload(expression->expr_token, index_data_type,
                                            value_data_type);
@@ -3292,7 +3296,10 @@ static DataType check_index_expression(IndexExpr* expression)
 
     if (checker.assignment)
     {
-      if (!equal_data_type(value_data_type, array_at(&function->parameters, 2)->data_type))
+      if (!equal_data_type(value_data_type, array_at(&function->parameters, 2)->data_type) &&
+          !assignable_data_type(&checker.assignment->value,
+                                array_at(&function->parameters, 2)->data_type,
+                                checker.assignment->value_data_type))
       {
         error_not_indexable_missing_overload(expression->expr_token, index_data_type,
                                              value_data_type);

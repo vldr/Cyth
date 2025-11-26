@@ -1,7 +1,7 @@
 #include "main.h"
 #include "array.h"
 #include "checker.h"
-#include "codegen.h"
+#include "jit.h"
 #include "lexer.h"
 #include "memory.h"
 #include "parser.h"
@@ -13,6 +13,12 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#endif
+
+#ifdef WASM
+#include "codegen.h"
+#else
+#include "jit.h"
 #endif
 
 typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
@@ -75,6 +81,7 @@ void run(char* source, bool codegen)
   if (cyth.error)
     goto clean_up;
 
+#ifdef WASM
   if (codegen)
   {
     codegen_init(statements);
@@ -82,6 +89,13 @@ void run(char* source, bool codegen)
 
     cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
   }
+#else
+  if (codegen)
+  {
+    jit_init(statements);
+    jit_run(cyth.logging);
+  }
+#endif
 
 clean_up:
   memory_reset();

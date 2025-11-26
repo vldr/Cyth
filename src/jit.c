@@ -153,7 +153,7 @@ static String* string_bool_cast(bool n)
   return n ? &true_string : &false_string;
 }
 
-static void panic(String* n, int line, int column)
+static void panic(const char* n, int line, int column)
 {
   void* array[10];
   int size = 0;
@@ -165,9 +165,9 @@ static void panic(String* n, int line, int column)
 #endif
 
   if (line && column)
-    printf("%.*s, on line %d:%d\n", n->size, n->data, line, column);
+    printf("%s, on line %d:%d\n", n, line, column);
   else
-    printf("%.*s\n", n->size, n->data);
+    printf("%s\n", n);
 
   for (int i = 0; i < size; i++)
   {
@@ -369,13 +369,10 @@ static void generate_string_literal_expression(MIR_op_t dest, const char* litera
 
 static void generate_panic(Token token, const char* what)
 {
-  MIR_reg_t ptr = _MIR_new_temp_reg(jit.ctx, MIR_T_I64, jit.function->u.func);
-  generate_string_literal_expression(MIR_new_reg_op(jit.ctx, ptr), what, strlen(what));
-
   MIR_append_insn(jit.ctx, jit.function,
                   MIR_new_call_insn(jit.ctx, 5, MIR_new_ref_op(jit.ctx, jit.panic.proto),
                                     MIR_new_ref_op(jit.ctx, jit.panic.func),
-                                    MIR_new_reg_op(jit.ctx, ptr),
+                                    MIR_new_int_op(jit.ctx, (uint64_t)what),
                                     MIR_new_int_op(jit.ctx, token.start_line),
                                     MIR_new_int_op(jit.ctx, token.start_column)));
 }
@@ -407,7 +404,7 @@ static MIR_op_t generate_string_at_op(MIR_reg_t base, MIR_reg_t index)
 
 static MIR_op_t generate_object_field_op(VarStmt* field, MIR_reg_t ptr)
 {
-  return MIR_new_mem_op(jit.ctx, data_type_to_mir_array_type(field->data_type), field->index, ptr,
+  return MIR_new_mem_op(jit.ctx, data_type_to_mir_array_type(field->data_type), field->offset, ptr,
                         0, 1);
 }
 

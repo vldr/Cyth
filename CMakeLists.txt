@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+option(WASM "Enable WASM codegen, when disabled will use JIT" ${EMSCRIPTEN})
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose Debug or Release" FORCE)
@@ -33,19 +34,36 @@ else()
         add_link_options(-pthread -lm)
     endif()
 
-    add_custom_target(test
-        COMMAND node test/_test_wasm.js $<TARGET_FILE:cyth>
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        DEPENDS cyth
-    )
+    if (WASM)
+        add_custom_target(test
+            COMMAND node test/_test_wasm.js $<TARGET_FILE:cyth>
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDS cyth
+        )
+    else()
+        add_custom_target(test
+            COMMAND node test/_test.js $<TARGET_FILE:cyth>
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            DEPENDS cyth
+        )
+    endif()
 endif()
 
-# add_subdirectory(third_party/mir)
-add_subdirectory(third_party/binaryen)
-add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/codegen.h
-                    src/environment.c src/environment.h src/expression.h src/lexer.c
-                    src/lexer.h src/main.c src/main.h src/map.c src/map.h src/memory.c
-                    src/memory.h src/parser.c src/parser.h src/statement.h )#src/jit.c src/jit.h
+set(SOURCES
+    src/array.h src/checker.c src/checker.h src/environment.c src/environment.h
+    src/expression.h src/lexer.c src/lexer.h src/main.c src/main.h src/map.c
+    src/map.h src/memory.c src/memory.h src/parser.c src/parser.h src/statement.h
+)
+
+if (WASM)
+    add_subdirectory(third_party/binaryen)
+    list(APPEND SOURCES src/codegen.c src/codegen.h)
+else()
+    add_subdirectory(third_party/mir)
+    list(APPEND SOURCES src/jit.c src/jit.h)
+endif()
+
+add_executable(cyth ${SOURCES})
 
 if (MSVC)
     target_compile_options(cyth PRIVATE /MP)
@@ -69,5 +87,10 @@ if (EMSCRIPTEN)
                 ${CMAKE_SOURCE_DIR}/editor/cyth.wasm)
 endif()
 
-# target_link_libraries(cyth PRIVATE mir)
-target_link_libraries(cyth PRIVATE binaryen)
+if (WASM)
+    target_compile_definitions(cyth PRIVATE WASM=1)
+    target_link_libraries(cyth PRIVATE binaryen)
+else()
+    target_link_libraries(cyth PRIVATE mir)
+endif()
+

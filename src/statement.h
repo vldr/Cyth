@@ -103,6 +103,7 @@ typedef struct _VAR_STMT
   DataTypeToken type;
 
   int index;
+  int offset;
   Scope scope;
 
   union {
@@ -128,6 +129,7 @@ typedef struct _CLASS_STMT
   ArrayFuncTemplateStmt function_templates;
   struct _FUNC_STMT* default_constructor;
 
+  uintptr_t ref;
   int alignment;
   int size;
 } ClassStmt;

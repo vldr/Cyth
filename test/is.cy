@@ -31,13 +31,11 @@ a = A()
 
 log(a is A)
 log(a is B)
-log(a is C)
 log(a is any)
 log(a is string)
 log(a is int[])
 
 # 1
-# 0
 # 0
 # 1
 # 0

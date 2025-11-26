@@ -1788,9 +1788,12 @@ static void init_class_declaration_body(ClassStmt* statement)
     function_template->name.length = strlen(statement->name.lexeme);
   }
 
+  int count = 0;
   VarStmt* variable_statement;
   array_foreach(&statement->variables, variable_statement)
   {
+    variable_statement->index = count++;
+
     init_variable_declaration(variable_statement);
   }
 
@@ -2693,6 +2696,10 @@ static DataType check_call_expression(CallExpr* expression)
         }
       }
 
+      expression->function_name =
+        variable->data_type.type == TYPE_FUNCTION_GROUP
+          ? function_data_type_to_string(class->name.lexeme, function_data_type)
+          : class->name.lexeme;
       expression->function = function;
     }
     else
@@ -2704,6 +2711,7 @@ static DataType check_call_expression(CallExpr* expression)
         return DATA_TYPE(TYPE_VOID);
       }
 
+      expression->function_name = class->name.lexeme;
       expression->function = class->default_constructor;
     }
 
@@ -3744,8 +3752,8 @@ static void check_class_declaration(ClassStmt* statement)
     if (size > statement->alignment)
       statement->alignment = size;
 
-    variable_statement->index = align(offset, size);
-    offset = size + variable_statement->index;
+    variable_statement->offset = align(offset, size);
+    offset = size + variable_statement->offset;
   }
 
   statement->size = align(offset, statement->alignment);

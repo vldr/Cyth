@@ -18,7 +18,7 @@ if (EMSCRIPTEN)
                      -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_run,_set_error_callback,_set_result_callback)
 
     add_custom_target(test
-        COMMAND node test/_test_web.js
+        COMMAND node test/_test_wasm_web.js
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
@@ -34,17 +34,18 @@ else()
     endif()
 
     add_custom_target(test
-        COMMAND node test/_test.js $<TARGET_FILE:cyth>
+        COMMAND node test/_test_wasm.js $<TARGET_FILE:cyth>
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
 endif()
 
-add_subdirectory(third_party/mir)
+# add_subdirectory(third_party/mir)
+add_subdirectory(third_party/binaryen)
 add_executable(cyth src/array.h src/checker.c src/checker.h src/codegen.c src/codegen.h
                     src/environment.c src/environment.h src/expression.h src/lexer.c
                     src/lexer.h src/main.c src/main.h src/map.c src/map.h src/memory.c
-                    src/memory.h src/parser.c src/parser.h src/statement.h)
+                    src/memory.h src/parser.c src/parser.h src/statement.h )#src/jit.c src/jit.h
 
 if (MSVC)
     target_compile_options(cyth PRIVATE /MP)
@@ -68,4 +69,5 @@ if (EMSCRIPTEN)
                 ${CMAKE_SOURCE_DIR}/editor/cyth.wasm)
 endif()
 
-target_link_libraries(cyth PRIVATE mir)
+# target_link_libraries(cyth PRIVATE mir)
+target_link_libraries(cyth PRIVATE binaryen)

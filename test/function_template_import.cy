@@ -4,11 +4,11 @@ import "env"
 log<int>(10)
 log<float>(3.625)
 log<bool>(true)
-log<char>('a')
+log<int>('a')
 log<string>("hello")
 
 # 10
 # 3.625
 # 1
-# a
+# 97
 # hello

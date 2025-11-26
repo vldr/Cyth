@@ -7,7 +7,6 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <string.h>
 
 static Expr* prefix_unary(void);
 static Expr* expression(void);
@@ -1143,6 +1142,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->type = STMT_CLASS_DECL;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
+  stmt->class.ref = 0;
   stmt->class.size = 0;
   stmt->class.alignment = 1;
   stmt->class.default_constructor = ALLOC(FuncStmt);

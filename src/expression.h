@@ -200,10 +200,8 @@ typedef struct _CALL_EXPR
   ArrayExpr arguments;
   ArrayToken argument_tokens;
 
-  union {
-    struct _FUNC_STMT* function;
-    const char* function_name;
-  };
+  struct _FUNC_STMT* function;
+  const char* function_name;
 } CallExpr;
 
 typedef struct _CAST_EXPR

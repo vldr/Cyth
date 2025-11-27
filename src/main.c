@@ -19,6 +19,27 @@
 #include "codegen.h"
 #else
 #include "jit.h"
+
+static void log_int(int n)
+{
+  printf("%d\n", n);
+}
+
+static void log_float(float n)
+{
+  printf("%.10g\n", n);
+}
+
+static void log_char(char n)
+{
+  printf("%c\n", n);
+}
+
+static void log_string(String* n)
+{
+  fwrite(n->data, 1, n->size, stdout);
+  putchar('\n');
+}
 #endif
 
 typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
@@ -92,8 +113,22 @@ void run(char* source, bool codegen)
 #else
   if (codegen)
   {
-    jit_init(statements);
-    jit_run(cyth.logging);
+    Jit* jit = jit_init(statements);
+    jit_set_function(jit, "log", (void*)log_int);
+    jit_set_function(jit, "log(int)", (void*)log_int);
+    jit_set_function(jit, "log(bool)", (void*)log_int);
+    jit_set_function(jit, "log(float)", (void*)log_float);
+    jit_set_function(jit, "log(char)", (void*)log_char);
+    jit_set_function(jit, "log(string)", (void*)log_string);
+    jit_set_function(jit, "log<int>", (void*)log_int);
+    jit_set_function(jit, "log<bool>", (void*)log_int);
+    jit_set_function(jit, "log<float>", (void*)log_float);
+    jit_set_function(jit, "log<char>", (void*)log_char);
+    jit_set_function(jit, "log<string>", (void*)log_string);
+
+    jit_generate(jit, cyth.logging);
+    jit_run(jit);
+    jit_destroy(jit);
   }
 #endif
 

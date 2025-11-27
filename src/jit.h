@@ -3,7 +3,25 @@
 
 #include "statement.h"
 
-void jit_init(ArrayStmt statements);
-void jit_run(bool logging);
+typedef struct _JIT Jit;
+
+typedef struct _STRING
+{
+  int size;
+  char data[];
+} String;
+
+typedef struct _ARRAY
+{
+  int size;
+  int capacity;
+  void* data;
+} Array;
+
+Jit* jit_init(ArrayStmt statements);
+void jit_set_function(Jit* jit, const char* name, void* func);
+void jit_generate(Jit* jit, bool logging);
+void jit_run(Jit* jit);
+void jit_destroy(Jit* jit);
 
 #endif

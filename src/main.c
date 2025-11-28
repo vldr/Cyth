@@ -15,6 +15,23 @@
 #include <io.h>
 #endif
 
+typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
+                                 const char* message);
+typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_size,
+                                  void* source_map);
+
+static struct
+{
+  bool error;
+  bool logging;
+
+  const char* input_path;
+  const char* output_path;
+
+  error_callback_t error_callback;
+  result_callback_t result_callback;
+} cyth;
+
 #ifdef WASM
 #include "codegen.h"
 #else
@@ -40,24 +57,38 @@ static void log_string(String* n)
   fwrite(n->data, 1, n->size, stdout);
   putchar('\n');
 }
-#endif
 
-typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
-                                 const char* message);
-typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_size,
-                                  void* source_map);
-
-static struct
+Jit* jit(char* source)
 {
-  bool error;
-  bool logging;
+  Jit* jit = NULL;
+  cyth.error = false;
 
-  const char* input_path;
-  const char* output_path;
+  lexer_init(source);
+  ArrayToken tokens = lexer_scan();
 
-  error_callback_t error_callback;
-  result_callback_t result_callback;
-} cyth;
+  if (cyth.error)
+    goto clean_up;
+
+  parser_init(tokens);
+  ArrayStmt statements = parser_parse();
+
+  if (cyth.error)
+    goto clean_up;
+
+  checker_init(statements);
+  checker_validate();
+
+  if (cyth.error)
+    goto clean_up;
+
+  jit = jit_init(statements);
+
+clean_up:
+  memory_reset();
+
+  return jit;
+}
+#endif
 
 void set_logging(bool logging)
 {

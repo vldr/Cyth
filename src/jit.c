@@ -339,8 +339,9 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
 static void generate_panic(Jit* jit, Token token, const char* what)
 {
   MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_call_insn(jit->ctx, 5, MIR_new_ref_op(jit->ctx, jit->panic.proto),
+                  MIR_new_call_insn(jit->ctx, 6, MIR_new_ref_op(jit->ctx, jit->panic.proto),
                                     MIR_new_ref_op(jit->ctx, jit->panic.func),
+                                    MIR_new_int_op(jit->ctx, (uint64_t)jit),
                                     MIR_new_int_op(jit->ctx, (uint64_t)what),
                                     MIR_new_int_op(jit->ctx, token.start_line),
                                     MIR_new_int_op(jit->ctx, token.start_column)));
@@ -4875,8 +4876,9 @@ Jit* jit_init(ArrayStmt statements)
   array_add(&jit->function_items, jit->function);
 
   MIR_load_external(jit->ctx, "panic", (void*)panic);
-  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 3,
-                                       (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 },
+  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
+                                       (MIR_var_t[]){ { .name = "jit", .type = MIR_T_I64 },
+                                                      { .name = "what", .type = MIR_T_I64 },
                                                       { .name = "line", .type = MIR_T_I64 },
                                                       { .name = "column", .type = MIR_T_I64 } });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");

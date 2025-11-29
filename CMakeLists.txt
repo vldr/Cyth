@@ -64,7 +64,6 @@ else()
 endif()
 
 add_executable(cyth ${SOURCES})
-add_library(libcyth STATIC ${SOURCES})
 
 if (MSVC)
     target_compile_options(cyth PRIVATE /MP)
@@ -93,6 +92,5 @@ if (WASM)
     target_link_libraries(cyth PRIVATE binaryen)
 else()
     target_link_libraries(cyth PRIVATE mir)
-    target_link_libraries(libcyth PRIVATE mir)
 endif()
 

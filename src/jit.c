@@ -4958,6 +4958,7 @@ void jit_generate(Jit* jit, bool logging)
   init_statements(jit, &jit->statements);
   generate_statements(jit, &jit->statements);
 
+  MIR_append_insn(jit->ctx, jit->function, MIR_new_ret_insn(jit->ctx, 0));
   MIR_finish_func(jit->ctx);
   MIR_finish_module(jit->ctx);
 

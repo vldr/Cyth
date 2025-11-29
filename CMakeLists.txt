@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-option(WASM "Enable WASM codegen, when disabled will use JIT" ${EMSCRIPTEN})
+
+option(WASM "WASM codegen" OFF)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose Debug or Release" FORCE)
@@ -55,7 +56,7 @@ set(SOURCES
     src/map.h src/memory.c src/memory.h src/parser.c src/parser.h src/statement.h
 )
 
-if (WASM)
+if (WASM OR EMSCRIPTEN)
     add_subdirectory(third_party/binaryen)
     list(APPEND SOURCES src/codegen.c src/codegen.h)
 else()
@@ -87,7 +88,7 @@ if (EMSCRIPTEN)
                 ${CMAKE_SOURCE_DIR}/editor/cyth.wasm)
 endif()
 
-if (WASM)
+if (WASM OR EMSCRIPTEN)
     target_compile_definitions(cyth PRIVATE WASM=1)
     target_link_libraries(cyth PRIVATE binaryen)
 else()

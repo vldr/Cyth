@@ -9503,8 +9503,8 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   return func_item->addr;
 }
 
-void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
-  return generate_func_code (ctx, func_item, TRUE);
+uintptr_t MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
+  return (uintptr_t)generate_func_code (ctx, func_item, TRUE);
 }
 
 void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f) {

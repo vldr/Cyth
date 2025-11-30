@@ -115,10 +115,12 @@ static String* string_char_cast(char n)
 
 static String* string_bool_cast(bool n)
 {
-  static String true_string = { .size = sizeof("true") - 1, .data = "true" };
-  static String false_string = { .size = sizeof("false") - 1, .data = "false" };
+  init_static_string(true_string, "true");
+  init_static_string(false_string, "false");
 
-  return n ? &true_string : &false_string;
+  return n ? (String*)&true_string : (String*)&false_string;
+
+#undef STATIC_STRING
 }
 
 static void panic(Jit* jit, const char* n, int line, int column)
@@ -969,7 +971,7 @@ static Function* generate_int_hash_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)int_hash);
+    MIR_load_external(jit->ctx, name, (uintptr_t)int_hash);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -999,7 +1001,7 @@ static Function* generate_float_hash_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)float_hash);
+    MIR_load_external(jit->ctx, name, (uintptr_t)float_hash);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1032,7 +1034,7 @@ static Function* generate_float_sqrt_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)float_sqrt);
+    MIR_load_external(jit->ctx, name, (uintptr_t)float_sqrt);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1070,7 +1072,7 @@ static Function* generate_string_hash_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_hash);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_hash);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1121,7 +1123,7 @@ static Function* generate_string_index_of_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_index_of);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_index_of);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1177,7 +1179,7 @@ static Function* generate_string_count_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_count);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_count);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1271,7 +1273,7 @@ static Function* generate_string_replace_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_replace);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_replace);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1321,7 +1323,7 @@ static Function* generate_string_trim_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_trim);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_trim);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1364,7 +1366,7 @@ static Function* generate_string_starts_with_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_starts_with);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_starts_with);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1407,7 +1409,7 @@ static Function* generate_string_ends_with_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_ends_with);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_ends_with);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1438,7 +1440,7 @@ static Function* generate_string_contains_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_contains);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_contains);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1547,7 +1549,7 @@ static Function* generate_string_split_function(Jit* jit, DataType return_data_t
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_split);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_split);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1610,7 +1612,7 @@ static Function* generate_string_join_function(Jit* jit, DataType array_data_typ
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_join);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_join);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1647,7 +1649,7 @@ static Function* generate_string_to_array_function(Jit* jit, DataType return_dat
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_to_array);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_to_array);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1689,7 +1691,7 @@ static Function* generate_string_pad_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)string_pad);
+    MIR_load_external(jit->ctx, name, (uintptr_t)string_pad);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1827,7 +1829,7 @@ static Function* generate_alloc_function(Jit* jit)
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)alloc);
+    MIR_load_external(jit->ctx, name, (uintptr_t)alloc);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1849,7 +1851,7 @@ static Function* generate_alloc_reset_function(Jit* jit)
     function->proto = MIR_new_proto_arr(jit->ctx, memory_sprintf("%s.proto", name), 0, 0, 0, 0);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)alloc_reset);
+    MIR_load_external(jit->ctx, name, (uintptr_t)alloc_reset);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -1875,7 +1877,7 @@ static Function* generate_memory_function(Jit* jit)
                                         return_type != MIR_T_UNDEF, &return_type, 0, 0);
     function->func = MIR_new_import(jit->ctx, name);
 
-    MIR_load_external(jit->ctx, name, (void*)memory);
+    MIR_load_external(jit->ctx, name, (uintptr_t)memory);
     map_put_function(&jit->functions, name, function);
   }
 
@@ -4875,7 +4877,7 @@ Jit* jit_init(ArrayStmt statements)
   array_init(&jit->function_items);
   array_add(&jit->function_items, jit->function);
 
-  MIR_load_external(jit->ctx, "panic", (void*)panic);
+  MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
   jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
                                        (MIR_var_t[]){ { .name = "jit", .type = MIR_T_I64 },
                                                       { .name = "what", .type = MIR_T_I64 },
@@ -4883,49 +4885,49 @@ Jit* jit_init(ArrayStmt statements)
                                                       { .name = "column", .type = MIR_T_I64 } });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");
 
-  MIR_load_external(jit->ctx, "malloc", (void*)malloc);
+  MIR_load_external(jit->ctx, "malloc", (uintptr_t)malloc);
   jit->malloc.proto = MIR_new_proto_arr(jit->ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                                         (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
   jit->malloc.func = MIR_new_import(jit->ctx, "malloc");
 
-  MIR_load_external(jit->ctx, "memcpy", (void*)memcpy);
+  MIR_load_external(jit->ctx, "memcpy", (uintptr_t)memcpy);
   jit->memcpy.proto = MIR_new_proto_arr(jit->ctx, "memcpy.proto", 0, (MIR_type_t[]){ MIR_T_I64 }, 3,
                                         (MIR_var_t[]){ { .name = "dest", .type = MIR_T_I64 },
                                                        { .name = "soruce", .type = MIR_T_I64 },
                                                        { .name = "n", .type = MIR_T_I64 } });
   jit->memcpy.func = MIR_new_import(jit->ctx, "memcpy");
 
-  MIR_load_external(jit->ctx, "realloc", (void*)realloc);
+  MIR_load_external(jit->ctx, "realloc", (uintptr_t)realloc);
   jit->realloc.proto = MIR_new_proto_arr(
     jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
     (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "size", .type = MIR_T_I64 } });
   jit->realloc.func = MIR_new_import(jit->ctx, "realloc");
 
-  MIR_load_external(jit->ctx, "string.equals", (void*)string_equals);
+  MIR_load_external(jit->ctx, "string.equals", (uintptr_t)string_equals);
   jit->string_equals.proto = MIR_new_proto_arr(
     jit->ctx, "string.equals.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
     (MIR_var_t[]){ { .name = "left", .type = MIR_T_I64 }, { .name = "right", .type = MIR_T_I64 } });
   jit->string_equals.func = MIR_new_import(jit->ctx, "string.equals");
 
-  MIR_load_external(jit->ctx, "string.bool_cast", (void*)string_bool_cast);
+  MIR_load_external(jit->ctx, "string.bool_cast", (uintptr_t)string_bool_cast);
   jit->string_bool_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.bool_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                       (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
   jit->string_bool_cast.func = MIR_new_import(jit->ctx, "string.bool_cast");
 
-  MIR_load_external(jit->ctx, "string.int_cast", (void*)string_int_cast);
+  MIR_load_external(jit->ctx, "string.int_cast", (uintptr_t)string_int_cast);
   jit->string_int_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.int_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                       (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
   jit->string_int_cast.func = MIR_new_import(jit->ctx, "string.int_cast");
 
-  MIR_load_external(jit->ctx, "string.float_cast", (void*)string_float_cast);
+  MIR_load_external(jit->ctx, "string.float_cast", (uintptr_t)string_float_cast);
   jit->string_float_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.float_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                       (MIR_var_t[]){ { .name = "n", .type = MIR_T_F } });
   jit->string_float_cast.func = MIR_new_import(jit->ctx, "string.float_cast");
 
-  MIR_load_external(jit->ctx, "string.char_cast", (void*)string_char_cast);
+  MIR_load_external(jit->ctx, "string.char_cast", (uintptr_t)string_char_cast);
   jit->string_char_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.char_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                       (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
@@ -4948,7 +4950,7 @@ Jit* jit_init(ArrayStmt statements)
   return jit;
 }
 
-void jit_set_function(Jit* jit, const char* name, void* func)
+void jit_set_function(Jit* jit, const char* name, uintptr_t func)
 {
   MIR_load_external(jit->ctx, name, func);
 }

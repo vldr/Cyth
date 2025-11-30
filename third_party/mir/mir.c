@@ -1965,10 +1965,10 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
 #define SETJMP_NAME "setjmp"
 #define SETJMP_NAME2 "_setjmp"
 
-void MIR_load_external (MIR_context_t ctx, const char *name, void *addr) {
+void MIR_load_external (MIR_context_t ctx, const char *name, uintptr_t addr) {
   if (strcmp (name, SETJMP_NAME) == 0 || (SETJMP_NAME2 != NULL && strcmp (name, SETJMP_NAME2) == 0))
-    setjmp_addr = addr;
-  setup_global (ctx, name, addr, NULL);
+    setjmp_addr = (void*)addr;
+  setup_global (ctx, name, (void*)addr, NULL);
 }
 
 static void simplify_module_init (MIR_context_t ctx);
@@ -2006,7 +2006,7 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
           if (import_resolver == NULL || (addr = import_resolver (item->u.import_id)) == NULL)
             MIR_get_error_func (ctx) (MIR_undeclared_op_ref_error, "import of undefined item %s",
                                       item->u.import_id);
-          MIR_load_external (ctx, item->u.import_id, addr);
+          MIR_load_external (ctx, item->u.import_id, (uintptr_t)addr);
           tab_item = item_tab_find (ctx, item->u.import_id, &environment_module);
           mir_assert (tab_item != NULL);
         }

@@ -69,7 +69,7 @@ add_executable(cyth ${SOURCES})
 if (MSVC)
     target_compile_options(cyth PRIVATE /MP)
 else()
-    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -Wno-gnu-flexible-array-initializer)
+    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(cyth PRIVATE -fsanitize=address -fsanitize=undefined -D_DEBUG)

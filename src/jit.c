@@ -10,6 +10,7 @@
 #include "statement.h"
 
 #include <ctype.h>
+#include <gc.h>
 #include <mir-gen.h>
 #include <setjmp.h>
 
@@ -18,7 +19,6 @@
 #endif
 
 typedef void (*Start)(void);
-
 typedef struct _FUNCTION
 {
   MIR_item_t func;
@@ -79,7 +79,7 @@ static String* string_int_cast(int n)
   int length = snprintf(NULL, 0, "%d", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = malloc(size);
+  String* result = GC_malloc(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%d", n);
@@ -92,7 +92,7 @@ static String* string_float_cast(float n)
   int length = snprintf(NULL, 0, "%.10g", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = malloc(size);
+  String* result = GC_malloc(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%.10g", n);
@@ -105,7 +105,7 @@ static String* string_char_cast(char n)
   int length = snprintf(NULL, 0, "%c", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = malloc(size);
+  String* result = GC_malloc(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%c", n);
@@ -119,8 +119,6 @@ static String* string_bool_cast(bool n)
   init_static_string(false_string, "false");
 
   return n ? (String*)&true_string : (String*)&false_string;
-
-#undef STATIC_STRING
 }
 
 static void panic(Jit* jit, const char* n, int line, int column)
@@ -323,7 +321,7 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
       length = strlen(literal);
 
     uintptr_t size = sizeof(String) + length;
-    String* string = malloc(size);
+    String* string = alloca(size);
     string->size = length;
     memcpy(string->data, literal, length);
 
@@ -980,7 +978,13 @@ static Function* generate_int_hash_function(Jit* jit)
 
 static int float_hash(float n)
 {
-  return *(int*)&n;
+  union {
+    float f;
+    int i;
+  } value;
+  value.f = n;
+
+  return value.i;
 }
 
 static Function* generate_float_hash_function(Jit* jit)
@@ -1197,7 +1201,7 @@ static String* string_replace(String* input, String* old, String* new)
 
   int size = input->size + count * (new->size - old->size);
 
-  String* result = malloc(sizeof(String) + size);
+  String* result = GC_malloc(sizeof(String) + size);
   result->size = size;
 
   if (old->size > 0)
@@ -1296,7 +1300,7 @@ static String* string_trim(String* input)
 
   int size = end - start + 1;
 
-  String* result = malloc(sizeof(String) + size);
+  String* result = GC_malloc(sizeof(String) + size);
   result->size = size;
 
   for (int i = start, j = 0; i <= end; i++, j++)
@@ -1451,16 +1455,16 @@ static Array* string_split(String* input, String* delim)
 {
   if (delim->size == 0)
   {
-    Array* result = malloc(sizeof(Array));
+    Array* result = GC_malloc(sizeof(Array));
     result->size = input->size;
     result->capacity = input->size;
-    result->data = malloc(sizeof(String*) * input->size);
+    result->data = GC_malloc(sizeof(String*) * input->size);
 
     String** data = result->data;
 
     for (int i = 0; i < input->size; i++)
     {
-      String* item = malloc(sizeof(String) + 1);
+      String* item = GC_malloc(sizeof(String) + 1);
       item->size = 1;
       item->data[0] = input->data[i];
 
@@ -1474,10 +1478,10 @@ static Array* string_split(String* input, String* delim)
   {
     int count = string_count(input, delim) + 1;
 
-    Array* result = malloc(sizeof(Array));
+    Array* result = GC_malloc(sizeof(Array));
     result->size = count;
     result->capacity = count;
-    result->data = malloc(sizeof(String*) * count);
+    result->data = GC_malloc(sizeof(String*) * count);
 
     String** data = result->data;
 
@@ -1501,7 +1505,7 @@ static Array* string_split(String* input, String* delim)
       {
         const int size = current - previous;
 
-        String* item = malloc(sizeof(String) + size);
+        String* item = GC_malloc(sizeof(String) + size);
         item->size = size;
         memcpy(item->data, input->data + previous, size);
 
@@ -1519,7 +1523,7 @@ static Array* string_split(String* input, String* delim)
 
     const int size = input->size - previous;
 
-    String* item = malloc(sizeof(String) + size);
+    String* item = GC_malloc(sizeof(String) + size);
     item->size = size;
     memcpy(item->data, input->data + previous, size);
 
@@ -1560,7 +1564,7 @@ static String* string_join(Array* input, String* delim)
 {
   if (input->size == 0)
   {
-    String* result = malloc(sizeof(String));
+    String* result = GC_malloc(sizeof(String));
     result->size = 0;
 
     return result;
@@ -1572,7 +1576,7 @@ static String* string_join(Array* input, String* delim)
   for (int i = 0; i < input->size; i++)
     size += data[i]->size;
 
-  String* result = malloc(sizeof(String) + size);
+  String* result = GC_malloc(sizeof(String) + size);
   result->size = size;
 
   for (int i = 0, k = 0; i < input->size; i++)
@@ -1621,10 +1625,10 @@ static Function* generate_string_join_function(Jit* jit, DataType array_data_typ
 
 static Array* string_to_array(String* input)
 {
-  Array* result = malloc(sizeof(Array));
+  Array* result = GC_malloc(sizeof(Array));
   result->size = input->size;
   result->capacity = input->size;
-  result->data = malloc(sizeof(char) * input->size);
+  result->data = GC_malloc(sizeof(char) * input->size);
 
   memcpy(result->data, input->data, input->size);
 
@@ -1660,7 +1664,7 @@ static String* string_pad(String* input, int pad)
 {
   const int size = pad + input->size;
 
-  String* result = malloc(sizeof(String) + size);
+  String* result = GC_malloc(sizeof(String) + size);
   result->size = size;
 
   for (int i = 0; i < pad; i++)
@@ -1808,7 +1812,7 @@ static Function* generate_string_concat_function(Jit* jit, int count)
 
 static void* alloc(int size)
 {
-  return malloc(size);
+  return GC_malloc(size);
 }
 
 static Function* generate_alloc_function(Jit* jit)
@@ -4885,10 +4889,16 @@ Jit* jit_init(ArrayStmt statements)
                                                       { .name = "column", .type = MIR_T_I64 } });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");
 
-  MIR_load_external(jit->ctx, "malloc", (uintptr_t)malloc);
+  MIR_load_external(jit->ctx, "malloc", (uintptr_t)GC_malloc);
   jit->malloc.proto = MIR_new_proto_arr(jit->ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
                                         (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
   jit->malloc.func = MIR_new_import(jit->ctx, "malloc");
+
+  MIR_load_external(jit->ctx, "realloc", (uintptr_t)GC_realloc);
+  jit->realloc.proto = MIR_new_proto_arr(
+    jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
+    (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "size", .type = MIR_T_I64 } });
+  jit->realloc.func = MIR_new_import(jit->ctx, "realloc");
 
   MIR_load_external(jit->ctx, "memcpy", (uintptr_t)memcpy);
   jit->memcpy.proto = MIR_new_proto_arr(jit->ctx, "memcpy.proto", 0, (MIR_type_t[]){ MIR_T_I64 }, 3,
@@ -4896,12 +4906,6 @@ Jit* jit_init(ArrayStmt statements)
                                                        { .name = "soruce", .type = MIR_T_I64 },
                                                        { .name = "n", .type = MIR_T_I64 } });
   jit->memcpy.func = MIR_new_import(jit->ctx, "memcpy");
-
-  MIR_load_external(jit->ctx, "realloc", (uintptr_t)realloc);
-  jit->realloc.proto = MIR_new_proto_arr(
-    jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
-    (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "size", .type = MIR_T_I64 } });
-  jit->realloc.func = MIR_new_import(jit->ctx, "realloc");
 
   MIR_load_external(jit->ctx, "string.equals", (uintptr_t)string_equals);
   jit->string_equals.proto = MIR_new_proto_arr(
@@ -4948,6 +4952,11 @@ Jit* jit_init(ArrayStmt statements)
   }
 
   return jit;
+}
+
+void* jit_alloc(size_t size)
+{
+  return GC_malloc(size);
 }
 
 void jit_set_function(Jit* jit, const char* name, uintptr_t func)

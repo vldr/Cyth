@@ -36,6 +36,8 @@
 #  pragma message("Warning: Expecting _WIN64 for x64 targets!")
 #endif
 
+#define NO_EXECUTE_PERMISSION 1
+
 /*
  * Define version numbers here to allow test on build machine for
  * cross-builds.  Note that this defines the header version number,

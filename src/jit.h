@@ -25,7 +25,7 @@ typedef struct _ARRAY
 } Array;
 
 Jit* jit_init(ArrayStmt statements);
-void* jit_alloc(size_t size);
+void* jit_alloc(bool atomic, size_t size);
 void jit_set_function(Jit* jit, const char* name, uintptr_t func);
 void jit_generate(Jit* jit, bool logging);
 void jit_run(Jit* jit);

@@ -50,8 +50,9 @@ struct _JIT
 
   Function panic;
   Function malloc;
-  Function memcpy;
+  Function malloc_atomic;
   Function realloc;
+  Function memcpy;
   Function string_equals;
   Function string_bool_cast;
   Function string_int_cast;
@@ -79,7 +80,7 @@ static String* string_int_cast(int n)
   int length = snprintf(NULL, 0, "%d", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = GC_malloc(size);
+  String* result = GC_malloc_atomic(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%d", n);
@@ -92,7 +93,7 @@ static String* string_float_cast(float n)
   int length = snprintf(NULL, 0, "%.10g", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = GC_malloc(size);
+  String* result = GC_malloc_atomic(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%.10g", n);
@@ -105,7 +106,7 @@ static String* string_char_cast(char n)
   int length = snprintf(NULL, 0, "%c", n) + 1;
   uintptr_t size = sizeof(String) + length;
 
-  String* result = GC_malloc(size);
+  String* result = GC_malloc_atomic(size);
   result->size = length - 1;
 
   snprintf(result->data, length, "%c", n);
@@ -162,6 +163,34 @@ static MIR_insn_code_t data_type_to_mov_type(DataType data_type)
     return MIR_FMOV;
   default:
     return MIR_MOV;
+  }
+}
+
+static bool data_type_is_pointer(DataType data_type)
+{
+  switch (data_type.type)
+  {
+  case TYPE_VOID:
+  case TYPE_ALIAS:
+  case TYPE_PROTOTYPE:
+  case TYPE_PROTOTYPE_TEMPLATE:
+  case TYPE_FUNCTION_TEMPLATE:
+  case TYPE_FUNCTION_GROUP:
+  case TYPE_FUNCTION:
+  case TYPE_FUNCTION_MEMBER:
+  case TYPE_FUNCTION_INTERNAL:
+  case TYPE_FUNCTION_POINTER:
+  case TYPE_NULL:
+  case TYPE_FLOAT:
+  case TYPE_BOOL:
+  case TYPE_CHAR:
+  case TYPE_INTEGER:
+    return false;
+  case TYPE_ANY:
+  case TYPE_STRING:
+  case TYPE_OBJECT:
+  case TYPE_ARRAY:
+    return true;
   }
 }
 
@@ -301,6 +330,14 @@ static void generate_malloc_expression(Jit* jit, MIR_reg_t dest, MIR_op_t size)
   MIR_append_insn(jit->ctx, jit->function,
                   MIR_new_call_insn(jit->ctx, 4, MIR_new_ref_op(jit->ctx, jit->malloc.proto),
                                     MIR_new_ref_op(jit->ctx, jit->malloc.func),
+                                    MIR_new_reg_op(jit->ctx, dest), size));
+}
+
+static void generate_malloc_atomic_expression(Jit* jit, MIR_reg_t dest, MIR_op_t size)
+{
+  MIR_append_insn(jit->ctx, jit->function,
+                  MIR_new_call_insn(jit->ctx, 4, MIR_new_ref_op(jit->ctx, jit->malloc_atomic.proto),
+                                    MIR_new_ref_op(jit->ctx, jit->malloc_atomic.func),
                                     MIR_new_reg_op(jit->ctx, dest), size));
 }
 
@@ -723,7 +760,7 @@ static Function* generate_array_to_string_function(Jit* jit, DataType data_type)
                                    MIR_new_int_op(jit->ctx, sizeof(unsigned int)),
                                    generate_array_length_op(jit, ptr)));
 
-      generate_malloc_expression(jit, string_ptr, MIR_new_reg_op(jit->ctx, size));
+      generate_malloc_atomic_expression(jit, string_ptr, MIR_new_reg_op(jit->ctx, size));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_MOV, generate_string_length_op(jit, string_ptr),
@@ -1201,7 +1238,7 @@ static String* string_replace(String* input, String* old, String* new)
 
   int size = input->size + count * (new->size - old->size);
 
-  String* result = GC_malloc(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size);
   result->size = size;
 
   if (old->size > 0)
@@ -1300,7 +1337,7 @@ static String* string_trim(String* input)
 
   int size = end - start + 1;
 
-  String* result = GC_malloc(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size);
   result->size = size;
 
   for (int i = start, j = 0; i <= end; i++, j++)
@@ -1464,7 +1501,7 @@ static Array* string_split(String* input, String* delim)
 
     for (int i = 0; i < input->size; i++)
     {
-      String* item = GC_malloc(sizeof(String) + 1);
+      String* item = GC_malloc_atomic(sizeof(String) + 1);
       item->size = 1;
       item->data[0] = input->data[i];
 
@@ -1505,7 +1542,7 @@ static Array* string_split(String* input, String* delim)
       {
         const int size = current - previous;
 
-        String* item = GC_malloc(sizeof(String) + size);
+        String* item = GC_malloc_atomic(sizeof(String) + size);
         item->size = size;
         memcpy(item->data, input->data + previous, size);
 
@@ -1523,7 +1560,7 @@ static Array* string_split(String* input, String* delim)
 
     const int size = input->size - previous;
 
-    String* item = GC_malloc(sizeof(String) + size);
+    String* item = GC_malloc_atomic(sizeof(String) + size);
     item->size = size;
     memcpy(item->data, input->data + previous, size);
 
@@ -1564,7 +1601,7 @@ static String* string_join(Array* input, String* delim)
 {
   if (input->size == 0)
   {
-    String* result = GC_malloc(sizeof(String));
+    String* result = GC_malloc_atomic(sizeof(String));
     result->size = 0;
 
     return result;
@@ -1576,7 +1613,7 @@ static String* string_join(Array* input, String* delim)
   for (int i = 0; i < input->size; i++)
     size += data[i]->size;
 
-  String* result = GC_malloc(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size);
   result->size = size;
 
   for (int i = 0, k = 0; i < input->size; i++)
@@ -1628,7 +1665,7 @@ static Array* string_to_array(String* input)
   Array* result = GC_malloc(sizeof(Array));
   result->size = input->size;
   result->capacity = input->size;
-  result->data = GC_malloc(sizeof(char) * input->size);
+  result->data = GC_malloc_atomic(sizeof(char) * input->size);
 
   memcpy(result->data, input->data, input->size);
 
@@ -1664,7 +1701,7 @@ static String* string_pad(String* input, int pad)
 {
   const int size = pad + input->size;
 
-  String* result = GC_malloc(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size);
   result->size = size;
 
   for (int i = 0; i < pad; i++)
@@ -1751,7 +1788,7 @@ static Function* generate_string_concat_function(Jit* jit, int count)
                        generate_string_length_op(jit, n_ptr)));
       }
 
-      generate_malloc_expression(jit, ptr, MIR_new_reg_op(jit->ctx, size));
+      generate_malloc_atomic_expression(jit, ptr, MIR_new_reg_op(jit->ctx, size));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_SUB, generate_string_length_op(jit, ptr),
@@ -1812,7 +1849,7 @@ static Function* generate_string_concat_function(Jit* jit, int count)
 
 static void* alloc(int size)
 {
-  return GC_malloc(size);
+  return malloc(size);
 }
 
 static Function* generate_alloc_function(Jit* jit)
@@ -4159,9 +4196,15 @@ static void generate_array_expression(Jit* jit, MIR_reg_t dest, LiteralArrayExpr
     DataType element_data_type = array_data_type_element(expression->data_type);
 
     generate_malloc_expression(jit, dest, MIR_new_int_op(jit->ctx, sizeof(Array)));
-    generate_malloc_expression(
-      jit, array_ptr,
-      MIR_new_int_op(jit->ctx, size_data_type(element_data_type) * expression->values.size));
+
+    if (data_type_is_pointer(element_data_type))
+      generate_malloc_expression(
+        jit, array_ptr,
+        MIR_new_int_op(jit->ctx, size_data_type(element_data_type) * expression->values.size));
+    else
+      generate_malloc_atomic_expression(
+        jit, array_ptr,
+        MIR_new_int_op(jit->ctx, size_data_type(element_data_type) * expression->values.size));
 
     MIR_append_insn(jit->ctx, jit->function,
                     MIR_new_insn(jit->ctx, MIR_MOV, generate_array_length_op(jit, dest),
@@ -4520,10 +4563,24 @@ static void generate_class_declaration(Jit* jit, ClassStmt* statement)
       MIR_set_curr_func(jit->ctx, jit->function->u.func);
     }
 
-    MIR_reg_t ptr = MIR_reg(jit->ctx, "this.0", jit->function->u.func);
-    generate_malloc_expression(jit, ptr, MIR_new_int_op(jit->ctx, statement->size));
-
+    bool contains_pointers = false;
     VarStmt* variable;
+    array_foreach(&statement->variables, variable)
+    {
+      if (data_type_is_pointer(variable->data_type))
+      {
+        contains_pointers = true;
+        break;
+      }
+    }
+
+    MIR_reg_t ptr = MIR_reg(jit->ctx, "this.0", jit->function->u.func);
+
+    if (contains_pointers)
+      generate_malloc_expression(jit, ptr, MIR_new_int_op(jit->ctx, statement->size));
+    else
+      generate_malloc_atomic_expression(jit, ptr, MIR_new_int_op(jit->ctx, statement->size));
+
     array_foreach(&statement->variables, variable)
     {
       MIR_reg_t initializer = _MIR_new_temp_reg(
@@ -4894,6 +4951,12 @@ Jit* jit_init(ArrayStmt statements)
                                         (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
   jit->malloc.func = MIR_new_import(jit->ctx, "malloc");
 
+  MIR_load_external(jit->ctx, "malloc_atomic", (uintptr_t)GC_malloc_atomic);
+  jit->malloc_atomic.proto =
+    MIR_new_proto_arr(jit->ctx, "malloc_atomic.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
+                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+  jit->malloc_atomic.func = MIR_new_import(jit->ctx, "malloc_atomic");
+
   MIR_load_external(jit->ctx, "realloc", (uintptr_t)GC_realloc);
   jit->realloc.proto = MIR_new_proto_arr(
     jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
@@ -4954,9 +5017,9 @@ Jit* jit_init(ArrayStmt statements)
   return jit;
 }
 
-void* jit_alloc(size_t size)
+void* jit_alloc(bool atomic, size_t size)
 {
-  return GC_malloc(size);
+  return atomic ? GC_malloc_atomic(size) : GC_malloc(size);
 }
 
 void jit_set_function(Jit* jit, const char* name, uintptr_t func)

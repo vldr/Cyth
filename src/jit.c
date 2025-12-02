@@ -14,8 +14,11 @@
 #include <mir-gen.h>
 #include <setjmp.h>
 
-#ifndef _WIN32
+#ifdef __has_include
+#if __has_include(<execinfo.h>)
 #include <execinfo.h>
+#define EXECINFO 1
+#endif
 #endif
 
 typedef void (*Start)(void);
@@ -129,7 +132,7 @@ static void panic(Jit* jit, const char* n, int line, int column)
 
 #ifdef _WIN32
   size = RtlCaptureStackBackTrace(0, sizeof(array) / sizeof_ptr(array), array, NULL);
-#else
+#elif EXECINFO
   size = backtrace(array, sizeof(array) / sizeof_ptr(array));
 #endif
 
@@ -192,6 +195,8 @@ static bool data_type_is_pointer(DataType data_type)
   case TYPE_ARRAY:
     return true;
   }
+
+  UNREACHABLE("Unexpected data type");
 }
 
 static MIR_type_t data_type_to_mir_type(DataType data_type)

@@ -304,7 +304,7 @@ static MIR_item_t data_type_to_proto(Jit* jit, DataType data_type)
 static uint64_t data_type_to_typeid(Jit* jit, DataType data_type)
 {
   const char* name = data_type_to_string(data_type);
-  int id = map_get_s64(&jit->typeids, name);
+  uint64_t id = map_get_s64(&jit->typeids, name);
 
   if (!id)
   {
@@ -363,7 +363,7 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
       length = strlen(literal);
 
     uintptr_t size = sizeof(String) + length;
-    String* string = alloca(size);
+    String* string = memory_alloc(size);
     string->size = length;
     memcpy(string->data, literal, length);
 
@@ -3586,6 +3586,11 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
     case TYPE_ARRAY:
     case TYPE_OBJECT: {
       uint64_t id = data_type_to_typeid(jit, expression->from_data_type) << 48;
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_AND, MIR_new_reg_op(jit->ctx, expr),
+                                   MIR_new_reg_op(jit->ctx, expr),
+                                   MIR_new_int_op(jit->ctx, 0xFFFFFFFFFFFFUL)));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_OR, MIR_new_reg_op(jit->ctx, dest),

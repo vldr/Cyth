@@ -6,12 +6,12 @@
 #include "main.h"
 #include "map.h"
 #include "memory.h"
-#include "mir.h"
 #include "statement.h"
 
 #include <ctype.h>
 #include <gc.h>
 #include <mir-gen.h>
+#include <mir.h>
 #include <setjmp.h>
 
 #ifdef __has_include
@@ -42,14 +42,13 @@ struct _JIT
   MIR_item_t function;
   MIR_label_t continue_label;
   MIR_label_t break_label;
+  Start start;
+
   ArrayStmt statements;
   MapS64 typeids;
   MapMIR_item string_constants;
   MapMIR_item items;
-  ArrayMIR_item_t function_items;
   MapFunction functions;
-  Start start;
-  int strings;
 
   Function panic;
   Function malloc;
@@ -143,15 +142,15 @@ static void panic(Jit* jit, const char* n, int line, int column)
 
   for (int i = 0; i < size; i++)
   {
-    MIR_item_t item;
-
-    array_foreach(&jit->function_items, item)
+    for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
+         item = DLIST_PREV(MIR_item_t, item))
     {
+      if (item->item_type != MIR_func_item)
+        continue;
+
       uint64_t distance = (uint64_t)array[i] - (uint64_t)item->u.func->machine_code;
       if (distance <= item->u.func->length)
-      {
         printf("  at %s\n", item->u.func->name);
-      }
     }
   }
 
@@ -447,8 +446,10 @@ static Function* generate_array_push_function(Jit* jit, DataType data_type,
   if (!function)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
-    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) },
-                           { .name = "value", .type = data_type_to_mir_type(element_data_type) } };
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
+      { .name = "value", .size = 0, .type = data_type_to_mir_type(element_data_type) }
+    };
 
     MIR_item_t previous_function = jit->function;
     MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
@@ -549,9 +550,10 @@ static Function* generate_array_push_string_function(Jit* jit, DataType data_typ
     DataType element_data_type = DATA_TYPE(TYPE_CHAR);
 
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
-    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) },
-                           { .name = "string_ptr",
-                             .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) } };
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
+      { .name = "string_ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) }
+    };
 
     MIR_item_t previous_function = jit->function;
     MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
@@ -660,7 +662,7 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
     DataType element_data_type = array_data_type_element(data_type);
 
     MIR_type_t return_type = data_type_to_mir_type(element_data_type);
-    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) } };
+    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
 
     MIR_item_t previous_function = jit->function;
     MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
@@ -739,7 +741,7 @@ static Function* generate_array_to_string_function(Jit* jit, DataType data_type)
     DataType return_data_type = DATA_TYPE(TYPE_STRING);
 
     MIR_type_t return_type = data_type_to_mir_type(return_data_type);
-    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) } };
+    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
 
     MIR_item_t previous_function = jit->function;
     MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
@@ -806,7 +808,7 @@ static Function* generate_array_clear_function(Jit* jit, DataType data_type)
   if (!function)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
-    MIR_var_t params[] = { { .name = "ptr", .type = data_type_to_mir_type(data_type) } };
+    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
 
     MIR_item_t previous_function = jit->function;
     MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
@@ -852,7 +854,7 @@ static Function* generate_array_reserve_function(Jit* jit, DataType data_type)
     ArrayMIR_var_t params;
     array_init(&params);
 
-    MIR_var_t this = { .name = "ptr", .type = data_type_to_mir_type(data_type) };
+    MIR_var_t this = { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) };
     array_add(&params, this);
 
     for (int i = 0; i < *data_type.array.count; i++)
@@ -1002,7 +1004,7 @@ static Function* generate_int_hash_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     function = ALLOC(Function);
@@ -1038,7 +1040,7 @@ static Function* generate_float_hash_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
     };
 
     function = ALLOC(Function);
@@ -1071,7 +1073,7 @@ static Function* generate_float_sqrt_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT));
     MIR_var_t params[] = {
-      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
     };
 
     function = ALLOC(Function);
@@ -1109,7 +1111,7 @@ static Function* generate_string_hash_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "n", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1159,8 +1161,8 @@ static Function* generate_string_index_of_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "haystack", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "haystack", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1215,8 +1217,8 @@ static Function* generate_string_count_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "haystack", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "haystack", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1308,9 +1310,9 @@ static Function* generate_string_replace_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "old", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "new", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "old", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "new", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1360,7 +1362,7 @@ static Function* generate_string_trim_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1402,8 +1404,8 @@ static Function* generate_string_starts_with_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1445,8 +1447,8 @@ static Function* generate_string_ends_with_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1476,8 +1478,8 @@ static Function* generate_string_contains_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1585,8 +1587,8 @@ static Function* generate_string_split_function(Jit* jit, DataType return_data_t
   {
     MIR_type_t return_type = data_type_to_mir_type(return_data_type);
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "delim", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "delim", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1648,8 +1650,8 @@ static Function* generate_string_join_function(Jit* jit, DataType array_data_typ
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(array_data_type) },
-      { .name = "delim", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(array_data_type) },
+      { .name = "delim", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1686,7 +1688,7 @@ static Function* generate_string_to_array_function(Jit* jit, DataType return_dat
   {
     MIR_type_t return_type = data_type_to_mir_type(return_data_type);
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1727,8 +1729,8 @@ static Function* generate_string_pad_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "pad", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "pad", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     function = ALLOC(Function);
@@ -1866,7 +1868,7 @@ static Function* generate_alloc_function(Jit* jit)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "input", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     function = ALLOC(Function);
@@ -1939,8 +1941,8 @@ static Function* generate_write_function(Jit* jit, DataType data_type)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
     MIR_var_t params[] = {
-      { .name = "ptr", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-      { .name = "value", .type = data_type_to_mir_type(data_type) },
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "value", .size = 0, .type = data_type_to_mir_type(data_type) },
     };
 
     MIR_item_t previous_function = jit->function;
@@ -1986,7 +1988,7 @@ static Function* generate_read_function(Jit* jit, DataType data_type)
   {
     MIR_type_t return_type = data_type_to_mir_type(data_type);
     MIR_var_t params[] = {
-      { .name = "ptr", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = jit->function;
@@ -2753,10 +2755,10 @@ static Function* generate_string_array_cast_function(Jit* jit, DataType data_typ
 
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "ptr", .type = data_type_to_mir_type(data_type) },
-      { .name = "dest", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "depth", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-      { .name = "list", .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
+      { .name = "dest", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "depth", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "list", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
     };
 
     MIR_item_t previous_function = jit->function;
@@ -2969,10 +2971,10 @@ static Function* generate_string_object_cast_function(Jit* jit, DataType data_ty
 
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "ptr", .type = data_type_to_mir_type(data_type) },
-      { .name = "dest", .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "depth", .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-      { .name = "list", .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
+      { .name = "dest", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "depth", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "list", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
     };
 
     MIR_item_t previous_function = jit->function;
@@ -4761,8 +4763,6 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
     {
       parameter->reg = MIR_reg(jit->ctx, vars.elems[_i].name, statement->item->u.func);
     }
-
-    array_add(&jit->function_items, statement->item);
   }
 
   MIR_set_curr_func(jit->ctx, previous_func);
@@ -4857,8 +4857,6 @@ static void init_class_declaration(Jit* jit, ClassStmt* statement)
       statement->default_constructor->proto_prototype = proto;
     }
 
-    array_add(&jit->function_items, item);
-
     MIR_set_curr_func(jit->ctx, previous_func);
     index++;
 
@@ -4945,69 +4943,71 @@ Jit* jit_init(ArrayStmt statements)
   jit->continue_label = NULL;
   jit->break_label = NULL;
 
-  array_init(&jit->function_items);
-  array_add(&jit->function_items, jit->function);
-
   MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
-  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
-                                       (MIR_var_t[]){ { .name = "jit", .type = MIR_T_I64 },
-                                                      { .name = "what", .type = MIR_T_I64 },
-                                                      { .name = "line", .type = MIR_T_I64 },
-                                                      { .name = "column", .type = MIR_T_I64 } });
+  jit->panic.proto =
+    MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
+                      (MIR_var_t[]){ { .name = "jit", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "what", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "line", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "column", .size = 0, .type = MIR_T_I64 } });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");
 
   MIR_load_external(jit->ctx, "malloc", (uintptr_t)GC_malloc);
-  jit->malloc.proto = MIR_new_proto_arr(jit->ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                                        (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+  jit->malloc.proto =
+    MIR_new_proto_arr(jit->ctx, "malloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->malloc.func = MIR_new_import(jit->ctx, "malloc");
 
   MIR_load_external(jit->ctx, "malloc_atomic", (uintptr_t)GC_malloc_atomic);
   jit->malloc_atomic.proto =
     MIR_new_proto_arr(jit->ctx, "malloc_atomic.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->malloc_atomic.func = MIR_new_import(jit->ctx, "malloc_atomic");
 
   MIR_load_external(jit->ctx, "realloc", (uintptr_t)GC_realloc);
-  jit->realloc.proto = MIR_new_proto_arr(
-    jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
-    (MIR_var_t[]){ { .name = "ptr", .type = MIR_T_I64 }, { .name = "size", .type = MIR_T_I64 } });
+  jit->realloc.proto =
+    MIR_new_proto_arr(jit->ctx, "realloc.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
+                      (MIR_var_t[]){ { .name = "ptr", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "size", .size = 0, .type = MIR_T_I64 } });
   jit->realloc.func = MIR_new_import(jit->ctx, "realloc");
 
   MIR_load_external(jit->ctx, "memcpy", (uintptr_t)memcpy);
-  jit->memcpy.proto = MIR_new_proto_arr(jit->ctx, "memcpy.proto", 0, (MIR_type_t[]){ MIR_T_I64 }, 3,
-                                        (MIR_var_t[]){ { .name = "dest", .type = MIR_T_I64 },
-                                                       { .name = "soruce", .type = MIR_T_I64 },
-                                                       { .name = "n", .type = MIR_T_I64 } });
+  jit->memcpy.proto =
+    MIR_new_proto_arr(jit->ctx, "memcpy.proto", 0, (MIR_type_t[]){ MIR_T_I64 }, 3,
+                      (MIR_var_t[]){ { .name = "dest", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "soruce", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->memcpy.func = MIR_new_import(jit->ctx, "memcpy");
 
   MIR_load_external(jit->ctx, "string.equals", (uintptr_t)string_equals);
-  jit->string_equals.proto = MIR_new_proto_arr(
-    jit->ctx, "string.equals.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
-    (MIR_var_t[]){ { .name = "left", .type = MIR_T_I64 }, { .name = "right", .type = MIR_T_I64 } });
+  jit->string_equals.proto =
+    MIR_new_proto_arr(jit->ctx, "string.equals.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
+                      (MIR_var_t[]){ { .name = "left", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "right", .size = 0, .type = MIR_T_I64 } });
   jit->string_equals.func = MIR_new_import(jit->ctx, "string.equals");
 
   MIR_load_external(jit->ctx, "string.bool_cast", (uintptr_t)string_bool_cast);
   jit->string_bool_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.bool_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->string_bool_cast.func = MIR_new_import(jit->ctx, "string.bool_cast");
 
   MIR_load_external(jit->ctx, "string.int_cast", (uintptr_t)string_int_cast);
   jit->string_int_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.int_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->string_int_cast.func = MIR_new_import(jit->ctx, "string.int_cast");
 
   MIR_load_external(jit->ctx, "string.float_cast", (uintptr_t)string_float_cast);
   jit->string_float_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.float_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_F } });
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_F } });
   jit->string_float_cast.func = MIR_new_import(jit->ctx, "string.float_cast");
 
   MIR_load_external(jit->ctx, "string.char_cast", (uintptr_t)string_char_cast);
   jit->string_char_cast.proto =
     MIR_new_proto_arr(jit->ctx, "string.char_cast.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 1,
-                      (MIR_var_t[]){ { .name = "n", .type = MIR_T_I64 } });
+                      (MIR_var_t[]){ { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->string_char_cast.func = MIR_new_import(jit->ctx, "string.char_cast");
 
   map_init_function(&jit->functions, 0, 0);
@@ -5037,6 +5037,21 @@ void jit_set_function(Jit* jit, const char* name, uintptr_t func)
   MIR_load_external(jit->ctx, name, func);
 }
 
+uintptr_t jit_get_function(Jit* jit, const char* name)
+{
+  for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
+       item = DLIST_NEXT(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_func_item)
+      continue;
+
+    if (strcmp(name, item->u.func->name) == 0)
+      return MIR_gen(jit->ctx, item);
+  }
+
+  return 0;
+}
+
 void jit_generate(Jit* jit, bool logging)
 {
   init_statements(jit, &jit->statements);
@@ -5057,12 +5072,15 @@ void jit_generate(Jit* jit, bool logging)
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
 }
 
+bool jit_check(Jit* jit)
+{
+  return setjmp(jit->jmp) == 0;
+}
+
 void jit_run(Jit* jit)
 {
-  if (setjmp(jit->jmp) == 0)
+  if (jit_check(jit))
     jit->start();
-  else
-    printf("Recovered from runtime error!\n");
 }
 
 void jit_destroy(Jit* jit)

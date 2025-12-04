@@ -39,6 +39,7 @@
 #define NO_EXECUTE_PERMISSION 1
 #define POINTER_MASK 0x0000FFFFFFFFFFFF
 #define GC_NOT_DLL
+#define NO_MSGBOX_ON_ERROR
 
 /*
  * Define version numbers here to allow test on build machine for

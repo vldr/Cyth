@@ -36,7 +36,7 @@ array_def(MIR_item_t, MIR_item_t);
 
 struct _JIT
 {
-  jmp_buf jmp;
+  jmp_buf* jmp;
   MIR_context_t ctx;
   MIR_module_t module;
   MIR_item_t function;
@@ -118,8 +118,8 @@ static String* string_char_cast(char n)
 
 static String* string_bool_cast(bool n)
 {
-  init_static_string(true_string, "true");
-  init_static_string(false_string, "false");
+  jit_init_string(true_string, "true");
+  jit_init_string(false_string, "false");
 
   return n ? (String*)&true_string : (String*)&false_string;
 }
@@ -154,7 +154,13 @@ static void panic(Jit* jit, const char* n, int line, int column)
     }
   }
 
-  longjmp(jit->jmp, 1);
+  if (jit->jmp == NULL)
+  {
+    printf("Panic was not caught, terminating program!\n");
+    exit(-1);
+  }
+
+  longjmp(*jit->jmp, 1);
 }
 
 static MIR_insn_code_t data_type_to_mov_type(DataType data_type)
@@ -4942,6 +4948,7 @@ Jit* jit_init(ArrayStmt statements)
   jit->function = MIR_new_func(jit->ctx, "<start>", 0, 0, 0);
   jit->continue_label = NULL;
   jit->break_label = NULL;
+  jit->jmp = NULL;
 
   MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
   jit->panic.proto =
@@ -5072,15 +5079,22 @@ void jit_generate(Jit* jit, bool logging)
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
 }
 
-bool jit_check(Jit* jit)
+void* jit_push_jmp(Jit* jit, void* new)
 {
-  return setjmp(jit->jmp) == 0;
+  jmp_buf* old = jit->jmp;
+  jit->jmp = new;
+
+  return old;
+}
+
+void jit_pop_jmp(Jit* jit, void* old)
+{
+  jit->jmp = old;
 }
 
 void jit_run(Jit* jit)
 {
-  if (jit_check(jit))
-    jit->start();
+  jit_try_catch(jit, { jit->start(); });
 }
 
 void jit_destroy(Jit* jit)

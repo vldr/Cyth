@@ -48,5 +48,6 @@ void jit_pop_jmp(Jit* jit, void* old);
 
 void jit_set_function(Jit* jit, const char* name, uintptr_t func);
 uintptr_t jit_get_function(Jit* jit, const char* name);
+uintptr_t jit_get_variable(Jit* jit, const char* name);
 
 #endif

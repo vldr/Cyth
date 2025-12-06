@@ -5059,6 +5059,21 @@ uintptr_t jit_get_function(Jit* jit, const char* name)
   return 0;
 }
 
+uintptr_t jit_get_variable(Jit* jit, const char* name)
+{
+  for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
+       item = DLIST_NEXT(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_data_item)
+      continue;
+
+    if (strcmp(name, item->u.func->name) == 0)
+      return (uintptr_t)item->addr;
+  }
+
+  return 0;
+}
+
 void jit_generate(Jit* jit, bool logging)
 {
   init_statements(jit, &jit->statements);
@@ -5075,8 +5090,19 @@ void jit_generate(Jit* jit, bool logging)
   MIR_gen_init(jit->ctx);
   MIR_gen_set_optimize_level(jit->ctx, 4);
   MIR_link(jit->ctx, MIR_set_gen_interface, NULL);
-
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
+
+  for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
+       item = DLIST_NEXT(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_data_item)
+      continue;
+
+    if (item->u.data->el_type != MIR_T_I64)
+      continue;
+
+    GC_add_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
+  }
 }
 
 void* jit_push_jmp(Jit* jit, void* new)
@@ -5099,6 +5125,18 @@ void jit_run(Jit* jit)
 
 void jit_destroy(Jit* jit)
 {
+  for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
+       item = DLIST_NEXT(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_data_item)
+      continue;
+
+    if (item->u.data->el_type != MIR_T_I64)
+      continue;
+
+    GC_remove_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
+  }
+
   MIR_gen_finish(jit->ctx);
   MIR_finish(jit->ctx);
   free(jit);

@@ -63,11 +63,18 @@ else()
     add_subdirectory(third_party/mir)
     add_subdirectory(third_party/bdwgc)
     list(APPEND SOURCES src/jit.c src/jit.h)
+
+    if (MSVC)
+        enable_language(C ASM_MASM)
+ 
+        list(APPEND SOURCES src/longjmp.asm)
+    endif()
 endif()
 
 add_executable(cyth ${SOURCES})
 
 if (MSVC)
+    add_library(libcyth ${SOURCES})
     target_compile_options(cyth PRIVATE /MP)
 else()
     target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -fsigned-char)
@@ -95,5 +102,10 @@ if (WASM OR EMSCRIPTEN)
 else()
     target_link_libraries(cyth PRIVATE mir)
     target_link_libraries(cyth PRIVATE bdwgc)
+
+    if (MSVC)
+        target_link_libraries(libcyth PRIVATE mir)
+        target_link_libraries(libcyth PRIVATE bdwgc)
+    endif()
 endif()
 

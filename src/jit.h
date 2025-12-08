@@ -4,6 +4,18 @@
 #include "statement.h"
 #include <setjmp.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#ifndef _WIN32
+#define jit_setjmp setjmp
+#define jit_longjmp longjmp
+#else
+int jit_setjmp(jmp_buf buf);
+#endif
+
 #define jit_init_string(name, value)                                                               \
   static struct                                                                                    \
   {                                                                                                \
@@ -15,15 +27,69 @@
   do                                                                                               \
   {                                                                                                \
     jmp_buf _new;                                                                                  \
-    jmp_buf* _old = jit_push_jmp(_jit, &_new);                                                     \
+    jmp_buf* _old = (jmp_buf*)jit_push_jmp(_jit, (void*)&_new);                                    \
                                                                                                    \
-    if (setjmp(_new) == 0)                                                                         \
+    if (jit_setjmp(_new) == 0)                                                                     \
       _block                                                                                       \
                                                                                                    \
-        jit_pop_jmp(_jit, _old);                                                                   \
+        jit_pop_jmp(_jit, (void*)_old);                                                            \
   } while (0)
 
-typedef struct _JIT Jit;
+  typedef struct _JIT Jit;
+
+  Jit* jit_init(ArrayStmt statements);
+  void* jit_alloc(bool atomic, size_t size);
+  void jit_generate(Jit* jit, bool logging);
+  void jit_run(Jit* jit);
+  void jit_destroy(Jit* jit);
+
+  void* jit_push_jmp(Jit* jit, void* new_jmp);
+  void jit_pop_jmp(Jit* jit, void* old_jmp);
+
+  void jit_set_function(Jit* jit, const char* name, uintptr_t func);
+  uintptr_t jit_get_function(Jit* jit, const char* name);
+  uintptr_t jit_get_variable(Jit* jit, const char* name);
+
+#ifdef __cplusplus
+}
+
+struct String
+{
+  int size;
+  char data[1];
+};
+
+template <typename T> struct Array
+{
+  int size;
+  int capacity;
+  T* data;
+};
+
+template <typename Func> void jit_set_function_typed(Jit* jit, const char* name, Func* fn)
+{
+  jit_set_function(jit, name, (uintptr_t)fn);
+}
+
+template <typename Func> Func* jit_get_function_typed(Jit* jit, const char* name)
+{
+  uintptr_t addr = jit_get_function(jit, name);
+  if (!addr)
+    return nullptr;
+
+  return reinterpret_cast<Func*>(addr);
+}
+
+template <typename T> T* jit_get_variable_typed(Jit* jit, const char* name)
+{
+  uintptr_t addr = jit_get_variable(jit, name);
+  if (!addr)
+    return nullptr;
+
+  return reinterpret_cast<T*>(addr);
+}
+#else
+
 typedef struct _STRING
 {
   int size;
@@ -37,17 +103,5 @@ typedef struct _ARRAY
   void* data;
 } Array;
 
-Jit* jit_init(ArrayStmt statements);
-void* jit_alloc(bool atomic, size_t size);
-void jit_generate(Jit* jit, bool logging);
-void jit_run(Jit* jit);
-void jit_destroy(Jit* jit);
-
-void* jit_push_jmp(Jit* jit, void* new);
-void jit_pop_jmp(Jit* jit, void* old);
-
-void jit_set_function(Jit* jit, const char* name, uintptr_t func);
-uintptr_t jit_get_function(Jit* jit, const char* name);
-uintptr_t jit_get_variable(Jit* jit, const char* name);
-
+#endif
 #endif

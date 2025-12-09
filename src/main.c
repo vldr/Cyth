@@ -60,33 +60,28 @@ static void log_string(String* n)
 
 Jit* jit(char* source)
 {
-  Jit* jit = NULL;
   cyth.error = false;
+  memory_reset();
 
   lexer_init(source);
   ArrayToken tokens = lexer_scan();
 
   if (cyth.error)
-    goto clean_up;
+    return NULL;
 
   parser_init(tokens);
   ArrayStmt statements = parser_parse();
 
   if (cyth.error)
-    goto clean_up;
+    return NULL;
 
   checker_init(statements);
   checker_validate();
 
   if (cyth.error)
-    goto clean_up;
+    return NULL;
 
-  jit = jit_init(statements);
-
-clean_up:
-  memory_reset();
-
-  return jit;
+  return jit_init(statements);
 }
 #endif
 
@@ -107,7 +102,9 @@ void set_result_callback(result_callback_t callback)
 
 void error(int start_line, int start_column, int end_line, int end_column, const char* message)
 {
-  cyth.error_callback(start_line, start_column, end_line, end_column, message);
+  if (cyth.error_callback)
+    cyth.error_callback(start_line, start_column, end_line, end_column, message);
+
   cyth.error = true;
 }
 

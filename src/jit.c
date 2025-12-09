@@ -12,7 +12,6 @@
 #include <gc.h>
 #include <mir-gen.h>
 #include <mir.h>
-#include <setjmp.h>
 
 #ifdef __has_include
 #if __has_include(<execinfo.h>)

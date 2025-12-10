@@ -5104,10 +5104,50 @@ void jit_generate(Jit* jit, bool logging)
   }
 }
 
+Jit* sig_jit;
+
+#ifndef _WIN32
+#include <signal.h>
+
+static void sigsegv_handler(int _)
+{
+  panic(sig_jit, "Stack overflow", 0, 0);
+}
+
+static void sigfpe_handler(int _)
+{
+  panic(sig_jit, "Division by zero", 0, 0);
+}
+#endif
+
 void* jit_push_jmp(Jit* jit, void* new)
 {
   jmp_buf* old = jit->jmp;
   jit->jmp = new;
+
+  if (!old)
+  {
+#ifndef _WIN32
+    static char stack[SIGSTKSZ];
+    stack_t ss = {
+      .ss_size = SIGSTKSZ,
+      .ss_sp = stack,
+    };
+    sigaltstack(&ss, NULL);
+
+    struct sigaction sa = { 0 };
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_ONSTACK;
+
+    sa.sa_handler = sigsegv_handler;
+    sigaction(SIGSEGV, &sa, NULL);
+
+    sa.sa_handler = sigfpe_handler;
+    sigaction(SIGFPE, &sa, NULL);
+#endif
+
+    sig_jit = jit;
+  }
 
   return old;
 }
@@ -5115,6 +5155,16 @@ void* jit_push_jmp(Jit* jit, void* new)
 void jit_pop_jmp(Jit* jit, void* old)
 {
   jit->jmp = old;
+
+  if (!old)
+  {
+#ifndef _WIN32
+    sigaction(SIGSEGV, (const struct sigaction*)SIG_DFL, NULL);
+    sigaction(SIGFPE, (const struct sigaction*)SIG_DFL, NULL);
+#endif
+
+    sig_jit = NULL;
+  }
 }
 
 void jit_run(Jit* jit)

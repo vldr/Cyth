@@ -9,11 +9,12 @@ extern "C"
 {
 #endif
 
-#ifndef _WIN32
-#define jit_setjmp setjmp
-#define jit_longjmp longjmp
+#ifdef _WIN32
+  int jit_setjmp(jmp_buf buf);
+  void jit_longjmp(jmp_buf buf, int n);
 #else
-int jit_setjmp(jmp_buf buf);
+#define jit_setjmp(buf) sigsetjmp(buf, 1)
+#define jit_longjmp siglongjmp
 #endif
 
 #define jit_init_string(name, value)                                                               \
@@ -56,7 +57,7 @@ int jit_setjmp(jmp_buf buf);
 struct String
 {
   int size;
-  char data[1];
+  char data[0];
 };
 
 template <typename T> struct Array

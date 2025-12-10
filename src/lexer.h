@@ -98,11 +98,11 @@ typedef enum
   TOKEN_INFINITY,
 
   TOKEN_EOF
-} TokenType;
+} TokenKind;
 
 typedef struct _TOKEN
 {
-  TokenType type;
+  TokenKind type;
   int start_line;
   int start_column;
   int end_line;

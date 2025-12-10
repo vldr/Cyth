@@ -20,6 +20,12 @@
 #endif
 #endif
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <signal.h>
+#endif
+
 typedef void (*Start)(void);
 typedef struct _FUNCTION
 {
@@ -60,6 +66,8 @@ struct _JIT
   Function string_float_cast;
   Function string_char_cast;
 };
+
+Jit* sig_jit;
 
 static void generate_default_initialization(Jit* jit, MIR_reg_t dest, DataType data_type);
 static void generate_string_cast(Jit* jit, MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth,
@@ -5104,19 +5112,31 @@ void jit_generate(Jit* jit, bool logging)
   }
 }
 
-Jit* sig_jit;
-
-#ifndef _WIN32
-#include <signal.h>
-
-static void sigsegv_handler(int _)
+#ifdef _WIN32
+PVOID handler;
+static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
 {
-  panic(sig_jit, "Stack overflow", 0, 0);
+  switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
+  {
+  case EXCEPTION_INT_DIVIDE_BY_ZERO:
+  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+    panic(sig_jit, "Division by zero", 0, 0);
+    return EXCEPTION_CONTINUE_EXECUTION;
+  case EXCEPTION_STACK_OVERFLOW:
+    panic(sig_jit, "Stack overflow", 0, 0);
+    return EXCEPTION_CONTINUE_EXECUTION;
+
+  default:
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
 }
-
-static void sigfpe_handler(int _)
+#else
+static void sig_handler(int sig)
 {
-  panic(sig_jit, "Division by zero", 0, 0);
+  if (sig == SIGSEGV)
+    panic(sig_jit, "Stack overflow", 0, 0);
+  else if (sig == SIGFPE)
+    panic(sig_jit, "Division by zero", 0, 0);
 }
 #endif
 
@@ -5136,14 +5156,19 @@ void* jit_push_jmp(Jit* jit, void* new)
     sigaltstack(&ss, NULL);
 
     struct sigaction sa = { 0 };
-    sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
 
-    sa.sa_handler = sigsegv_handler;
+    sa.sa_handler = sig_handler;
     sigaction(SIGSEGV, &sa, NULL);
 
-    sa.sa_handler = sigfpe_handler;
+    sa.sa_handler = sig_handler;
     sigaction(SIGFPE, &sa, NULL);
+#else
+    ULONG size = 64 * 1024;
+    SetThreadStackGuarantee(&size);
+
+    handler = AddVectoredExceptionHandler(1, vector_handler);
 #endif
 
     sig_jit = jit;
@@ -5158,9 +5183,12 @@ void jit_pop_jmp(Jit* jit, void* old)
 
   if (!old)
   {
-#ifndef _WIN32
-    sigaction(SIGSEGV, (const struct sigaction*)SIG_DFL, NULL);
-    sigaction(SIGFPE, (const struct sigaction*)SIG_DFL, NULL);
+#ifdef _WIN32
+    RemoveVectoredExceptionHandler(handler);
+    _resetstkoflw();
+#else
+    sigaction(SIGSEGV, NULL, NULL);
+    sigaction(SIGFPE, NULL, NULL);
 #endif
 
     sig_jit = NULL;

@@ -51,7 +51,7 @@ static void seek(int position)
   parser.current = position;
 }
 
-static bool check(TokenType type)
+static bool check(TokenKind type)
 {
   return peek().type == type;
 }
@@ -69,7 +69,7 @@ static Token advance(void)
   return previous();
 }
 
-static bool match(TokenType type)
+static bool match(TokenKind type)
 {
   if (check(type))
   {
@@ -80,7 +80,7 @@ static bool match(TokenType type)
   return false;
 }
 
-static Token consume(TokenType type, const char* message)
+static Token consume(TokenKind type, const char* message)
 {
   if (!check(type))
   {

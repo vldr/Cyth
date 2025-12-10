@@ -43,7 +43,7 @@ static struct
   ArrayToken tokens;
 } lexer;
 
-static void add_custom_token(TokenType type, const char* lexeme, int length)
+static void add_custom_token(TokenKind type, const char* lexeme, int length)
 {
   Token token;
   token.type = type;
@@ -57,7 +57,7 @@ static void add_custom_token(TokenType type, const char* lexeme, int length)
   array_add(&lexer.tokens, token);
 }
 
-static void add_token(TokenType type)
+static void add_token(TokenKind type)
 {
   add_custom_token(type, lexer.start, (int)(lexer.current - lexer.start));
 }
@@ -120,7 +120,7 @@ static bool match(char c)
   return false;
 }
 
-static void text(TokenType token_type, char terminator)
+static void text(TokenKind token_type, char terminator)
 {
   bool escaping = false;
   int shifts = 0;
@@ -251,7 +251,7 @@ static void hex(void)
 
 static void number(void)
 {
-  TokenType type = TOKEN_INTEGER;
+  TokenKind type = TOKEN_INTEGER;
 
   while (isdigit(peek()))
     advance();
@@ -274,7 +274,7 @@ static void literal(void)
   while (isalnum(peek()) || peek() == '_')
     advance();
 
-  TokenType type = TOKEN_IDENTIFIER;
+  TokenKind type = TOKEN_IDENTIFIER;
 
   switch (lexer.start[0])
   {

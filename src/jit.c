@@ -23,6 +23,8 @@
 #ifdef _WIN32
 #include <Windows.h>
 #else
+#define __USE_GNU
+#include <pthread.h>
 #include <signal.h>
 #endif
 
@@ -5122,6 +5124,7 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
     panic(sig_jit, "Division by zero", 0, 0);
     return EXCEPTION_CONTINUE_EXECUTION;
+
   case EXCEPTION_STACK_OVERFLOW:
     panic(sig_jit, "Stack overflow", 0, 0);
     return EXCEPTION_CONTINUE_EXECUTION;
@@ -5131,12 +5134,42 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
   }
 }
 #else
-static void sig_handler(int sig)
+static void sig_handler(int sig, siginfo_t* si, void* ctx)
 {
+  (void)ctx;
+
   if (sig == SIGSEGV)
-    panic(sig_jit, "Stack overflow", 0, 0);
+  {
+    void* stack_base;
+    size_t stack_size;
+
+#if defined(__APPLE__)
+    stack_size = pthread_get_stacksize_np(pthread_self());
+    void* stack_addr = pthread_get_stackaddr_np(pthread_self());
+
+    int stack_variable;
+    if (stack_addr > (void*)&stack_variable)
+      stack_base = (uint8_t*)stack_addr - stack_size;
+    else
+      stack_base = stack_addr;
+#else
+    pthread_attr_t attributes;
+    pthread_getattr_np(pthread_self(), &attributes);
+    pthread_attr_getstack(&attributes, &stack_base, &stack_size);
+    pthread_attr_destroy(&attributes);
+#endif
+
+    uint8_t* fault = si->si_addr;
+
+    if (fault < (uint8_t*)stack_base && fault >= (uint8_t*)stack_base - stack_size)
+      panic(sig_jit, "Stack overflow", 0, 0);
+    else
+      panic(sig_jit, "Internal runtime error", 0, 0);
+  }
   else if (sig == SIGFPE)
+  {
     panic(sig_jit, "Division by zero", 0, 0);
+  }
 }
 #endif
 
@@ -5148,21 +5181,21 @@ void* jit_push_jmp(Jit* jit, void* new)
   if (!old)
   {
 #ifndef _WIN32
-    static char stack[SIGSTKSZ];
+    static char stack[SIGSTKSZ * 2];
     stack_t ss = {
-      .ss_size = SIGSTKSZ,
+      .ss_size = SIGSTKSZ * 2,
       .ss_sp = stack,
     };
     sigaltstack(&ss, NULL);
 
     struct sigaction sa = { 0 };
-    sa.sa_flags = SA_ONSTACK;
+    sa.sa_flags = SA_ONSTACK | SA_SIGINFO;
     sigemptyset(&sa.sa_mask);
 
-    sa.sa_handler = sig_handler;
+    sa.sa_sigaction = sig_handler;
     sigaction(SIGSEGV, &sa, NULL);
 
-    sa.sa_handler = sig_handler;
+    sa.sa_sigaction = sig_handler;
     sigaction(SIGFPE, &sa, NULL);
 #else
     ULONG size = 64 * 1024;

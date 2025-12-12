@@ -1219,14 +1219,32 @@ static bool autocast_int_literal_to_float_literal(Expr** expression)
     return false;
 
   Expr* expr = *expression;
-  if (expr->type != EXPR_LITERAL)
-    return false;
+  if (expr->type == EXPR_LITERAL)
+  {
+    float value = (float)expr->literal.integer;
+    expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
+    expr->literal.floating = value;
 
-  float value = (float)expr->literal.integer;
-  expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
-  expr->literal.floating = value;
+    return true;
+  }
+  else if (expr->type == EXPR_UNARY && expr->unary.expr->type == EXPR_LITERAL)
+  {
+    if (autocast_int_literal_to_float_literal(&expr->unary.expr))
+    {
+      expr->unary.data_type = DATA_TYPE(TYPE_FLOAT);
+      return true;
+    }
+  }
+  else if (expr->type == EXPR_GROUP && expr->group.expr->type == EXPR_LITERAL)
+  {
+    if (autocast_int_literal_to_float_literal(&expr->group.expr))
+    {
+      expr->group.data_type = DATA_TYPE(TYPE_FLOAT);
+      return true;
+    }
+  }
 
-  return true;
+  return false;
 }
 
 static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, DataType* right,
@@ -2689,7 +2707,7 @@ static DataType check_call_expression(CallExpr* expression)
         data_type_inference(&argument_data_type, &parameter_data_type);
 
         if (!equal_data_type(argument_data_type, parameter_data_type) &&
-            !assignable_data_type(&expression->arguments.elems[i - 1], parameter_data_type,
+            !assignable_data_type(&expression->arguments.elems[i], parameter_data_type,
                                   argument_data_type))
         {
           error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,

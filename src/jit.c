@@ -133,7 +133,7 @@ static String* string_bool_cast(bool n)
   return n ? (String*)&true_string : (String*)&false_string;
 }
 
-static void panic(Jit* jit, const char* n, int line, int column)
+static void panic(Jit* jit, const char* n)
 {
   void* array[10];
   int size = 0;
@@ -144,10 +144,7 @@ static void panic(Jit* jit, const char* n, int line, int column)
   size = backtrace(array, sizeof(array) / sizeof_ptr(array));
 #endif
 
-  if (line && column)
-    printf("%s, on line %d:%d\n", n, line, column);
-  else
-    printf("%s\n", n);
+  printf("%s\n", n);
 
   for (int i = 0; i < size; i++)
   {
@@ -159,7 +156,22 @@ static void panic(Jit* jit, const char* n, int line, int column)
 
       uint64_t distance = (uint64_t)array[i] - (uint64_t)item->u.func->machine_code;
       if (distance <= item->u.func->length)
-        printf("  at %s\n", item->u.func->name);
+      {
+        size_t offset = 0;
+
+        for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
+             insn = DLIST_NEXT(MIR_insn_t, insn))
+        {
+          uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
+          offset += insn->size;
+
+          if ((uintptr_t)array[i] >= ptr && (uintptr_t)array[i] < ptr + insn->size)
+          {
+            if (insn->line && insn->column)
+              printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+          }
+        }
+      }
     }
   }
 
@@ -344,6 +356,14 @@ static FuncStmt* get_function_member(DataType data_type, const char* name)
   return function;
 }
 
+static MIR_insn_t generate_debug_info(Token token, MIR_insn_t insn)
+{
+  insn->line = token.start_line;
+  insn->column = token.start_column;
+
+  return insn;
+}
+
 static void generate_malloc_expression(Jit* jit, MIR_reg_t dest, MIR_op_t size)
 {
   MIR_append_insn(jit->ctx, jit->function,
@@ -392,15 +412,13 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
                                MIR_new_ref_op(jit->ctx, item)));
 }
 
-static void generate_panic(Jit* jit, Token token, const char* what)
+static void generate_panic(Jit* jit, const char* what)
 {
   MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_call_insn(jit->ctx, 6, MIR_new_ref_op(jit->ctx, jit->panic.proto),
+                  MIR_new_call_insn(jit->ctx, 4, MIR_new_ref_op(jit->ctx, jit->panic.proto),
                                     MIR_new_ref_op(jit->ctx, jit->panic.func),
                                     MIR_new_int_op(jit->ctx, (uint64_t)jit),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)what),
-                                    MIR_new_int_op(jit->ctx, token.start_line),
-                                    MIR_new_int_op(jit->ctx, token.start_column)));
+                                    MIR_new_int_op(jit->ctx, (uint64_t)what)));
 }
 
 static MIR_op_t generate_array_length_op(Jit* jit, MIR_reg_t ptr)
@@ -731,7 +749,7 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(jit->ctx, jit->function, panic_label);
 
-      generate_panic(jit, (Token){ 0 }, "Out of bounds access");
+      generate_panic(jit, "Out of bounds access");
 
       MIR_append_insn(jit->ctx, jit->function, finish_label);
     }
@@ -908,7 +926,7 @@ static Function* generate_array_reserve_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(jit->ctx, jit->function, panic_label);
 
-      generate_panic(jit, (Token){ 0 }, "Invalid reservation amount");
+      generate_panic(jit, "Invalid reservation amount");
 
       MIR_append_insn(jit->ctx, jit->function, continue_label);
     }
@@ -2679,9 +2697,11 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
     UNREACHABLE("Unhandled binary operation");
   }
 
-  MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_insn(jit->ctx, op, MIR_new_reg_op(jit->ctx, dest),
-                               MIR_new_reg_op(jit->ctx, left), MIR_new_reg_op(jit->ctx, right)));
+  MIR_append_insn(
+    jit->ctx, jit->function,
+    generate_debug_info(expression->op, MIR_new_insn(jit->ctx, op, MIR_new_reg_op(jit->ctx, dest),
+                                                     MIR_new_reg_op(jit->ctx, left),
+                                                     MIR_new_reg_op(jit->ctx, right))));
 }
 
 static void generate_unary_expression(Jit* jit, MIR_reg_t dest, UnaryExpr* expression)
@@ -3504,7 +3524,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, expression->type.token, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast");
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3653,7 +3673,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, expression->type.token, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast");
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3694,7 +3714,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, expression->type.token, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast");
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3770,26 +3790,13 @@ static void generate_variable_expression(Jit* jit, MIR_reg_t dest, VarExpr* expr
     return;
   }
   case SCOPE_CLASS: {
-    MIR_label_t cont_label = MIR_new_label(jit->ctx);
-    MIR_label_t if_false_label = MIR_new_label(jit->ctx);
-
     MIR_reg_t ptr = MIR_reg(jit->ctx, "this.0", jit->function->u.func);
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_BF, MIR_new_label_op(jit->ctx, if_false_label),
-                                 MIR_new_reg_op(jit->ctx, ptr)));
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
-                                 MIR_new_reg_op(jit->ctx, dest),
-                                 generate_object_field_op(jit, expression->variable, ptr)));
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
-    MIR_append_insn(jit->ctx, jit->function, if_false_label);
-
-    generate_panic(jit, expression->name, "Null pointer access");
-
-    MIR_append_insn(jit->ctx, jit->function, cont_label);
+    MIR_append_insn(
+      jit->ctx, jit->function,
+      generate_debug_info(expression->name,
+                          MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
+                                       MIR_new_reg_op(jit->ctx, dest),
+                                       generate_object_field_op(jit, expression->variable, ptr))));
 
     return;
   }
@@ -3856,30 +3863,17 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
         ptr = MIR_reg(jit->ctx, "this.0", jit->function->u.func);
       }
 
-      MIR_label_t cont_label = MIR_new_label(jit->ctx);
-      MIR_label_t if_false_label = MIR_new_label(jit->ctx);
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_BF, MIR_new_label_op(jit->ctx, if_false_label),
-                                   MIR_new_reg_op(jit->ctx, ptr)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
-                                   generate_object_field_op(jit, expression->variable, ptr),
-                                   MIR_new_reg_op(jit->ctx, value)));
+      MIR_append_insn(
+        jit->ctx, jit->function,
+        generate_debug_info(expression->op,
+                            MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
+                                         generate_object_field_op(jit, expression->variable, ptr),
+                                         MIR_new_reg_op(jit->ctx, value))));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
                                    MIR_new_reg_op(jit->ctx, dest),
                                    MIR_new_reg_op(jit->ctx, value)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
-      MIR_append_insn(jit->ctx, jit->function, if_false_label);
-
-      generate_panic(jit, expression->op, "Null pointer access");
-
-      MIR_append_insn(jit->ctx, jit->function, cont_label);
 
       return;
     }
@@ -3924,19 +3918,28 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
     }
     else
     {
-      MIR_label_t cont_label = MIR_new_label(jit->ctx);
-      MIR_label_t if_false_label = MIR_new_label(jit->ctx);
+      MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_UBGES, MIR_new_label_op(jit->ctx, if_false_label),
+                      MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
                                    MIR_new_reg_op(jit->ctx, index),
                                    generate_array_length_op(jit, ptr)));
 
-      MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                                   MIR_new_reg_op(jit->ctx, mask)));
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, array_ptr),
-                                   generate_array_data_op(jit, ptr)));
+                      MIR_new_insn(jit->ctx, MIR_AND, MIR_new_reg_op(jit->ctx, ptr),
+                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
+
+      MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+
+      MIR_append_insn(
+        jit->ctx, jit->function,
+        generate_debug_info(expression->op,
+                            MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, array_ptr),
+                                         generate_array_data_op(jit, ptr))));
 
       DataType element_data_type =
         array_data_type_element(expression->target->index.expr_data_type);
@@ -3952,15 +3955,6 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
                       MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
                                    MIR_new_reg_op(jit->ctx, dest),
                                    MIR_new_reg_op(jit->ctx, value)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
-
-      MIR_append_insn(jit->ctx, jit->function, if_false_label);
-
-      generate_panic(jit, expression->target->index.index_token, "Out of bounds access");
-
-      MIR_append_insn(jit->ctx, jit->function, cont_label);
     }
   }
 }
@@ -4019,7 +4013,7 @@ static void generate_call_expression(Jit* jit, MIR_reg_t dest, CallExpr* express
                     MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
 
     MIR_append_insn(jit->ctx, jit->function, if_false_label);
-    generate_panic(jit, expression->callee_token, "Null pointer call");
+    generate_panic(jit, "Null pointer call");
     MIR_append_insn(jit->ctx, jit->function, cont_label);
 
     array_add(&arguments, MIR_new_reg_op(jit->ctx, callee_ptr));
@@ -4044,8 +4038,10 @@ static void generate_call_expression(Jit* jit, MIR_reg_t dest, CallExpr* express
     array_add(&arguments, MIR_new_reg_op(jit->ctx, temp));
   }
 
-  MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_insn_arr(jit->ctx, MIR_CALL, arguments.size, arguments.elems));
+  MIR_append_insn(
+    jit->ctx, jit->function,
+    generate_debug_info(expression->callee_token,
+                        MIR_new_insn_arr(jit->ctx, MIR_CALL, arguments.size, arguments.elems)));
 }
 
 static void generate_access_expression(Jit* jit, MIR_reg_t dest, AccessExpr* expression)
@@ -4099,25 +4095,12 @@ static void generate_access_expression(Jit* jit, MIR_reg_t dest, AccessExpr* exp
   }
   else
   {
-    MIR_label_t cont_label = MIR_new_label(jit->ctx);
-    MIR_label_t if_false_label = MIR_new_label(jit->ctx);
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_BF, MIR_new_label_op(jit->ctx, if_false_label),
-                                 MIR_new_reg_op(jit->ctx, ptr)));
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
-                                 MIR_new_reg_op(jit->ctx, dest),
-                                 generate_object_field_op(jit, expression->variable, ptr)));
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
-    MIR_append_insn(jit->ctx, jit->function, if_false_label);
-
-    generate_panic(jit, expression->name, "Null pointer access");
-
-    MIR_append_insn(jit->ctx, jit->function, cont_label);
+    MIR_append_insn(
+      jit->ctx, jit->function,
+      generate_debug_info(expression->name,
+                          MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
+                                       MIR_new_reg_op(jit->ctx, dest),
+                                       generate_object_field_op(jit, expression->variable, ptr))));
 
     return;
   }
@@ -4136,61 +4119,68 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
   switch (expression->expr_data_type.type)
   {
   case TYPE_STRING: {
-    MIR_label_t cont_label = MIR_new_label(jit->ctx);
-    MIR_label_t if_false_label = MIR_new_label(jit->ctx);
+    MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_UBGES, MIR_new_label_op(jit->ctx, if_false_label),
+                    MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
                                  MIR_new_reg_op(jit->ctx, index),
                                  generate_string_length_op(jit, ptr)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
-                                 MIR_new_reg_op(jit->ctx, dest),
-                                 generate_string_at_op(jit, ptr, index)));
+                    MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                                 MIR_new_reg_op(jit->ctx, mask)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
+                    MIR_new_insn(jit->ctx, MIR_AND, MIR_new_reg_op(jit->ctx, ptr),
+                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
 
-    MIR_append_insn(jit->ctx, jit->function, if_false_label);
+    MIR_append_insn(jit->ctx, jit->function,
+                    MIR_new_insn(jit->ctx, MIR_AND, MIR_new_reg_op(jit->ctx, index),
+                                 MIR_new_reg_op(jit->ctx, index), MIR_new_reg_op(jit->ctx, mask)));
 
-    generate_panic(jit, expression->index_token, "Out of bounds access");
-
-    MIR_append_insn(jit->ctx, jit->function, cont_label);
+    MIR_append_insn(
+      jit->ctx, jit->function,
+      generate_debug_info(expression->index_token,
+                          MIR_new_insn(jit->ctx, data_type_to_mov_type(expression->data_type),
+                                       MIR_new_reg_op(jit->ctx, dest),
+                                       generate_string_at_op(jit, ptr, index))));
     return;
   }
   case TYPE_ARRAY: {
-    MIR_label_t cont_label = MIR_new_label(jit->ctx);
-    MIR_label_t if_false_label = MIR_new_label(jit->ctx);
+    MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_UBGES, MIR_new_label_op(jit->ctx, if_false_label),
+                    MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
                                  MIR_new_reg_op(jit->ctx, index),
                                  generate_array_length_op(jit, ptr)));
 
-    MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+    MIR_append_insn(jit->ctx, jit->function,
+                    MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                                 MIR_new_reg_op(jit->ctx, mask)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, array_ptr),
-                                 generate_array_data_op(jit, ptr)));
+                    MIR_new_insn(jit->ctx, MIR_AND, MIR_new_reg_op(jit->ctx, ptr),
+                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
+
+    MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+
+    MIR_append_insn(
+      jit->ctx, jit->function,
+      generate_debug_info(expression->index_token,
+                          MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, array_ptr),
+                                       generate_array_data_op(jit, ptr))));
 
     DataType element_data_type = array_data_type_element(expression->expr_data_type);
 
     MIR_append_insn(
       jit->ctx, jit->function,
-      MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
-                   MIR_new_reg_op(jit->ctx, dest),
-                   MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
-                                  array_ptr, index, size_data_type(element_data_type))));
+      generate_debug_info(
+        expression->index_token,
+        MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
+                     MIR_new_reg_op(jit->ctx, dest),
+                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                                    array_ptr, index, size_data_type(element_data_type)))));
 
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
-
-    MIR_append_insn(jit->ctx, jit->function, if_false_label);
-
-    generate_panic(jit, expression->index_token, "Out of bounds access");
-
-    MIR_append_insn(jit->ctx, jit->function, cont_label);
     return;
   }
   case TYPE_OBJECT: {
@@ -4630,10 +4620,12 @@ static void generate_class_declaration(Jit* jit, ClassStmt* statement)
 
         generate_expression(jit, initializer, variable->initializer);
 
-        MIR_append_insn(jit->ctx, jit->function,
-                        MIR_new_insn(jit->ctx, data_type_to_mov_type(variable->data_type),
-                                     generate_object_field_op(jit, variable, ptr),
-                                     MIR_new_reg_op(jit->ctx, initializer)));
+        MIR_append_insn(
+          jit->ctx, jit->function,
+          generate_debug_info(variable->name,
+                              MIR_new_insn(jit->ctx, data_type_to_mov_type(variable->data_type),
+                                           generate_object_field_op(jit, variable, ptr),
+                                           MIR_new_reg_op(jit->ctx, initializer))));
       }
     }
 
@@ -4960,12 +4952,11 @@ Jit* jit_init(ArrayStmt statements)
   jit->jmp = NULL;
 
   MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
-  jit->panic.proto =
-    MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
-                      (MIR_var_t[]){ { .name = "jit", .size = 0, .type = MIR_T_I64 },
-                                     { .name = "what", .size = 0, .type = MIR_T_I64 },
-                                     { .name = "line", .size = 0, .type = MIR_T_I64 },
-                                     { .name = "column", .size = 0, .type = MIR_T_I64 } });
+  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 2,
+                                       (MIR_var_t[]){
+                                         { .name = "jit", .size = 0, .type = MIR_T_I64 },
+                                         { .name = "what", .size = 0, .type = MIR_T_I64 },
+                                       });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");
 
   MIR_load_external(jit->ctx, "malloc", (uintptr_t)GC_malloc);
@@ -5122,11 +5113,15 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
   {
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-    panic(sig_jit, "Division by zero", 0, 0);
+    panic(sig_jit, "Division by zero");
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_STACK_OVERFLOW:
-    panic(sig_jit, "Stack overflow", 0, 0);
+    panic(sig_jit, "Stack overflow");
+    return EXCEPTION_CONTINUE_EXECUTION;
+
+  case EXCEPTION_ACCESS_VIOLATION:
+    panic(sig_jit, "Null pointer access");
     return EXCEPTION_CONTINUE_EXECUTION;
 
   default:
@@ -5162,13 +5157,15 @@ static void sig_handler(int sig, siginfo_t* si, void* ctx)
     uint8_t* fault = si->si_addr;
 
     if (fault < (uint8_t*)stack_base && fault >= (uint8_t*)stack_base - stack_size)
-      panic(sig_jit, "Stack overflow", 0, 0);
+      panic(sig_jit, "Stack overflow");
+    else if (fault < (uint8_t*)0xffff)
+      panic(sig_jit, "Null pointer access");
     else
-      panic(sig_jit, "Internal runtime error", 0, 0);
+      panic(sig_jit, "Internal runtime error");
   }
   else if (sig == SIGFPE)
   {
-    panic(sig_jit, "Division by zero", 0, 0);
+    panic(sig_jit, "Division by zero");
   }
 }
 #endif

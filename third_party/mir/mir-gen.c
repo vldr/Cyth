@@ -9496,7 +9496,7 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
              (unsigned long long) machine_code, (unsigned long) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
-  _MIR_restore_func_insns (ctx, func_item);
+  // _MIR_restore_func_insns (ctx, func_item);
   /* ??? We should use atomic here but c2mir does not implement them yet.  */
   func_item->u.func->machine_code = machine_code;
   func_item->u.func->length = code_len;

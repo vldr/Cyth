@@ -2211,6 +2211,10 @@ static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t c
 #endif
   insn->code = code;
   insn->data = NULL;
+  insn->line = 0;
+  insn->column = 0;
+  insn->size = 0;
+
   return insn;
 }
 

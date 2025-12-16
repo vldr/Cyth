@@ -283,6 +283,8 @@ DEF_DLIST_LINK (MIR_insn_t)
 
 struct MIR_insn {
   void *data; /* Aux data */
+  size_t size;
+  int line, column;
   DLIST_LINK (MIR_insn_t) insn_link;
   MIR_insn_code_t code : 32;
   unsigned int nops : 32; /* number of operands */

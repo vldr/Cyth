@@ -3926,7 +3926,7 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
                                    generate_array_length_op(jit, ptr)));
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                      MIR_new_insn(jit->ctx, MIR_NEG, MIR_new_reg_op(jit->ctx, mask),
                                    MIR_new_reg_op(jit->ctx, mask)));
 
       MIR_append_insn(jit->ctx, jit->function,
@@ -4127,7 +4127,7 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
                                  generate_string_length_op(jit, ptr)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                    MIR_new_insn(jit->ctx, MIR_NEG, MIR_new_reg_op(jit->ctx, mask),
                                  MIR_new_reg_op(jit->ctx, mask)));
 
     MIR_append_insn(jit->ctx, jit->function,
@@ -4155,7 +4155,7 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
                                  generate_array_length_op(jit, ptr)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_NEGS, MIR_new_reg_op(jit->ctx, mask),
+                    MIR_new_insn(jit->ctx, MIR_NEG, MIR_new_reg_op(jit->ctx, mask),
                                  MIR_new_reg_op(jit->ctx, mask)));
 
     MIR_append_insn(jit->ctx, jit->function,

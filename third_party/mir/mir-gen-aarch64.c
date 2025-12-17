@@ -2476,6 +2476,8 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   VARR_TRUNC (uint64_t, abs_address_locs, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
+    size_t len_before = VARR_LENGTH (uint8_t, result_code);
+
     if (insn->code == MIR_LABEL) {
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else if (insn->code != MIR_USE) {
@@ -2489,6 +2491,9 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         out_insn (gen_ctx, insn, replacement, NULL);
       }
     }
+
+    size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
+    insn->size = insn_len;
   }
   /* Setting up labels */
   for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {

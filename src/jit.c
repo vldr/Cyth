@@ -4901,7 +4901,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 #if !defined(__linux__)
   while (fp)
   {
-    uintptr_t pc = *(uintptr_t*)(fp);
+    uintptr_t pc = *(uintptr_t*)(fp + sizeof(uintptr_t));
 
     for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
          item = DLIST_PREV(MIR_item_t, item))

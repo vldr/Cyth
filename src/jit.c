@@ -13,19 +13,18 @@
 #include <mir-gen.h>
 #include <mir.h>
 
-#ifdef __has_include
-#if __has_include(<execinfo.h>)
-#include <execinfo.h>
-#define EXECINFO 1
-#endif
-#endif
-
 #ifdef _WIN32
 #include <Windows.h>
 #else
 #define __USE_GNU
 #include <pthread.h>
 #include <signal.h>
+
+#if defined(__linux__)
+#include <ucontext.h>
+#elif defined(__APPLE__)
+#include <sys/ucontext.h>
+#endif
 #endif
 
 typedef void (*Start)(void);
@@ -131,57 +130,6 @@ static String* string_bool_cast(bool n)
   jit_init_string(false_string, "false");
 
   return n ? (String*)&true_string : (String*)&false_string;
-}
-
-static void panic(Jit* jit, const char* n)
-{
-  void* array[10];
-  int size = 0;
-
-#ifdef _WIN32
-  size = RtlCaptureStackBackTrace(0, sizeof(array) / sizeof_ptr(array), array, NULL);
-#elif EXECINFO
-  size = backtrace(array, sizeof(array) / sizeof_ptr(array));
-#endif
-
-  printf("%s\n", n);
-
-  for (int i = 0; i < size; i++)
-  {
-    for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
-         item = DLIST_PREV(MIR_item_t, item))
-    {
-      if (item->item_type != MIR_func_item)
-        continue;
-
-      uint64_t distance = (uint64_t)array[i] - (uint64_t)item->u.func->machine_code;
-      if (distance <= item->u.func->length)
-      {
-        size_t offset = 0;
-
-        for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
-             insn = DLIST_NEXT(MIR_insn_t, insn))
-        {
-          uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
-          offset += insn->size;
-
-          if ((uintptr_t)array[i] >= ptr && (uintptr_t)array[i] < ptr + insn->size)
-          {
-            if (insn->line && insn->column)
-              printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
-          }
-        }
-      }
-    }
-  }
-
-  if (jit->jmp == NULL)
-  {
-    printf("Panic was not caught, terminating program!\n");
-    exit(-1);
-  }
-
-  jit_longjmp(*jit->jmp, 1);
 }
 
 static MIR_insn_code_t data_type_to_mov_type(DataType data_type)
@@ -415,10 +363,12 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
 static void generate_panic(Jit* jit, const char* what)
 {
   MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_call_insn(jit->ctx, 4, MIR_new_ref_op(jit->ctx, jit->panic.proto),
+                  MIR_new_call_insn(jit->ctx, 6, MIR_new_ref_op(jit->ctx, jit->panic.proto),
                                     MIR_new_ref_op(jit->ctx, jit->panic.func),
                                     MIR_new_int_op(jit->ctx, (uint64_t)jit),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)what)));
+                                    MIR_new_int_op(jit->ctx, (uint64_t)what),
+                                    MIR_new_int_op(jit->ctx, (uint64_t)0),
+                                    MIR_new_int_op(jit->ctx, (uint64_t)0)));
 }
 
 static MIR_op_t generate_array_length_op(Jit* jit, MIR_reg_t ptr)
@@ -4920,6 +4870,74 @@ static void init_statements(Jit* jit, ArrayStmt* statements)
   }
 }
 
+static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
+{
+  (void)fp;
+
+  printf("%s\n", what);
+
+  for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
+       item = DLIST_PREV(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_func_item)
+      continue;
+
+    uintptr_t offset = 0;
+
+    for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
+         insn = DLIST_NEXT(MIR_insn_t, insn))
+    {
+      uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
+      if (pc >= ptr && pc < ptr + insn->size)
+      {
+        if (insn->line && insn->column)
+          printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+      }
+
+      offset += insn->size;
+    }
+  }
+
+#if !defined(__linux__)
+  while (fp)
+  {
+    uintptr_t pc = *(uintptr_t*)(fp);
+
+    for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
+         item = DLIST_PREV(MIR_item_t, item))
+    {
+      if (item->item_type != MIR_func_item)
+        continue;
+
+      uintptr_t offset = 0;
+
+      for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
+           insn = DLIST_NEXT(MIR_insn_t, insn))
+      {
+        offset += insn->size;
+
+        uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
+        if (pc >= ptr && pc < ptr + insn->size)
+        {
+          if (insn->line && insn->column)
+            printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+        }
+      }
+    }
+
+    fp = *(uintptr_t*)fp;
+  }
+#endif
+
+  if (jit->jmp == NULL)
+  {
+    printf("Panic was not caught, terminating program!\n");
+    exit(-1);
+  }
+
+  jit_longjmp(*jit->jmp, 1);
+}
+
 Jit* jit_init(ArrayStmt statements)
 {
   Jit* jit = malloc(sizeof(Jit));
@@ -4934,10 +4952,12 @@ Jit* jit_init(ArrayStmt statements)
   jit->jmp = NULL;
 
   MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
-  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 2,
+  jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
                                        (MIR_var_t[]){
                                          { .name = "jit", .size = 0, .type = MIR_T_I64 },
                                          { .name = "what", .size = 0, .type = MIR_T_I64 },
+                                         { .name = "pc", .size = 0, .type = MIR_T_I64 },
+                                         { .name = "fp", .size = 0, .type = MIR_T_I64 },
                                        });
   jit->panic.func = MIR_new_import(jit->ctx, "panic");
 
@@ -5095,16 +5115,20 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
   {
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-    panic(sig_jit, "Division by zero");
+    panic(sig_jit, "Division by zero", ExceptionInfo->ContextRecord->Rip,
+          ExceptionInfo->ContextRecord->Rbp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_STACK_OVERFLOW:
-    panic(sig_jit, "Stack overflow");
+    panic(sig_jit, "Stack overflow", ExceptionInfo->ContextRecord->Rip,
+          ExceptionInfo->ContextRecord->Rbp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
-  case EXCEPTION_ACCESS_VIOLATION:
-    panic(sig_jit, "Null pointer access");
+  case EXCEPTION_ACCESS_VIOLATION: {
+    panic(sig_jit, "Null pointer access", ExceptionInfo->ContextRecord->Rip,
+          ExceptionInfo->ContextRecord->Rbp);
     return EXCEPTION_CONTINUE_EXECUTION;
+  }
 
   default:
     return EXCEPTION_CONTINUE_SEARCH;
@@ -5113,7 +5137,23 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
 #else
 static void sig_handler(int sig, siginfo_t* si, void* ctx)
 {
-  (void)ctx;
+  ucontext_t* uc = (ucontext_t*)ctx;
+  uintptr_t pc = 0;
+  uintptr_t fp = 0;
+
+#if defined(__linux__) && defined(__x86_64__)
+  pc = uc->uc_mcontext.gregs[REG_RIP];
+  fp = uc->uc_mcontext.gregs[REG_RBP];
+#elif defined(__linux__) && defined(__aarch64__)
+  pc = uc->uc_mcontext.pc;
+  fp = uc->uc_mcontext.regs[29];
+#elif defined(__APPLE__) && defined(__x86_64__)
+  pc = uc->uc_mcontext->__ss.__rip;
+  fp = uc->uc_mcontext->__ss.__rbp;
+#elif defined(__APPLE__) && defined(__aarch64__)
+  pc = uc->uc_mcontext->__ss.__pc;
+  fp = uc->uc_mcontext->__ss.__fp;
+#endif
 
   if (sig == SIGSEGV)
   {
@@ -5139,15 +5179,15 @@ static void sig_handler(int sig, siginfo_t* si, void* ctx)
     uint8_t* fault = si->si_addr;
 
     if (fault < (uint8_t*)stack_base && fault >= (uint8_t*)stack_base - stack_size)
-      panic(sig_jit, "Stack overflow");
+      panic(sig_jit, "Stack overflow", pc, fp);
     else if (fault < (uint8_t*)0xffff)
-      panic(sig_jit, "Null pointer access");
+      panic(sig_jit, "Null pointer access", pc, fp);
     else
-      panic(sig_jit, "Internal runtime error");
+      panic(sig_jit, "Internal runtime error", pc, fp);
   }
   else if (sig == SIGFPE)
   {
-    panic(sig_jit, "Division by zero");
+    panic(sig_jit, "Division by zero", pc, fp);
   }
 }
 #endif
@@ -5177,7 +5217,7 @@ void* jit_push_jmp(Jit* jit, void* new)
     sa.sa_sigaction = sig_handler;
     sigaction(SIGFPE, &sa, NULL);
 #else
-    ULONG size = 64 * 1024;
+    ULONG size = 1024 * 1024;
     SetThreadStackGuarantee(&size);
 
     handler = AddVectoredExceptionHandler(1, vector_handler);

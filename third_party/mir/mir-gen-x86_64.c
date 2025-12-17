@@ -2943,6 +2943,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   }
   for (n = 0, insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
+    size_t len_before = VARR_LENGTH (uint8_t, result_code);
     if (insn->code == MIR_LABEL) {
       if (gen_nested_loop_label_p (gen_ctx, insn)) {
         int padn = LOOP_ALIGN - (int) (VARR_LENGTH (uint8_t, result_code) % LOOP_ALIGN);
@@ -2957,19 +2958,19 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         ind = find_insn_pattern (gen_ctx, insn, NULL);
       gen_assert (ind >= 0);
 
-      size_t len_before = VARR_LENGTH (uint8_t, result_code);
       out_insn (gen_ctx, insn, patterns[ind].replacement, NULL);
-      size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
-      insn->size = insn_len;
-      
-#ifndef NDEBUG
-      if (insn_len > (size_t) patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {
-        // fprintf (stderr, "\"%s\" max size(%d) < real size(%d)\n", patterns[ind].replacement,
-        //          patterns[ind].max_insn_size, (int) insn_len);
-        // gen_assert (FALSE);
-      }
-#endif
+   
+// #ifndef NDEBUG
+//       if (insn_len > (size_t) patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {
+//         fprintf (stderr, "\"%s\" max size(%d) < real size(%d)\n", patterns[ind].replacement,
+//                  patterns[ind].max_insn_size, (int) insn_len);
+//         gen_assert (FALSE);
+//       }
+// #endif
     }
+
+    size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
+    insn->size = insn_len;
   }
   return translate_finish (gen_ctx, len);
 }

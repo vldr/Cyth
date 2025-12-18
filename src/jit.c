@@ -663,16 +663,13 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
     MIR_reg_t ptr = MIR_reg(jit->ctx, "ptr", jit->function->u.func);
 
     {
-      MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+      MIR_label_t finish_label = MIR_new_label(jit->ctx);
+      MIR_label_t panic_label = MIR_new_label(jit->ctx);
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_NES, MIR_new_reg_op(jit->ctx, mask),
+                      MIR_new_insn(jit->ctx, MIR_BEQS, MIR_new_label_op(jit->ctx, panic_label),
                                    generate_array_length_op(jit, ptr),
                                    MIR_new_int_op(jit->ctx, 0)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, ptr),
-                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
 
       MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
@@ -696,6 +693,15 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
         MIR_new_ret_insn(jit->ctx, 1,
                          MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
                                         array_ptr, index, size_data_type(element_data_type))));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, finish_label)));
+
+      MIR_append_insn(jit->ctx, jit->function, panic_label);
+
+      generate_panic(jit, "Out of bounds access");
+
+      MIR_append_insn(jit->ctx, jit->function, finish_label);
     }
 
     map_put_function(&jit->functions, name, function);
@@ -4872,8 +4878,6 @@ static void init_statements(Jit* jit, ArrayStmt* statements)
 
 static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 {
-  (void)fp;
-
   printf("%s\n", what);
 
   for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
@@ -4896,6 +4900,13 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 
       offset += insn->size;
     }
+  }
+
+  if (!fp)
+  {
+#if defined(__clang__) || defined(__GNUC__)
+    fp = (uintptr_t)__builtin_frame_address(0);
+#endif
   }
 
 #if !defined(__linux__)

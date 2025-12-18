@@ -3027,6 +3027,8 @@ void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t fu
   }
   if (insn->code == MIR_UNSPEC)
     fprintf (f, " # %s", VARR_GET (MIR_proto_t, unspec_protos, insn->ops[0].u.u)->name);
+  else if (insn->line && insn->column)
+    fprintf (f, " # %d:%d", insn->line, insn->column);
   if (newline_p) fprintf (f, "\n");
 }
 
@@ -4149,6 +4151,13 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         if (insn->code == MIR_RET || insn->code == MIR_JRET) break;
         inline_insns_after++;
         new_insn = MIR_copy_insn (ctx, insn);
+
+        if (call && new_insn->line == 0 && new_insn->column == 0)
+        {
+          new_insn->line = call->line;
+          new_insn->column = call->column;
+        }
+
         change_inline_insn_regs (ctx, new_insn);
         store_labels_for_duplication (ctx, labels, temp_insns, insn, new_insn);
         VARR_PUSH (MIR_insn_t, cold_insns, new_insn);
@@ -4161,6 +4170,13 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       mir_assert (insn->code != MIR_JRET);
       inline_insns_after++;
       new_insn = MIR_copy_insn (ctx, insn);
+
+      if (call && new_insn->line == 0 && new_insn->column == 0)
+      {
+        new_insn->line = call->line;
+        new_insn->column = call->column;
+      }
+
       /* va insns are possible here as va_list can be passed as arg */
       if (insn == called_func_top_alloca) new_called_func_top_alloca = new_insn;
       change_inline_insn_regs (ctx, new_insn);

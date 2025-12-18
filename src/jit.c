@@ -4592,8 +4592,10 @@ static void generate_class_declaration(Jit* jit, ClassStmt* statement)
         array_add(&arguments, MIR_new_reg_op(jit->ctx, var_reg));
       }
 
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn_arr(jit->ctx, MIR_CALL, arguments.size, arguments.elems));
+      MIR_append_insn(
+        jit->ctx, jit->function,
+        generate_debug_info(statement->name,
+                            MIR_new_insn_arr(jit->ctx, MIR_CALL, arguments.size, arguments.elems)));
     }
 
     MIR_append_insn(jit->ctx, jit->function,

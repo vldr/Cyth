@@ -1041,10 +1041,17 @@ static Function* generate_float_hash_function(Jit* jit)
 
 static float float_sqrt(float n)
 {
-  float y = n;
-  for (int i = 0; i < 5; i++)
-    y = 0.5f * (y + n / y);
-  return y;
+#if defined(__x86_64__)
+  float out;
+  __asm__("sqrtss %1, %0" : "=x"(out) : "x"(n));
+  return out;
+#elif defined(__aarch64__)
+  float out;
+  __asm__("fsqrt %s0, %s1" : "=w"(out) : "w"(n));
+  return out;
+#else
+  return sqrtf(n);
+#endif
 }
 
 static Function* generate_float_sqrt_function(Jit* jit)
@@ -4906,11 +4913,12 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
   {
 #if defined(__clang__) || defined(__GNUC__)
     fp = (uintptr_t)__builtin_frame_address(0);
+#elif defined(_MSC_VER)
+    fp = (uintptr_t)_AddressOfReturnAddress() - 8;
 #endif
   }
 
-#if !defined(__linux__)
-  while (fp)
+  while (fp > 0xffff && fp < 0xffffffffffff)
   {
     uintptr_t pc = *(uintptr_t*)(fp + sizeof(uintptr_t));
 
@@ -4938,7 +4946,6 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 
     fp = *(uintptr_t*)fp;
   }
-#endif
 
   if (jit->jmp == NULL)
   {

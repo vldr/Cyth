@@ -705,7 +705,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   func = curr_func_item->u.func;
   block_arg_func_p = FALSE;
   start_sp_from_bp_offset = 8;
-  keep_fp_p = func->vararg_p;
+  // keep_fp_p = func->vararg_p;
+  keep_fp_p = TRUE;
   for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */

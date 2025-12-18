@@ -15,6 +15,7 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#include <math.h>
 #else
 #define __USE_GNU
 #include <pthread.h>

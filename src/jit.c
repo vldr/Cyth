@@ -361,15 +361,16 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
                                MIR_new_ref_op(jit->ctx, item)));
 }
 
-static void generate_panic(Jit* jit, const char* what)
+static void generate_panic(Jit* jit, const char* what, Token token)
 {
-  MIR_append_insn(jit->ctx, jit->function,
-                  MIR_new_call_insn(jit->ctx, 6, MIR_new_ref_op(jit->ctx, jit->panic.proto),
-                                    MIR_new_ref_op(jit->ctx, jit->panic.func),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)jit),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)what),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)0),
-                                    MIR_new_int_op(jit->ctx, (uint64_t)0)));
+  MIR_append_insn(
+    jit->ctx, jit->function,
+    generate_debug_info(
+      token, MIR_new_call_insn(
+               jit->ctx, 6, MIR_new_ref_op(jit->ctx, jit->panic.proto),
+               MIR_new_ref_op(jit->ctx, jit->panic.func), MIR_new_int_op(jit->ctx, (uint64_t)jit),
+               MIR_new_int_op(jit->ctx, (uint64_t)what), MIR_new_int_op(jit->ctx, (uint64_t)0),
+               MIR_new_int_op(jit->ctx, (uint64_t)0))));
 }
 
 static MIR_op_t generate_array_length_op(Jit* jit, MIR_reg_t ptr)
@@ -700,7 +701,7 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(jit->ctx, jit->function, panic_label);
 
-      generate_panic(jit, "Out of bounds access");
+      generate_panic(jit, "Out of bounds access", (Token){ 0 });
 
       MIR_append_insn(jit->ctx, jit->function, finish_label);
     }
@@ -877,7 +878,7 @@ static Function* generate_array_reserve_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(jit->ctx, jit->function, panic_label);
 
-      generate_panic(jit, "Invalid reservation amount");
+      generate_panic(jit, "Invalid reservation amount", (Token){ 0 });
 
       MIR_append_insn(jit->ctx, jit->function, continue_label);
     }
@@ -3482,7 +3483,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast", expression->type.token);
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3631,7 +3632,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast", expression->type.token);
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3672,7 +3673,7 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      generate_panic(jit, "Invalid type cast");
+      generate_panic(jit, "Invalid type cast", expression->type.token);
 
       MIR_append_insn(jit->ctx, jit->function, cont_label);
       return;
@@ -3967,7 +3968,7 @@ static void generate_call_expression(Jit* jit, MIR_reg_t dest, CallExpr* express
                     MIR_new_insn(jit->ctx, MIR_JMP, MIR_new_label_op(jit->ctx, cont_label)));
 
     MIR_append_insn(jit->ctx, jit->function, if_false_label);
-    generate_panic(jit, "Null pointer call");
+    generate_panic(jit, "Null pointer call", expression->callee_token);
     MIR_append_insn(jit->ctx, jit->function, cont_label);
 
     array_add(&arguments, MIR_new_reg_op(jit->ctx, callee_ptr));

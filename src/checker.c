@@ -2912,6 +2912,23 @@ static DataType check_access_expression(AccessExpr* expression)
 
       return expression->data_type;
     }
+    else if (strcmp("remove", name) == 0)
+    {
+      expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+      expression->data_type.function_internal.name = "array.remove";
+      expression->data_type.function_internal.this = expression->expr;
+      expression->data_type.function_internal.return_type = ALLOC(DataType);
+      *expression->data_type.function_internal.return_type = array_data_type_element(data_type);
+
+      array_init(&expression->data_type.function_internal.parameter_types);
+      array_add(&expression->data_type.function_internal.parameter_types, data_type);
+      array_add(&expression->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_INTEGER));
+
+      expression->variable = NULL;
+      expression->expr_data_type = data_type;
+
+      return expression->data_type;
+    }
     else if (strcmp("toString", name) == 0)
     {
       if (array_data_type_element(data_type).type != TYPE_CHAR)

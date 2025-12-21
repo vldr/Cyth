@@ -2636,6 +2636,80 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   }
 }
 
+static const char* generate_array_remove_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define INDEX() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define INDEX_SET(_v) (BinaryenLocalSet(codegen.module, 1, (_v)))
+#define RESULT() (BinaryenLocalGet(codegen.module, 2, return_type))
+#define RESULT_SET(_v) (BinaryenLocalSet(codegen.module, 2, (_v)))
+#define LENGTH() (BinaryenLocalGet(codegen.module, 3, BinaryenTypeInt32()))
+#define LENGTH_SET(_v) (BinaryenLocalSet(codegen.module, 3, (_v)))
+#define SRC_INDEX() (BinaryenLocalGet(codegen.module, 4, BinaryenTypeInt32()))
+#define SRC_INDEX_SET(_v) (BinaryenLocalSet(codegen.module, 4, (_v)))
+#define ARRAY() (BinaryenStructGet(codegen.module, 0, THIS(), BinaryenTypeAuto(), false))
+#define ARRAY_GET(_i) (BinaryenArrayGet(codegen.module, ARRAY(), (_i), return_type, false))
+#define CAPACITY() (BinaryenArrayLen(codegen.module, ARRAY()))
+#define SIZE() (BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false))
+#define SIZE_SET(_v) (BinaryenStructSet(codegen.module, 1, THIS(), (_v)))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  DataType element_data_type = array_data_type_element(this_data_type);
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("array.remove.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType return_type = data_type_to_binaryen_type(element_data_type);
+
+    BinaryenExpressionRef body_list[] = {
+      INDEX_SET(BinaryenSelect(codegen.module,
+                               BinaryenBinary(codegen.module, BinaryenLtSInt32(), INDEX(), SIZE()),
+                               INDEX(), BinaryenConst(codegen.module, BinaryenLiteralInt32(-1)))),
+      RESULT_SET(ARRAY_GET(INDEX())),
+      SRC_INDEX_SET(BinaryenBinary(codegen.module, BinaryenAddInt32(), INDEX(), CONSTANT(1))),
+      LENGTH_SET(BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), SRC_INDEX())),
+      SIZE_SET(BinaryenBinary(codegen.module, BinaryenSubInt32(), SIZE(), CONSTANT(1))),
+      BinaryenArrayCopy(codegen.module, ARRAY(), INDEX(), ARRAY(), SRC_INDEX(), LENGTH()),
+      BinaryenReturn(codegen.module, RESULT())
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeNone());
+
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+    BinaryenType vars_list[] = {
+      return_type,
+      BinaryenTypeInt32(),
+      BinaryenTypeInt32(),
+    };
+
+    BinaryenAddFunction(codegen.module, name, params, return_type, vars_list,
+                        sizeof(vars_list) / sizeof_ptr(vars_list), body);
+  }
+
+  return name;
+
+#undef THIS
+#undef INDEX
+#undef INDEX_SET
+#undef RESULT
+#undef RESULT_SET
+#undef LENGTH
+#undef LENGTH_SET
+#undef SRC_INDEX
+#undef SRC_INDEX_SET
+#undef ARRAY
+#undef ARRAY_GET
+#undef CAPACITY
+#undef SIZE
+#undef SIZE_SET
+#undef CONSTANT
+}
+
 static const char* generate_array_push_function(DataType this_data_type, DataType value_data_type)
 {
 #define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
@@ -3469,6 +3543,9 @@ static const char* generate_function_internal(DataType data_type)
     return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.reserve") == 0)
     return generate_array_reserve_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.remove") == 0)
+    return generate_array_remove_function(
       array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();

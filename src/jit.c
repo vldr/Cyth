@@ -62,6 +62,7 @@ struct _JIT
   Function malloc_atomic;
   Function realloc;
   Function memcpy;
+  Function memmove;
   Function string_equals;
   Function string_bool_cast;
   Function string_int_cast;
@@ -918,8 +919,8 @@ static Function* generate_array_remove_function(Jit* jit, DataType data_type)
                                    MIR_new_int_op(jit->ctx, size_data_type(element_data_type))));
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_call_insn(jit->ctx, 5, MIR_new_ref_op(jit->ctx, jit->memcpy.proto),
-                                        MIR_new_ref_op(jit->ctx, jit->memcpy.func),
+                      MIR_new_call_insn(jit->ctx, 5, MIR_new_ref_op(jit->ctx, jit->memmove.proto),
+                                        MIR_new_ref_op(jit->ctx, jit->memmove.func),
                                         MIR_new_reg_op(jit->ctx, array_ptr),
                                         MIR_new_reg_op(jit->ctx, sub_array_ptr),
                                         MIR_new_reg_op(jit->ctx, size)));
@@ -5115,6 +5116,14 @@ Jit* jit_init(ArrayStmt statements)
                                      { .name = "soruce", .size = 0, .type = MIR_T_I64 },
                                      { .name = "n", .size = 0, .type = MIR_T_I64 } });
   jit->memcpy.func = MIR_new_import(jit->ctx, "memcpy");
+
+  MIR_load_external(jit->ctx, "memmove", (uintptr_t)memmove);
+  jit->memmove.proto =
+    MIR_new_proto_arr(jit->ctx, "memmove.proto", 0, (MIR_type_t[]){ MIR_T_I64 }, 3,
+                      (MIR_var_t[]){ { .name = "dest", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "soruce", .size = 0, .type = MIR_T_I64 },
+                                     { .name = "n", .size = 0, .type = MIR_T_I64 } });
+  jit->memmove.func = MIR_new_import(jit->ctx, "memmove");
 
   MIR_load_external(jit->ctx, "string.equals", (uintptr_t)string_equals);
   jit->string_equals.proto =

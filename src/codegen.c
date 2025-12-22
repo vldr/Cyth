@@ -3623,6 +3623,9 @@ static BinaryenExpressionRef generate_function_pointer(DataType data_type)
     name = generate_function_internal(data_type);
     break;
 
+  case TYPE_FUNCTION_GROUP:
+    return BinaryenRefNull(codegen.module, BinaryenTypeNullref());
+
   default:
     UNREACHABLE("Unexpected function data type");
   }
@@ -4292,7 +4295,8 @@ static BinaryenExpressionRef generate_variable_expression(VarExpr* expression)
 
   if (expression->data_type.type == TYPE_FUNCTION ||
       expression->data_type.type == TYPE_FUNCTION_MEMBER ||
-      expression->data_type.type == TYPE_FUNCTION_INTERNAL)
+      expression->data_type.type == TYPE_FUNCTION_INTERNAL ||
+      expression->data_type.type == TYPE_FUNCTION_GROUP)
   {
     return generate_function_pointer(expression->data_type);
   }
@@ -4452,7 +4456,8 @@ static BinaryenExpressionRef generate_access_expression(AccessExpr* expression)
 
   if (expression->data_type.type == TYPE_FUNCTION ||
       expression->data_type.type == TYPE_FUNCTION_MEMBER ||
-      expression->data_type.type == TYPE_FUNCTION_INTERNAL)
+      expression->data_type.type == TYPE_FUNCTION_INTERNAL ||
+      expression->data_type.type == TYPE_FUNCTION_GROUP)
   {
     return generate_function_pointer(expression->data_type);
   }

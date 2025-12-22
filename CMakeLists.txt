@@ -59,7 +59,9 @@ set(SOURCES
 if (WASM OR EMSCRIPTEN)
     add_subdirectory(third_party/binaryen)
     list(APPEND SOURCES src/codegen.c src/codegen.h)
-else()
+endif()
+
+if (NOT EMSCRIPTEN)
     add_subdirectory(third_party/mir)
     add_subdirectory(third_party/bdwgc)
     list(APPEND SOURCES src/jit.c src/jit.h)
@@ -99,7 +101,9 @@ endif()
 if (WASM OR EMSCRIPTEN)
     target_compile_definitions(cyth PRIVATE WASM=1)
     target_link_libraries(cyth PRIVATE binaryen)
-else()
+endif()
+
+if (NOT EMSCRIPTEN)
     target_link_libraries(cyth PRIVATE mir)
     target_link_libraries(cyth PRIVATE bdwgc)
 

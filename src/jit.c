@@ -4814,7 +4814,8 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
 
   if (statement->import)
   {
-    statement->item = MIR_new_import(jit->ctx, statement->name.lexeme);
+    statement->item =
+      MIR_new_import(jit->ctx, memory_sprintf("%s.%s", statement->import, statement->name.lexeme));
   }
   else
   {
@@ -5029,6 +5030,9 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 #endif
   }
 
+  uintptr_t previous_ptr = 0;
+  uintptr_t previous_count = 0;
+
   while (fp > 0xffff && fp < 0xffffffffffff)
   {
     uintptr_t pc = *(uintptr_t*)(fp + sizeof(uintptr_t));
@@ -5050,7 +5054,23 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
         if (pc >= ptr && pc < ptr + insn->size)
         {
           if (insn->line && insn->column)
-            printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+          {
+            if (ptr != previous_ptr)
+            {
+              printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+
+              previous_count = 0;
+            }
+            else
+            {
+              if (previous_count == 0)
+                printf("  at ...\n");
+
+              previous_count++;
+            }
+          }
+
+          previous_ptr = ptr;
         }
       }
     }

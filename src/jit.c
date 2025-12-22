@@ -3523,7 +3523,9 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
   MIR_type_t type = data_type_to_mir_type(expression->from_data_type);
   MIR_reg_t expr = 0;
 
-  if (type != MIR_T_UNDEF)
+  if (type != MIR_T_UNDEF && expression->from_data_type.type != TYPE_FUNCTION &&
+      expression->from_data_type.type != TYPE_FUNCTION_MEMBER &&
+      expression->from_data_type.type != TYPE_FUNCTION_INTERNAL)
   {
     expr = _MIR_new_temp_reg(jit->ctx, type, jit->function->u.func);
     generate_expression(jit, expr, expression->expr);

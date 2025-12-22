@@ -1216,7 +1216,7 @@ static bool autocast(Expr** expression, DataType from, DataType to)
 static bool autocast_int_literal_to_float_literal(Expr** expression)
 {
   if (expression == NULL)
-    return false;
+    return true;
 
   Expr* expr = *expression;
   if (expr->type == EXPR_LITERAL)
@@ -1288,6 +1288,87 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
 
             if (!equal_data_type(parameter_data_type, argument_data_type) &&
                 !assignable_data_type(NULL, parameter_data_type, argument_data_type))
+            {
+              match = false;
+              break;
+            }
+          }
+        }
+        else
+        {
+          match = false;
+        }
+
+        if (match)
+          *data_type = function_data_type;
+      }
+    }
+
+    array_foreach(&function_group, function_data_type)
+    {
+      if (function_data_type.type == TYPE_FUNCTION ||
+          function_data_type.type == TYPE_FUNCTION_MEMBER)
+      {
+        FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                               ? function_data_type.function
+                               : function_data_type.function_member.function;
+
+        int offset = function_data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+        bool match = true;
+
+        if (function->parameters.size - offset == number_of_arguments)
+        {
+          for (unsigned int i = offset; i < function->parameters.size; i++)
+          {
+            DataType argument_data_type = argument_data_types[i - offset];
+            DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+            if (!equal_data_type(parameter_data_type, argument_data_type))
+            {
+              match = false;
+              break;
+            }
+          }
+        }
+        else
+        {
+          match = false;
+        }
+
+        if (match)
+          *data_type = function_data_type;
+      }
+    }
+  }
+}
+
+static void expand_exact_function_group(DataType* data_type, DataType* argument_data_types,
+                                        unsigned int number_of_arguments)
+{
+  if (data_type->type == TYPE_FUNCTION_GROUP)
+  {
+    ArrayDataType function_group = data_type->function_group;
+    DataType function_data_type;
+
+    array_foreach(&function_group, function_data_type)
+    {
+      if (function_data_type.type == TYPE_FUNCTION ||
+          function_data_type.type == TYPE_FUNCTION_MEMBER)
+      {
+        FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                               ? function_data_type.function
+                               : function_data_type.function_member.function;
+
+        bool match = true;
+
+        if (function->parameters.size == number_of_arguments)
+        {
+          for (unsigned int i = 0; i < function->parameters.size; i++)
+          {
+            DataType argument_data_type = argument_data_types[i];
+            DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+            if (!equal_data_type(parameter_data_type, argument_data_type))
             {
               match = false;
               break;
@@ -1998,9 +2079,9 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_FUNCTION_POINTER: {
         DataType function_data_type = expression->from_data_type;
-        expand_function_group(&function_data_type,
-                              expression->to_data_type.function_internal.parameter_types.elems,
-                              expression->to_data_type.function_internal.parameter_types.size);
+        expand_exact_function_group(
+          &function_data_type, expression->to_data_type.function_internal.parameter_types.elems,
+          expression->to_data_type.function_internal.parameter_types.size);
 
         if (function_data_type.type != TYPE_FUNCTION_GROUP)
         {

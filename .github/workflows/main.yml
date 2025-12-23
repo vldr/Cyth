@@ -50,6 +50,7 @@ jobs:
 
       - name: Test (MIR) (Windows)
         run: |
+          export PATH="/home/ubuntu/.wine/drive_c/Program Files/nodejs/":$PATH
           cd winbuild
           make test
 

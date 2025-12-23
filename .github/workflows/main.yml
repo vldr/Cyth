@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: Build and Test
+    name: Linux and Web
     concurrency: ci-${{ github.ref }}
     runs-on: self-hosted
     steps:
@@ -24,23 +24,6 @@ jobs:
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: ${{env.EM_VERSION}}
-
-      - name: Build (MIR) (Windows)
-        run: |
-          export WINEDEBUG=-all
-          export PATH=~/my_msvc/opt/msvc/bin/x64:$PATH
-
-          CC=cl CXX=cl cmake -S . -B winbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows
-          cd winbuild
-          make -j12
-
-      - name: Test (MIR) (Windows)
-        run: |
-          export WINEDEBUG=-all
-          export PATH="/home/ubuntu/.wine/drive_c/Program Files/nodejs/":$PATH
-          
-          cd winbuild
-          make test
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -84,3 +67,41 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: editor
+
+  build-windows:
+    name: Windows
+    concurrency: ci-windows-${{ github.ref }}
+    runs-on: windows-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Add MSBUILD to PATH
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}  
+
+      - name: Build (MIR)
+        run: |
+          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
+          cd winbuild
+          msbuild cyth.vcxproj
+
+      - name: Test (MIR)
+        run: |
+          cd winbuild
+          msbuild test.vcxproj
+
+      - name: Build (WASM)
+        run: |
+          cmake.exe -DWASM=1 -S . -B winbuild -G "Visual Studio 17 2022"
+          cd winbuild
+          msbuild cyth.vcxproj
+
+      - name: Test (WASM)
+        run: |
+          cd winbuild
+          msbuild test.vcxproj

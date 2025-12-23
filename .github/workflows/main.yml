@@ -27,14 +27,18 @@ jobs:
 
       - name: Build (MIR) (Windows)
         run: |
+          export WINEDEBUG=-all
           export PATH=~/my_msvc/opt/msvc/bin/x64:$PATH
+
           CC=cl CXX=cl cmake -S . -B winbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows
           cd winbuild
           make -j12
 
       - name: Test (MIR) (Windows)
         run: |
+          export WINEDEBUG=-all
           export PATH="/home/ubuntu/.wine/drive_c/Program Files/nodejs/":$PATH
+          
           cd winbuild
           make test
 

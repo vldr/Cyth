@@ -1514,10 +1514,11 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
 
           DataType function_data_type =
             function_template_to_data_type(function_template_data_type, function_type, true);
-          if (function_data_type.type == TYPE_VOID)
+
+          if (checker.error)
           {
-            *data_type = DATA_TYPE(TYPE_VOID);
-            return;
+            checker.error = false;
+            continue;
           }
 
           FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER

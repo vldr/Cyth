@@ -21,7 +21,7 @@ static struct
   FuncStmt* function;
   ClassStmt* class;
   IfStmt* cond;
-  ClassTemplateStmt* class_template;
+  Token* template;
   WhileStmt* loop;
   AssignExpr* assignment;
 } checker;
@@ -49,10 +49,10 @@ static void checker_error(Token token, const char* message)
   if (checker.error)
     return;
 
-  if (checker.class_template && checker.class)
+  if (checker.template)
     message =
-      memory_sprintf("%s (occurred when creating %s at %d:%d)", message, checker.class->name.lexeme,
-                     checker.class->name.start_line, checker.class->name.start_column);
+      memory_sprintf("%s (occurred when creating %s at %d:%d)", message, checker.template->lexeme,
+                     checker.template->start_line, checker.template->start_column);
 
   error(token.start_line, token.start_column, token.end_line, token.end_column, message);
   checker.error = true;
@@ -815,6 +815,13 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.cond = NULL;
   checker.environment = checker.global_environment;
 
+  Token* previous_template = checker.template;
+  if (!previous_template)
+  {
+    checker.template = ALLOC(Token);
+    *checker.template = class_statement->name;
+  }
+
   init_class_declaration(class_statement);
 
   checker.environment = environment_init(previous_environment);
@@ -849,6 +856,9 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.cond = previous_cond;
   checker.environment = previous_environment;
 
+  if (!previous_template)
+    checker.template = NULL;
+
   array_add(&template.class_template->classes, class_statement);
 
   variable = environment_get_variable(checker.environment, name);
@@ -868,6 +878,20 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
                    variable->data_type.type == TYPE_FUNCTION_MEMBER))
   {
     return variable->data_type;
+  }
+
+  DataType** template_data_types =
+    alloca(template.function_template.function->types.size * sizeof(DataType*));
+
+  for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
+  {
+    DataType template_data_type = data_type_token_to_data_type(array_at(&function_type.types, i));
+
+    if (checker.error)
+      return DATA_TYPE(TYPE_VOID);
+
+    template_data_types[i] = ALLOC(DataType);
+    *template_data_types[i] = template_data_type;
   }
 
   Stmt* statement = parser_parse_function_declaration_statement(
@@ -896,10 +920,17 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.cond = template.function_template.function->cond;
   checker.environment = template.function_template.function->environment;
 
+  Token* previous_template = checker.template;
+  if (!previous_template)
+  {
+    checker.template = ALLOC(Token);
+    *checker.template = function_statement->name;
+  }
+
   for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
   {
     Token name = template.function_template.function->types.elems[i];
-    DataTypeToken actual_data_type_token = array_at(&function_type.types, i);
+    DataTypeToken data_type_token = array_at(&function_type.types, i);
 
     VarStmt* variable = ALLOC(VarStmt);
     variable->name = name;
@@ -909,9 +940,8 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     variable->scope = SCOPE_GLOBAL;
     variable->index = -1;
     variable->data_type.type = TYPE_ALIAS;
-    variable->data_type.alias.token = actual_data_type_token;
-    variable->data_type.alias.data_type = ALLOC(DataType);
-    *variable->data_type.alias.data_type = data_type_token_to_data_type(actual_data_type_token);
+    variable->data_type.alias.token = data_type_token;
+    variable->data_type.alias.data_type = template_data_types[i];
 
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
@@ -933,6 +963,9 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.loop = previous_loop;
   checker.cond = previous_cond;
   checker.environment = previous_environment;
+
+  if (!previous_template)
+    checker.template = NULL;
 
   array_add(&template.function_template.function->functions, function_statement);
 
@@ -1441,6 +1474,11 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
       .types = *types,
     };
 
+    function_type.token.start_line = name.start_line;
+    function_type.token.start_column = name.start_column;
+    function_type.token.end_line = name.end_line;
+    function_type.token.end_column = name.end_column;
+
     *data_type = function_template_to_data_type(*data_type, function_type, false);
   }
   else if (data_type->type == TYPE_FUNCTION_GROUP)
@@ -1469,8 +1507,19 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
             .types = *types,
           };
 
+          function_type.token.start_line = name.start_line;
+          function_type.token.start_column = name.start_column;
+          function_type.token.end_line = name.end_line;
+          function_type.token.end_column = name.end_column;
+
           DataType function_data_type =
             function_template_to_data_type(function_template_data_type, function_type, true);
+          if (function_data_type.type == TYPE_VOID)
+          {
+            *data_type = DATA_TYPE(TYPE_VOID);
+            return;
+          }
+
           FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
                                  ? function_data_type.function_member.function
                                  : function_data_type.function;
@@ -2107,9 +2156,6 @@ static DataType check_cast_expression(CastExpr* expression)
       break;
 
     case TYPE_ALIAS:
-    case TYPE_FUNCTION:
-    case TYPE_FUNCTION_MEMBER:
-    case TYPE_FUNCTION_INTERNAL:
     case TYPE_FUNCTION_TEMPLATE:
     case TYPE_PROTOTYPE:
     case TYPE_PROTOTYPE_TEMPLATE:
@@ -2117,6 +2163,25 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_STRING:
         valid = true;
+        break;
+
+      default:
+        break;
+      }
+
+      break;
+
+    case TYPE_FUNCTION:
+    case TYPE_FUNCTION_MEMBER:
+    case TYPE_FUNCTION_INTERNAL:
+      switch (expression->to_data_type.type)
+      {
+      case TYPE_STRING:
+        valid = true;
+        break;
+
+      case TYPE_FUNCTION_POINTER:
+        valid = equal_data_type(expression->from_data_type, expression->to_data_type);
         break;
 
       default:
@@ -2845,7 +2910,7 @@ static DataType check_access_expression(AccessExpr* expression)
 {
   DataType data_type = check_expression(expression->expr);
 
-  if (data_type.type == TYPE_OBJECT)
+  if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_PROTOTYPE)
   {
     const char* name = expression->name.lexeme;
 
@@ -2853,6 +2918,14 @@ static DataType check_access_expression(AccessExpr* expression)
     VarStmt* variable = map_get_var_stmt(class->members, name);
 
     if (!variable)
+    {
+      error_cannot_find_member_name(expression->name, name, data_type);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
+    if (data_type.type == TYPE_PROTOTYPE && (variable->data_type.type != TYPE_FUNCTION_TEMPLATE &&
+                                             variable->data_type.type != TYPE_FUNCTION_MEMBER &&
+                                             variable->data_type.type != TYPE_FUNCTION_GROUP))
     {
       error_cannot_find_member_name(expression->name, name, data_type);
       return DATA_TYPE(TYPE_VOID);
@@ -3893,16 +3966,11 @@ static void check_class_declaration(ClassStmt* statement)
 
 static void check_class_template_declaration(ClassTemplateStmt* statement)
 {
-  ClassTemplateStmt* previous_class_template = checker.class_template;
-  checker.class_template = statement;
-
   ClassStmt* class_statement;
   array_foreach(&statement->classes, class_statement)
   {
     check_class_declaration(class_statement);
   }
-
-  checker.class_template = previous_class_template;
 }
 
 static void check_import_declaration(ImportStmt* statement)
@@ -4157,6 +4225,7 @@ void checker_init(ArrayStmt statements)
 {
   checker.error = false;
   checker.function = NULL;
+  checker.template = NULL;
   checker.class = NULL;
   checker.loop = NULL;
   checker.cond = NULL;

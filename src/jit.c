@@ -70,6 +70,7 @@ struct _JIT
   Function string_char_cast;
 };
 
+uintptr_t sig_fp;
 Jit* sig_jit;
 
 static void generate_default_initialization(Jit* jit, MIR_reg_t dest, DataType data_type);
@@ -4704,7 +4705,7 @@ static void generate_class_declaration(Jit* jit, ClassStmt* statement)
 
       MIR_append_insn(
         jit->ctx, jit->function,
-        generate_debug_info(statement->name,
+        generate_debug_info(initializer_function->name,
                             MIR_new_insn_arr(jit->ctx, MIR_CALL, arguments.size, arguments.elems)));
     }
 
@@ -5035,7 +5036,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
   uintptr_t previous_ptr = 0;
   uintptr_t previous_count = 0;
 
-  while (fp > 0xffff && fp < 0xffffffffffff)
+  while (fp && fp < sig_fp)
   {
     uintptr_t pc = *(uintptr_t*)(fp + sizeof(uintptr_t));
 
@@ -5384,6 +5385,12 @@ void* jit_push_jmp(Jit* jit, void* new)
     SetThreadStackGuarantee(&size);
 
     handler = AddVectoredExceptionHandler(1, vector_handler);
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+    sig_fp = (uintptr_t)__builtin_frame_address(0);
+#elif defined(_MSC_VER)
+    sig_fp = (uintptr_t)_AddressOfReturnAddress() - 8;
 #endif
 
     sig_jit = jit;

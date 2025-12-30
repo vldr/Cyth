@@ -207,7 +207,7 @@ static MIR_type_t data_type_to_mir_type(DataType data_type)
   UNREACHABLE("Unhandled data type");
 }
 
-static MIR_type_t data_type_to_mir_array_type(DataType data_type)
+static MIR_type_t data_type_to_sized_type(DataType data_type)
 {
   switch (data_type.type)
   {
@@ -238,6 +238,19 @@ static MIR_type_t data_type_to_mir_array_type(DataType data_type)
   }
 
   UNREACHABLE("Unhandled data type");
+}
+
+static MIR_type_t sized_mir_type_to_mir_type(MIR_type_t type)
+{
+  switch (type)
+  {
+  case MIR_T_F:
+    return MIR_T_F;
+  default:
+    return MIR_T_I64;
+  }
+
+  UNREACHABLE("Unexpected mir type");
 }
 
 static MIR_item_t data_type_to_proto(Jit* jit, DataType data_type)
@@ -347,9 +360,10 @@ static void generate_string_literal_expression(Jit* jit, MIR_op_t dest, const ch
     if (length == -1)
       length = strlen(literal);
 
-    uintptr_t size = sizeof(String) + length;
+    uintptr_t size = sizeof(String) + length + 1;
     String* string = memory_alloc(size);
     string->size = length;
+    string->data[length] = '\0';
     memcpy(string->data, literal, length);
 
     const char* name = memory_sprintf("string.%d", map_size_mir_item(&jit->string_constants));
@@ -403,8 +417,8 @@ static MIR_op_t generate_string_at_op(Jit* jit, MIR_reg_t base, MIR_reg_t index)
 
 static MIR_op_t generate_object_field_op(Jit* jit, VarStmt* field, MIR_reg_t ptr)
 {
-  return MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(field->data_type), field->offset, ptr,
-                        0, 1);
+  return MIR_new_mem_op(jit->ctx, data_type_to_sized_type(field->data_type), field->offset, ptr, 0,
+                        1);
 }
 
 static void generate_default_array_initialization(Jit* jit, MIR_reg_t dest)
@@ -507,7 +521,7 @@ static Function* generate_array_push_function(Jit* jit, DataType data_type,
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, index, size_data_type(element_data_type)),
                      MIR_new_reg_op(jit->ctx, value)));
 
@@ -695,7 +709,7 @@ static Function* generate_array_pop_function(Jit* jit, DataType data_type)
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_ret_insn(jit->ctx, 1,
-                         MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                         MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                         array_ptr, index, size_data_type(element_data_type))));
 
       MIR_append_insn(jit->ctx, jit->function,
@@ -751,10 +765,19 @@ static Function* generate_array_to_string_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_ADD, MIR_new_reg_op(jit->ctx, size),
-                                   MIR_new_int_op(jit->ctx, sizeof(unsigned int)),
+                                   MIR_new_int_op(jit->ctx, sizeof(unsigned int) + 1),
                                    generate_array_length_op(jit, ptr)));
 
       generate_malloc_atomic_expression(jit, string_ptr, MIR_new_reg_op(jit->ctx, size));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, size),
+                                   generate_array_length_op(jit, ptr)));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, data_type_to_mov_type(return_data_type),
+                                   generate_string_at_op(jit, string_ptr, size),
+                                   MIR_new_int_op(jit->ctx, 0)));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_MOV, generate_string_length_op(jit, string_ptr),
@@ -883,7 +906,7 @@ static Function* generate_array_remove_function(Jit* jit, DataType data_type)
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_reg_op(jit->ctx, value),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, index, size_data_type(element_data_type))));
 
       MIR_reg_t size = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
@@ -1072,7 +1095,7 @@ static Function* generate_array_reserve_function(Jit* jit, DataType data_type)
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, MIR_MOV,
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, i, size_data_type(element_data_type)),
                      MIR_new_reg_op(jit->ctx, dest)));
 
@@ -1356,8 +1379,9 @@ static String* string_replace(String* input, String* old, String* new)
 
   int size = input->size + count * (new->size - old->size);
 
-  String* result = GC_malloc_atomic(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
+  result->data[size] = '\0';
 
   if (old->size > 0)
   {
@@ -1455,8 +1479,9 @@ static String* string_trim(String* input)
 
   int size = end - start + 1;
 
-  String* result = GC_malloc_atomic(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
+  result->data[size] = '\0';
 
   for (int i = start, j = 0; i <= end; i++, j++)
     result->data[j] = input->data[i];
@@ -1619,9 +1644,10 @@ static Array* string_split(String* input, String* delim)
 
     for (int i = 0; i < input->size; i++)
     {
-      String* item = GC_malloc_atomic(sizeof(String) + 1);
+      String* item = GC_malloc_atomic(sizeof(String) + 1 + 1);
       item->size = 1;
       item->data[0] = input->data[i];
+      item->data[1] = '\0';
 
       *data = item;
       data += 1;
@@ -1660,8 +1686,9 @@ static Array* string_split(String* input, String* delim)
       {
         const int size = current - previous;
 
-        String* item = GC_malloc_atomic(sizeof(String) + size);
+        String* item = GC_malloc_atomic(sizeof(String) + size + 1);
         item->size = size;
+        item->data[size] = '\0';
         memcpy(item->data, input->data + previous, size);
 
         *data = item;
@@ -1678,8 +1705,9 @@ static Array* string_split(String* input, String* delim)
 
     const int size = input->size - previous;
 
-    String* item = GC_malloc_atomic(sizeof(String) + size);
+    String* item = GC_malloc_atomic(sizeof(String) + size + 1);
     item->size = size;
+    item->data[size] = '\0';
     memcpy(item->data, input->data + previous, size);
 
     *data = item;
@@ -1719,8 +1747,9 @@ static String* string_join(Array* input, String* delim)
 {
   if (input->size == 0)
   {
-    String* result = GC_malloc_atomic(sizeof(String));
+    String* result = GC_malloc_atomic(sizeof(String) + 1);
     result->size = 0;
+    result->data[result->size] = '\0';
 
     return result;
   }
@@ -1731,8 +1760,9 @@ static String* string_join(Array* input, String* delim)
   for (int i = 0; i < input->size; i++)
     size += data[i]->size;
 
-  String* result = GC_malloc_atomic(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
+  result->data[size] = '\0';
 
   for (int i = 0, k = 0; i < input->size; i++)
   {
@@ -1819,8 +1849,9 @@ static String* string_pad(String* input, int pad)
 {
   const int size = pad + input->size;
 
-  String* result = GC_malloc_atomic(sizeof(String) + size);
+  String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
+  result->data[size] = '\0';
 
   for (int i = 0; i < pad; i++)
     result->data[i] = ' ';
@@ -1899,19 +1930,28 @@ static Function* generate_string_concat_function(Jit* jit, int count)
       for (int i = 0; i < count; i++)
       {
         MIR_reg_t n_ptr = MIR_reg(jit->ctx, params.elems[i].name, jit->function->u.func);
-        MIR_append_insn(
-          jit->ctx, jit->function,
-          MIR_new_insn(jit->ctx, MIR_ADD, MIR_new_reg_op(jit->ctx, size),
-                       i == 0 ? MIR_new_int_op(jit->ctx, 4) : MIR_new_reg_op(jit->ctx, size),
-                       generate_string_length_op(jit, n_ptr)));
+        MIR_append_insn(jit->ctx, jit->function,
+                        MIR_new_insn(jit->ctx, MIR_ADD, MIR_new_reg_op(jit->ctx, size),
+                                     i == 0 ? MIR_new_int_op(jit->ctx, sizeof(unsigned int) + 1)
+                                            : MIR_new_reg_op(jit->ctx, size),
+                                     generate_string_length_op(jit, n_ptr)));
       }
 
       generate_malloc_atomic_expression(jit, ptr, MIR_new_reg_op(jit->ctx, size));
 
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_SUB, generate_string_length_op(jit, ptr),
+                      MIR_new_insn(jit->ctx, MIR_SUB, MIR_new_reg_op(jit->ctx, size),
                                    MIR_new_reg_op(jit->ctx, size),
-                                   MIR_new_int_op(jit->ctx, sizeof(unsigned int))));
+                                   MIR_new_int_op(jit->ctx, sizeof(unsigned int) + 1)));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_MOV, generate_string_length_op(jit, ptr),
+                                   MIR_new_reg_op(jit->ctx, size)));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, data_type_to_mov_type(DATA_TYPE(TYPE_STRING)),
+                                   generate_string_at_op(jit, ptr, size),
+                                   MIR_new_int_op(jit->ctx, 0)));
     }
 
     {
@@ -2076,7 +2116,7 @@ static Function* generate_write_function(Jit* jit, DataType data_type)
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(data_type),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(data_type), 0, ptr, 0, 0),
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(data_type), 0, ptr, 0, 0),
                      MIR_new_reg_op(jit->ctx, value)));
     }
 
@@ -2120,11 +2160,10 @@ static Function* generate_read_function(Jit* jit, DataType data_type)
       MIR_reg_t dest =
         _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(data_type), jit->function->u.func);
 
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, data_type_to_mov_type(data_type),
-                                   MIR_new_reg_op(jit->ctx, dest),
-                                   MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(data_type),
-                                                  0, ptr, 0, 0)));
+      MIR_append_insn(
+        jit->ctx, jit->function,
+        MIR_new_insn(jit->ctx, data_type_to_mov_type(data_type), MIR_new_reg_op(jit->ctx, dest),
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(data_type), 0, ptr, 0, 0)));
 
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_ret_insn(jit->ctx, 1, MIR_new_reg_op(jit->ctx, dest)));
@@ -2966,7 +3005,7 @@ static Function* generate_string_array_cast_function(Jit* jit, DataType data_typ
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_reg_op(jit->ctx, expr),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, i, size_data_type(element_data_type))));
 
       generate_string_literal_expression(jit, MIR_new_reg_op(jit->ctx, tmp), "", -1);
@@ -3179,8 +3218,8 @@ static Function* generate_string_object_cast_function(Jit* jit, DataType data_ty
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(list_element_data_type),
                      MIR_new_reg_op(jit->ctx, expr),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(list_element_data_type),
-                                    0, array_ptr, i, size_data_type(list_element_data_type))));
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(list_element_data_type), 0,
+                                    array_ptr, i, size_data_type(list_element_data_type))));
 
       {
         MIR_label_t cont_label = MIR_new_label(jit->ctx);
@@ -4026,7 +4065,7 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, index, size_data_type(element_data_type)),
                      MIR_new_reg_op(jit->ctx, value)));
 
@@ -4097,7 +4136,8 @@ static void generate_call_expression(Jit* jit, MIR_reg_t dest, CallExpr* express
   array_foreach(&expression->arguments, argument)
   {
     MIR_reg_t temp =
-      _MIR_new_temp_reg(jit->ctx, proto->u.proto->args->varr[_i].type, jit->function->u.func);
+      _MIR_new_temp_reg(jit->ctx, sized_mir_type_to_mir_type(proto->u.proto->args->varr[_i].type),
+                        jit->function->u.func);
     generate_expression(jit, temp, argument);
 
     array_add(&arguments, MIR_new_reg_op(jit->ctx, temp));
@@ -4235,7 +4275,7 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
         expression->index_token,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_reg_op(jit->ctx, dest),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type), 0,
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type), 0,
                                     array_ptr, index, size_data_type(element_data_type)))));
 
     return;
@@ -4302,7 +4342,7 @@ static void generate_array_expression(Jit* jit, MIR_reg_t dest, LiteralArrayExpr
       MIR_append_insn(
         jit->ctx, jit->function,
         MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
-                     MIR_new_mem_op(jit->ctx, data_type_to_mir_array_type(element_data_type),
+                     MIR_new_mem_op(jit->ctx, data_type_to_sized_type(element_data_type),
                                     _i * size_data_type(element_data_type), array_ptr, 0, 1),
                      MIR_new_reg_op(jit->ctx, item)));
     }
@@ -4488,7 +4528,8 @@ static void generate_return_statement(Jit* jit, ReturnStmt* statement)
   if (statement->expr)
   {
     MIR_reg_t temp =
-      _MIR_new_temp_reg(jit->ctx, *jit->function->u.func->res_types, jit->function->u.func);
+      _MIR_new_temp_reg(jit->ctx, sized_mir_type_to_mir_type(*jit->function->u.func->res_types),
+                        jit->function->u.func);
     generate_expression(jit, temp, statement->expr);
 
     MIR_append_insn(jit->ctx, jit->function,
@@ -4805,7 +4846,7 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
   {
     MIR_var_t var;
     var.name = memory_sprintf("%s.%d", parameter->name.lexeme, parameter->index);
-    var.type = data_type_to_mir_type(parameter->data_type);
+    var.type = data_type_to_sized_type(parameter->data_type);
 
     array_add(&vars, var);
   }
@@ -4813,7 +4854,7 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
   statement->proto = MIR_new_proto_arr(
     jit->ctx, memory_sprintf("%s.proto", statement->name.lexeme),
     statement->data_type.type != TYPE_VOID,
-    (MIR_type_t[]){ data_type_to_mir_type(statement->data_type) }, vars.size, vars.elems);
+    (MIR_type_t[]){ data_type_to_sized_type(statement->data_type) }, vars.size, vars.elems);
 
   if (statement->import)
   {
@@ -4824,7 +4865,7 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
   {
     statement->item = MIR_new_func_arr(
       jit->ctx, statement->name.lexeme, statement->data_type.type != TYPE_VOID,
-      (MIR_type_t[]){ data_type_to_mir_type(statement->data_type) }, vars.size, vars.elems);
+      (MIR_type_t[]){ data_type_to_sized_type(statement->data_type) }, vars.size, vars.elems);
 
     array_foreach(&statement->parameters, parameter)
     {

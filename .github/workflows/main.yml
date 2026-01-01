@@ -51,6 +51,7 @@ jobs:
         run: |
           cd build
           make test
+          make testwasm
 
       - name: Build (Emscripten)
         run: |
@@ -105,3 +106,4 @@ jobs:
         run: |
           cd winbuild
           msbuild test.vcxproj
+          msbuild testwasm.vcxproj

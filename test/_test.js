@@ -54,7 +54,7 @@ for (const filename of scripts) {
         };
       });
 
-    const process = child_process.spawnSync(executable, [], { input: text });
+    const process = child_process.spawnSync(executable, ["-"], { input: text });
     const status = process.status;
     const output = process.stdout.toString();
     const errors = process.stderr
@@ -64,7 +64,7 @@ for (const filename of scripts) {
       .filter(Boolean)
       .map((line) => {
         const matches = line.match(
-          /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
+          /^([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
         );
 
         return matches

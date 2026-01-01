@@ -5045,7 +5045,7 @@ static void init_statements(Jit* jit, ArrayStmt* statements)
 
 static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 {
-  printf("%s\n", what);
+  fprintf(stderr, "%s\n", what);
 
   for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_PREV(MIR_item_t, item))
@@ -5105,14 +5105,14 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
           {
             if (ptr != previous_ptr)
             {
-              printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+              fprintf(stderr, "  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
 
               previous_count = 0;
             }
             else
             {
               if (previous_count == 0)
-                printf("  at ...\n");
+                fprintf(stderr, "  at ...\n");
 
               previous_count++;
             }
@@ -5128,7 +5128,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 
   if (jit->jmp == NULL)
   {
-    printf("Panic was not caught, terminating program!\n");
+    fprintf(stderr, "Panic was not caught, terminating program!\n");
     exit(-1);
   }
 
@@ -5295,7 +5295,7 @@ void jit_generate(Jit* jit, bool logging)
 
   MIR_load_module(jit->ctx, jit->module);
   MIR_gen_init(jit->ctx);
-  MIR_gen_set_optimize_level(jit->ctx, 4);
+  MIR_gen_set_optimize_level(jit->ctx, 3);
   MIR_link(jit->ctx, MIR_set_gen_interface, NULL);
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
 
@@ -5458,6 +5458,7 @@ void jit_pop_jmp(Jit* jit, void* old)
     sigaction(SIGFPE, NULL, NULL);
 #endif
 
+    sig_fp = 0;
     sig_jit = NULL;
   }
 }

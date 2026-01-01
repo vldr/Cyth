@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 option(WASM "WASM codegen" OFF)
 
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose Debug or Release" FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose Debug or Release" FORCE)
 endif()
 
 project(cyth)
@@ -35,15 +35,15 @@ else()
         add_link_options(-pthread -lm)
     endif()
 
+    add_custom_target(test
+        COMMAND node test/_test.js $<TARGET_FILE:cyth>
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        DEPENDS cyth
+    )
+
     if (WASM)
-        add_custom_target(test
+        add_custom_target(testwasm
             COMMAND node test/_test_wasm.js $<TARGET_FILE:cyth>
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            DEPENDS cyth
-        )
-    else()
-        add_custom_target(test
-            COMMAND node test/_test.js $<TARGET_FILE:cyth>
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             DEPENDS cyth
         )
@@ -101,6 +101,10 @@ endif()
 if (WASM OR EMSCRIPTEN)
     target_compile_definitions(cyth PRIVATE WASM=1)
     target_link_libraries(cyth PRIVATE binaryen)
+
+    if (MSVC)
+        target_link_libraries(libcyth PRIVATE binaryen)
+    endif()
 endif()
 
 if (NOT EMSCRIPTEN)

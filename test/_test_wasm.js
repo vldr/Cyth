@@ -47,7 +47,7 @@ for (const filename of scripts) {
         };
       });
 
-    const process = child_process.spawnSync(executable, [], { input: text });
+    const process = child_process.spawnSync(executable, ["wasm", "-"], { input: text });
     const logs = [];
     const status = process.status;
     const bytecode = process.stdout;
@@ -58,7 +58,7 @@ for (const filename of scripts) {
       .filter(Boolean)
       .map((line) => {
         const matches = line.match(
-          /^\(null\):([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
+          /^([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
         );
 
         return matches

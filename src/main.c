@@ -24,6 +24,9 @@ static struct
 {
   bool error;
   bool logging;
+  bool typecheck;
+  bool wasm;
+  bool io;
 
   const char* input_path;
   const char* output_path;
@@ -34,7 +37,9 @@ static struct
 
 #ifdef WASM
 #include "codegen.h"
-#else
+#endif
+
+#ifndef EMSCRIPTEN
 #include "jit.h"
 
 static void log_int(int n)
@@ -130,7 +135,7 @@ void run(char* source, bool codegen)
   if (cyth.error)
     goto clean_up;
 
-#ifdef WASM
+#ifdef EMSCRIPTEN
   if (codegen)
   {
     codegen_init(statements);
@@ -141,22 +146,34 @@ void run(char* source, bool codegen)
 #else
   if (codegen)
   {
-    Jit* jit = jit_init(statements);
-    jit_set_function(jit, "env.log", (uintptr_t)log_int);
-    jit_set_function(jit, "env.log(int)", (uintptr_t)log_int);
-    jit_set_function(jit, "env.log(bool)", (uintptr_t)log_int);
-    jit_set_function(jit, "env.log(float)", (uintptr_t)log_float);
-    jit_set_function(jit, "env.log(char)", (uintptr_t)log_char);
-    jit_set_function(jit, "env.log(string)", (uintptr_t)log_string);
-    jit_set_function(jit, "env.log<int>", (uintptr_t)log_int);
-    jit_set_function(jit, "env.log<bool>", (uintptr_t)log_int);
-    jit_set_function(jit, "env.log<float>", (uintptr_t)log_float);
-    jit_set_function(jit, "env.log<char>", (uintptr_t)log_char);
-    jit_set_function(jit, "env.log<string>", (uintptr_t)log_string);
+#ifdef WASM
+    if (cyth.wasm)
+    {
+      codegen_init(statements);
+      Codegen codegen = codegen_generate(cyth.logging);
 
-    jit_generate(jit, cyth.logging);
-    jit_run(jit);
-    jit_destroy(jit);
+      cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
+    }
+    else
+#endif
+    {
+      Jit* jit = jit_init(statements);
+      jit_set_function(jit, "env.log", (uintptr_t)log_int);
+      jit_set_function(jit, "env.log(int)", (uintptr_t)log_int);
+      jit_set_function(jit, "env.log(bool)", (uintptr_t)log_int);
+      jit_set_function(jit, "env.log(float)", (uintptr_t)log_float);
+      jit_set_function(jit, "env.log(char)", (uintptr_t)log_char);
+      jit_set_function(jit, "env.log(string)", (uintptr_t)log_string);
+      jit_set_function(jit, "env.log<int>", (uintptr_t)log_int);
+      jit_set_function(jit, "env.log<bool>", (uintptr_t)log_int);
+      jit_set_function(jit, "env.log<float>", (uintptr_t)log_float);
+      jit_set_function(jit, "env.log<char>", (uintptr_t)log_char);
+      jit_set_function(jit, "env.log<string>", (uintptr_t)log_string);
+
+      jit_generate(jit, cyth.logging);
+      jit_run(jit);
+      jit_destroy(jit);
+    }
   }
 #endif
 
@@ -170,7 +187,7 @@ static void run_file(void)
   int result = setmode(fileno(stdin), O_BINARY);
   if (result == -1)
   {
-    fprintf(stderr, "Could set 'stdin' mode to binary\n");
+    fprintf(stderr, "error: could set 'stdin' mode to binary\n");
 
     cyth.error = true;
     return;
@@ -179,19 +196,42 @@ static void run_file(void)
   result = setmode(fileno(stdout), O_BINARY);
   if (result == -1)
   {
-    fprintf(stderr, "Could set 'stdout' mode to binary\n");
+    fprintf(stderr, "error: could set 'stdout' mode to binary\n");
 
     cyth.error = true;
     return;
   }
 #endif
 
-  if (cyth.input_path)
+  if (cyth.io)
   {
+    ArrayChar source;
+    array_init(&source);
+
+    char c;
+    while ((c = getchar()) != EOF)
+    {
+      array_add(&source, c);
+    }
+
+    array_add(&source, '\0');
+
+    run(source.elems, !cyth.typecheck);
+  }
+  else
+  {
+    if (!cyth.input_path)
+    {
+      fprintf(stderr, "error: no input file\n");
+
+      cyth.error = true;
+      return;
+    }
+
     FILE* file = fopen(cyth.input_path, "rb");
     if (!file)
     {
-      fprintf(stderr, "Could not open file: %s\n", cyth.input_path);
+      fprintf(stderr, "error: could not open file: %s\n", cyth.input_path);
 
       cyth.error = true;
       return;
@@ -206,7 +246,7 @@ static void run_file(void)
 
     if (file_size != bytes_read)
     {
-      fprintf(stderr, "Could not read file: %s\n", cyth.input_path);
+      fprintf(stderr, "error: could not read file: %s\n", cyth.input_path);
 
       cyth.error = true;
       return;
@@ -215,52 +255,34 @@ static void run_file(void)
     fclose(file);
     source[file_size] = '\0';
 
-    run(source, true);
-  }
-  else
-  {
-    ArrayChar source;
-    array_init(&source);
-
-    char c;
-    while ((c = getchar()) != EOF)
-    {
-      array_add(&source, c);
-    }
-
-    array_add(&source, '\0');
-
-    run(source.elems, true);
+    run(source, !cyth.typecheck);
   }
 }
 
 static void handle_error(int start_line, int start_column, int end_line, int end_column,
                          const char* message)
 {
-  fprintf(stderr, "%s:%d:%d-%d:%d: error: %s\n", cyth.input_path, start_line, start_column,
-          end_line, end_column, message);
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.input_path ? cyth.input_path : "",
+          cyth.input_path ? ":" : "", start_line, start_column, end_line, end_column, message);
 }
 
 static void handle_result(size_t size, void* data, size_t source_map_size, void* source_map)
 {
-  if (!data)
-    return;
-
   (void)source_map_size;
 
-  if (cyth.input_path && !cyth.output_path)
+  if (!cyth.io && !cyth.output_path)
     goto clean_up;
 
   FILE* file;
 
-  if (cyth.input_path)
-    file = fopen(cyth.output_path, "wb");
-  else
+  if (cyth.io)
     file = stdout;
+  else
+    file = fopen(cyth.output_path, "wb");
 
   if (!file)
   {
-    fprintf(stderr, "Could not open file: %s\n", cyth.output_path);
+    fprintf(stderr, "error: could not open file: %s\n", cyth.output_path);
 
     cyth.error = true;
     goto clean_up;
@@ -269,7 +291,7 @@ static void handle_result(size_t size, void* data, size_t source_map_size, void*
   size_t bytes_written = fwrite(data, sizeof(unsigned char), size, file);
   if (size != bytes_written)
   {
-    fprintf(stderr, "Could not write file: %s\n", cyth.output_path);
+    fprintf(stderr, "error: could not write file: %s\n", cyth.output_path);
 
     cyth.error = true;
     goto clean_up_fd;
@@ -286,18 +308,77 @@ clean_up:
 int main(int argc, char* argv[])
 {
   if (argc < 2)
-    cyth.input_path = NULL;
-  else
-    cyth.input_path = argv[1];
+  {
+    printf("usage: cyth [options] <input_file>\n");
 
-  if (argc < 3)
-    cyth.output_path = NULL;
-  else
-    cyth.output_path = argv[2];
+#ifdef WASM
+    printf("       cyth wasm [options] <input_file> [output_file]\n");
+#endif
+
+    printf("\n"
+           "Available options are:\n"
+           "  -t Parse and type-check only.\n"
+           "  -l Print IR.\n"
+           "  -  Read from stdin and output to stdout (will ignore options).\n");
+
+    return 0;
+  }
+
+  int arg = 1;
+
+#ifdef WASM
+  if (strcmp(argv[1], "wasm") == 0)
+  {
+    cyth.wasm = true;
+    arg++;
+  }
+#endif
+
+  for (; arg < argc; arg++)
+  {
+    if (strcmp(argv[arg], "-l") == 0)
+    {
+      cyth.logging = true;
+    }
+    else if (strcmp(argv[arg], "-t") == 0)
+    {
+      cyth.typecheck = true;
+    }
+    else if (strcmp(argv[arg], "-") == 0)
+    {
+      cyth.io = true;
+    }
+    else
+    {
+      if (argv[arg][0] != '-')
+      {
+        if (cyth.input_path == NULL)
+        {
+          cyth.input_path = argv[arg];
+        }
+#ifdef WASM
+        else if (cyth.output_path == NULL && cyth.wasm)
+        {
+          cyth.output_path = argv[arg];
+        }
+#endif
+        else
+        {
+          fprintf(stderr, "error: unknown non-option: '%s'\n", argv[arg]);
+          return -1;
+        }
+      }
+      else
+      {
+        fprintf(stderr, "error: unknown option: '%s'\n", argv[arg]);
+        return -1;
+      }
+    }
+  }
 
   set_error_callback(handle_error);
   set_result_callback(handle_result);
-  set_logging(cyth.input_path && !cyth.output_path);
+  set_logging(cyth.logging);
 
   run_file();
   memory_free();

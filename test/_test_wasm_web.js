@@ -55,7 +55,7 @@ const files = await fs.readdir(import.meta.dirname);
 const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) : files.filter((f) => f.endsWith(".cy"));
 
 for (const filename of scripts) {
-  await test(filename, async () => {
+  await test(filename + " (wasm)", async () => {
     const fullPath = path.join(import.meta.dirname, filename);
     const text = await fs.readFile(fullPath, "utf-8");
     const expectedLogs = text

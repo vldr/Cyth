@@ -5062,7 +5062,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
       if (pc >= ptr && pc < ptr + insn->size)
       {
         if (insn->line && insn->column)
-          printf("  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+          fprintf(stderr, "  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
       }
 
       offset += insn->size;
@@ -5081,7 +5081,9 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
   uintptr_t previous_ptr = 0;
   uintptr_t previous_count = 0;
 
-  while (fp && fp < sig_fp)
+  uintptr_t sig_fp_min = (uintptr_t)alloca(sizeof(uintptr_t));
+
+  while (fp >= sig_fp_min && fp <= sig_fp)
   {
     uintptr_t pc = *(uintptr_t*)(fp + sizeof(uintptr_t));
 
@@ -5297,6 +5299,7 @@ void jit_generate(Jit* jit, bool logging)
   MIR_gen_init(jit->ctx);
   MIR_gen_set_optimize_level(jit->ctx, 3);
   MIR_link(jit->ctx, MIR_set_gen_interface, NULL);
+
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
 
   for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;

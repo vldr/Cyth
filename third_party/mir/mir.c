@@ -1144,7 +1144,7 @@ MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len) {
 }
 
 static MIR_type_t canon_type (MIR_type_t type) {
-#if defined(_WIN32) || __SIZEOF_LONG_DOUBLE__ == 8
+#if defined(_M_AMD64) || __SIZEOF_LONG_DOUBLE__ == 8
   if (type == MIR_T_LD) type = MIR_T_D;
 #endif
   return type;
@@ -2179,7 +2179,7 @@ static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t c
   insn = MIR_malloc (ctx->alloc, sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (nops - 1));
   if (insn == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for insn creation");
-#if defined(_WIN32) || __SIZEOF_LONG_DOUBLE__ == 8
+#if defined(_M_AMD64) || __SIZEOF_LONG_DOUBLE__ == 8
   switch (code) {
   case MIR_LDMOV: code = MIR_DMOV; break;
   case MIR_I2LD: code = MIR_I2D; break;
@@ -2521,7 +2521,7 @@ MIR_op_t MIR_new_double_op (MIR_context_t ctx MIR_UNUSED, double d) {
 MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx MIR_UNUSED, long double ld) {
   MIR_op_t op;
 
-#if defined(_WIN32) || __SIZEOF_LONG_DOUBLE__ == 8
+#if defined(_M_AMD64) || __SIZEOF_LONG_DOUBLE__ == 8
   return MIR_new_double_op (ctx, ld);
 #endif
   mir_assert (sizeof (long double) == 16); /* machine-defined 80- or 128-bit FP  */
@@ -6038,7 +6038,7 @@ static void scan_number (MIR_context_t ctx, int ch, int get_char (MIR_context_t)
       *double_p = FALSE;
       ch = get_char (ctx);
     } else if (ch == 'l' || ch == 'L') {
-#if !defined(_WIN32) && __SIZEOF_LONG_DOUBLE__ != 8
+#if !defined(_M_AMD64) && __SIZEOF_LONG_DOUBLE__ != 8
       *ldouble_p = TRUE;
       *double_p = FALSE;
 #endif
@@ -6592,7 +6592,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         op.u.f = t.u.f;
         break;
       case TC_LDOUBLE: op.mode = MIR_OP_LDOUBLE; op.u.ld = t.u.ld;
-#if !defined(_WIN32) && __SIZEOF_LONG_DOUBLE__ != 8
+#if !defined(_M_AMD64) && __SIZEOF_LONG_DOUBLE__ != 8
         break;
 #endif
       case TC_DOUBLE:
@@ -6928,7 +6928,7 @@ void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len) {
 
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-x86_64.c"
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(_M_ARM64)
 #include "mir-aarch64.c"
 #elif defined(__PPC64__)
 #include "mir-ppc64.c"

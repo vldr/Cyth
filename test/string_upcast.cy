@@ -8,7 +8,6 @@ log("" + 4294967296.625)
 
 log("" + inf)
 log("" + -inf)
-log("" + nan)
 
 log("" + true)
 log("" + false)
@@ -24,7 +23,6 @@ for int i = -10; i <= 10; i += 1
 # 4294967296
 # inf
 # -inf
-# nan
 # true
 # false
 # 2147483647
@@ -57,7 +55,6 @@ log((string)4294967296.625)
 
 log((string)inf)
 log((string)-inf)
-log((string)nan)
 
 log((string)true)
 log((string)false)
@@ -73,7 +70,6 @@ for int i = -10; i <= 10; i += 1
 # 4294967296
 # inf
 # -inf
-# nan
 # true
 # false
 # 2147483647

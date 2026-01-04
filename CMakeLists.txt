@@ -67,9 +67,13 @@ if (NOT EMSCRIPTEN)
     list(APPEND SOURCES src/jit.c src/jit.h)
 
     if (MSVC)
-        enable_language(C ASM_MASM)
- 
-        list(APPEND SOURCES src/longjmp.asm)
+        if (CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+            enable_language(C ASM_MARMASM)
+            list(APPEND SOURCES src/longjmp.arm64.asm)
+        else()
+            enable_language(C ASM_MASM)
+            list(APPEND SOURCES src/longjmp.x64.asm)
+        endif()
     endif()
 endif()
 
@@ -77,7 +81,6 @@ add_executable(cyth ${SOURCES})
 
 if (MSVC)
     add_library(libcyth ${SOURCES})
-    target_compile_options(cyth PRIVATE /MP)
 else()
     target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -fsigned-char)
 

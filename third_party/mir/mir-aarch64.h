@@ -5,6 +5,10 @@
 
 #include "mir.h"
 
+#if defined(_M_ARM64)
+#define __SIZEOF_LONG_DOUBLE__ 8
+#endif
+
 #define TARGET_NOP 0xd503201f
 
 #define HREG_EL(h) h##_HARD_REG
@@ -46,7 +50,7 @@ static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type
 
 static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_M_ARM64)
   if (hard_reg == R18_HARD_REG) return TRUE;
 #endif
   return (hard_reg == R29_HARD_REG /*FP*/ || hard_reg == SP_HARD_REG

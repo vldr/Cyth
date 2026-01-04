@@ -5319,26 +5319,33 @@ void jit_generate(Jit* jit, bool logging)
 PVOID handler;
 static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
 {
+  uintptr_t pc = 0;
+  uintptr_t fp = 0;
+
+#ifdef _M_ARM64
+  pc = ExceptionInfo->ContextRecord->Pc ? ExceptionInfo->ContextRecord->Pc
+                                        : ExceptionInfo->ContextRecord->Lr - 4;
+  fp = ExceptionInfo->ContextRecord->Fp;
+#else
+  pc = ExceptionInfo->ContextRecord->Rip ? ExceptionInfo->ContextRecord->Rip
+                                         : (*(uintptr_t*)ExceptionInfo->ContextRecord->Rsp) - 2;
+  fp = ExceptionInfo->ContextRecord->Rbp;
+#endif
+
   switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
   {
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-    panic(sig_jit, "Division by zero", ExceptionInfo->ContextRecord->Rip,
-          ExceptionInfo->ContextRecord->Rbp);
+    panic(sig_jit, "Division by zero", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_STACK_OVERFLOW:
-    panic(sig_jit, "Stack overflow", ExceptionInfo->ContextRecord->Rip,
-          ExceptionInfo->ContextRecord->Rbp);
+    panic(sig_jit, "Stack overflow", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
-  case EXCEPTION_ACCESS_VIOLATION: {
-    panic(sig_jit, "Null pointer access",
-          ExceptionInfo->ContextRecord->Rip ? ExceptionInfo->ContextRecord->Rip
-                                            : (*(uintptr_t*)ExceptionInfo->ContextRecord->Rsp) - 2,
-          ExceptionInfo->ContextRecord->Rbp);
+  case EXCEPTION_ACCESS_VIOLATION:
+    panic(sig_jit, "Null pointer access", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
-  }
 
   default:
     return EXCEPTION_CONTINUE_SEARCH;

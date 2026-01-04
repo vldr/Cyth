@@ -2448,6 +2448,11 @@ static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
   size_t size = _MIR_type_size (ctx, op_ref->u.var_mem.type);
   int scale = gen_int_log2 ((int64_t) size);
 
+#if defined(_M_ARM64)
+  if (size == 1)
+    scale = 1;
+#endif
+
   if (op_ref->u.var_mem.disp == 0
       && ((op_ref->u.var_mem.index == MIR_NON_VAR || op_ref->u.var_mem.scale == 1
            || op_ref->u.var_mem.scale == scale)))

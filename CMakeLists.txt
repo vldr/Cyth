@@ -80,7 +80,7 @@ endif()
 add_executable(cyth ${SOURCES})
 
 if (MSVC)
-    add_library(libcyth ${SOURCES})
+    add_library(libcyth STATIC ${SOURCES})
 else()
     target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -fsigned-char)
 

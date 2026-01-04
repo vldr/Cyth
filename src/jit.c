@@ -5302,6 +5302,8 @@ void jit_generate(Jit* jit, bool logging)
 
   jit->start = (Start)MIR_gen(jit->ctx, jit->function);
 
+  GC_set_no_dls(true);
+
   for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_NEXT(MIR_item_t, item))
   {

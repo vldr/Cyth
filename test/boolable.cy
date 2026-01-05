@@ -9,6 +9,7 @@ string b = "hello"
 any c = Object()
 Object d = Object()
 void(string) e = (void(string))log
+int[] f = [1,2,3]
 
 if a
     log("integer")
@@ -28,11 +29,15 @@ if e
 if null
     log("null")
 
+if f
+    log("array")
+
 # integer
 # string
 # any
 # class
 # function pointer
+# array
 
 if true and a
     log("integer")
@@ -79,11 +84,21 @@ if false or e
 # function pointer
 # function pointer
 
+if true and f
+    log("array")
+
+if false or f
+    log("array")
+
+# array
+# array
+
 a = 0
 b = ""
 c = null
 d = null
 e = null
+f = []
 
 if not a
     log("integer")
@@ -100,6 +115,9 @@ if not d
 if not e
     log("function pointer")
 
+if not f
+    log("array")
+
 if not null
     log("null")
 
@@ -108,6 +126,7 @@ if not null
 # any
 # class
 # function pointer
+# array
 # null
 
 if true and not a
@@ -154,3 +173,12 @@ if false or not e
 
 # function pointer
 # function pointer
+
+if true and not f
+    log("array")
+
+if false or not f
+    log("array")
+
+# array
+# array

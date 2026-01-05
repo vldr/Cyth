@@ -616,8 +616,9 @@ bool nullable_data_type(DataType data_type)
 
 bool boolable_data_type(DataType data_type)
 {
-  return nullable_data_type(data_type) || data_type.type == TYPE_INTEGER ||
-         data_type.type == TYPE_STRING || data_type.type == TYPE_BOOL;
+  return nullable_data_type(data_type) || data_type.type == TYPE_ARRAY ||
+         data_type.type == TYPE_INTEGER || data_type.type == TYPE_STRING ||
+         data_type.type == TYPE_BOOL;
 }
 
 bool assignable_data_type(Expr** expression, DataType destination, DataType source)
@@ -1888,11 +1889,11 @@ static void init_variable_declaration(VarStmt* statement)
   else
   {
     statement->data_type = data_type_token_to_data_type(statement->type);
-  }
 
-  if (statement->data_type.type == TYPE_VOID)
-  {
-    error_type_cannot_be_void(statement->type.token);
+    if (statement->data_type.type == TYPE_VOID)
+    {
+      error_type_cannot_be_void(statement->type.token);
+    }
   }
 
   if (checker.function)
@@ -2428,6 +2429,7 @@ skip:
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_STRING)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_FUNCTION_POINTER)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_OBJECT)) &&
+        !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_ARRAY)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_ANY)) &&
         !upcast_boolable_to_bool(expression, &left, &right, DATA_TYPE(TYPE_NULL)))
     {

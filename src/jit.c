@@ -1094,7 +1094,7 @@ static Function* generate_array_reserve_function(Jit* jit, DataType data_type)
 
       MIR_append_insn(
         jit->ctx, jit->function,
-        MIR_new_insn(jit->ctx, MIR_MOV,
+        MIR_new_insn(jit->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_mem_op(jit->ctx, data_type_to_sized_mir_type(element_data_type), 0,
                                     array_ptr, i, size_data_type(element_data_type)),
                      MIR_new_reg_op(jit->ctx, dest)));
@@ -3722,6 +3722,12 @@ static void generate_cast_expression(Jit* jit, MIR_reg_t dest, CastExpr* express
       MIR_append_insn(jit->ctx, jit->function,
                       MIR_new_insn(jit->ctx, MIR_NES, MIR_new_reg_op(jit->ctx, dest),
                                    generate_string_length_op(jit, expr),
+                                   MIR_new_int_op(jit->ctx, 0)));
+      return;
+    case TYPE_ARRAY:
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_NES, MIR_new_reg_op(jit->ctx, dest),
+                                   generate_array_length_op(jit, expr),
                                    MIR_new_int_op(jit->ctx, 0)));
       return;
     case TYPE_ANY:

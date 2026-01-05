@@ -4197,6 +4197,10 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       return BinaryenBinary(codegen.module, BinaryenNeInt32(),
                             BinaryenArrayLen(codegen.module, value),
                             BinaryenConst(codegen.module, BinaryenLiteralInt32(0)));
+    case TYPE_ARRAY:
+      return BinaryenBinary(codegen.module, BinaryenNeInt32(),
+                            BinaryenStructGet(codegen.module, 1, value, BinaryenTypeInt32(), false),
+                            BinaryenConst(codegen.module, BinaryenLiteralInt32(0)));
     case TYPE_ANY:
     case TYPE_NULL:
     case TYPE_OBJECT:

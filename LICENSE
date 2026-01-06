@@ -28,6 +28,16 @@ third_party/binaryen/LICENSE.
 
 ==============================================================================
 
+MIR is used in this repo, and it has the MIT license, see
+third_party/mir/LICENSE.
+
+==============================================================================
+
+Boehm is used in this repo, and it has the MIT license, see
+third_party/bdwgc/LICENSE.
+
+==============================================================================
+
 The license for source file src/memory.c and src/memory.h:
 
 Copyright 2022 Alexey Kutepov <reximkut@gmail.com>

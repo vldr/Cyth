@@ -52,7 +52,7 @@ endif()
 
 set(SOURCES
     src/array.h src/checker.c src/checker.h src/environment.c src/environment.h
-    src/expression.h src/lexer.c src/lexer.h src/main.c src/main.h src/map.c
+    src/expression.h src/lexer.c src/lexer.h src/main.h src/map.c
     src/map.h src/memory.c src/memory.h src/parser.c src/parser.h src/statement.h
 )
 
@@ -77,18 +77,25 @@ if (NOT EMSCRIPTEN)
     endif()
 endif()
 
-add_executable(cyth ${SOURCES})
+add_executable(cyth src/main.c ${SOURCES})
 
-if (MSVC)
-    add_library(libcyth STATIC ${SOURCES})
-else()
-    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -fsigned-char)
-
+if (NOT MSVC)
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(cyth PRIVATE -fsanitize=address -fsanitize=undefined -D_DEBUG)
     else()
         target_compile_options(cyth PRIVATE -flto)
     endif()
+endif()
+
+if (NOT EMSCRIPTEN)
+    add_library(libcyth STATIC ${SOURCES})
+    target_include_directories(libcyth PUBLIC src/)
+
+    set_property(TARGET libcyth PROPERTY OUTPUT_NAME cyth)
+endif()
+
+if (NOT MSVC)
+    target_compile_options(cyth PRIVATE -Wall -Wextra -pedantic -fsigned-char)
 endif()
 
 if (EMSCRIPTEN)
@@ -105,7 +112,8 @@ if (WASM OR EMSCRIPTEN)
     target_compile_definitions(cyth PRIVATE WASM=1)
     target_link_libraries(cyth PRIVATE binaryen)
 
-    if (MSVC)
+    if (NOT EMSCRIPTEN)
+        target_compile_definitions(libcyth PRIVATE WASM=1)
         target_link_libraries(libcyth PRIVATE binaryen)
     endif()
 endif()
@@ -114,9 +122,7 @@ if (NOT EMSCRIPTEN)
     target_link_libraries(cyth PRIVATE mir)
     target_link_libraries(cyth PRIVATE bdwgc)
 
-    if (MSVC)
-        target_link_libraries(libcyth PRIVATE mir)
-        target_link_libraries(libcyth PRIVATE bdwgc)
-    endif()
+    target_link_libraries(libcyth PRIVATE mir)
+    target_link_libraries(libcyth PRIVATE bdwgc)
 endif()
 

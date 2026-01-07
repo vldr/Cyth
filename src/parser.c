@@ -2,7 +2,6 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
-#include "main.h"
 #include "statement.h"
 
 #include <math.h>
@@ -17,20 +16,24 @@ static DataTypeToken data_type_array_function(bool* skip_greater_greater);
 
 static struct
 {
-  bool error;
   int current;
   unsigned int classes;
   ArrayToken tokens;
+
+  bool error;
+  int errors;
+  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
+                         const char* message);
 } parser;
 
-static void parser_error(Token token, const char* message)
+static void error(Token token, const char* message)
 {
   if (!parser.error)
-  {
-    error(token.start_line, token.start_column, token.end_line, token.end_column, message);
-  }
+    parser.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
+                          message);
 
   parser.error = true;
+  parser.errors++;
 }
 
 static Token peek(void)
@@ -84,7 +87,7 @@ static Token consume(TokenKind type, const char* message)
 {
   if (!check(type))
   {
-    parser_error(peek(), message);
+    error(peek(), message);
   }
 
   return advance();
@@ -318,7 +321,7 @@ static DataTypeToken consume_data_type(const char* message)
   if (!data_type_token.type)
   {
     seek(current);
-    parser_error(peek(), message);
+    error(peek(), message);
   }
 
   return data_type_token;
@@ -463,9 +466,9 @@ static Expr* primary(void)
     expr->literal.string.length = token.length;
 
     if (expr->literal.string.length > 1)
-      parser_error(token, "Character constant cannot have multiple characters.");
+      error(token, "Character constant cannot have multiple characters.");
     else if (expr->literal.string.length == 0)
-      parser_error(token, "Character constant cannot be empty.");
+      error(token, "Character constant cannot be empty.");
 
     break;
   case TOKEN_STRING:
@@ -557,7 +560,7 @@ static Expr* primary(void)
 
     break;
   default:
-    parser_error(token, "Expected an expression.");
+    error(token, "Expected an expression.");
     break;
   }
 
@@ -1026,7 +1029,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   {
     Token types_token = combine_tokens(start_token, end_token);
 
-    parser_error(types_token, "The types list cannot be empty.");
+    error(types_token, "The types list cannot be empty.");
   }
 
   stmt->func_template.count = 0;
@@ -1111,7 +1114,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
   if (!array_size(&stmt->class_template.types))
   {
-    parser_error(types_token, "The types list cannot be empty.");
+    error(types_token, "The types list cannot be empty.");
   }
 
   consume(TOKEN_NEWLINE, "Expected a newline.");
@@ -1127,8 +1130,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
           body_statement->type != STMT_FUNCTION_TEMPLATE_DECL &&
           body_statement->type != STMT_VARIABLE_DECL)
       {
-        parser_error(keyword,
-                     "Only functions and variables can appear inside 'class' declarations.");
+        error(keyword, "Only functions and variables can appear inside 'class' declarations.");
       }
     }
   }
@@ -1174,8 +1176,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
       }
       else
       {
-        parser_error(keyword,
-                     "Only functions and variables can appear inside 'class' declarations.");
+        error(keyword, "Only functions and variables can appear inside 'class' declarations.");
       }
     }
   }
@@ -1212,8 +1213,8 @@ static Stmt* import_declaration_statement(void)
       }
       else
       {
-        parser_error(stmt->import.keyword,
-                     "Only function signatures can appear inside 'import' declarations.");
+        error(stmt->import.keyword,
+              "Only function signatures can appear inside 'import' declarations.");
       }
     }
   }
@@ -1631,13 +1632,22 @@ static ArrayStmt statements(void)
   return statements;
 }
 
-void parser_init(ArrayToken tokens)
+void parser_init(ArrayToken tokens,
+                 void (*error_callback)(int start_line, int start_column, int end_line,
+                                        int end_column, const char* message))
 {
-  parser.error = false;
   parser.tokens = tokens;
   parser.classes = 0;
+  parser.errors = 0;
+  parser.error = false;
+  parser.error_callback = error_callback;
 
   seek(0);
+}
+
+int parser_errors(void)
+{
+  return parser.errors;
 }
 
 ArrayStmt parser_parse(void)

@@ -42,6 +42,4 @@
   } while (0)
 #endif
 
-void error(int start_line, int start_column, int end_line, int end_column, const char* message);
-
 #endif

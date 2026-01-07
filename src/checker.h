@@ -13,7 +13,10 @@ const char* data_type_to_string(DataType data_type);
 const char* function_data_type_to_string(const char* name, DataType data_type);
 DataType array_data_type_element(DataType array_data_type);
 
-void checker_init(ArrayStmt statements);
+void checker_init(ArrayStmt statements,
+                  void (*error_callback)(int start_line, int start_column, int end_line,
+                                         int end_column, const char* message));
+int checker_errors(void);
 void checker_validate(void);
 
 #endif

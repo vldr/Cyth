@@ -1,6 +1,5 @@
 #include "lexer.h"
 #include "array.h"
-#include "main.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -33,6 +32,11 @@ static struct
   char* start;
   char* current;
 
+  bool error;
+  int errors;
+  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
+                         const char* message);
+
   enum
   {
     INDENTATION_NONE,
@@ -42,6 +46,14 @@ static struct
   ArrayInt indentation;
   ArrayToken tokens;
 } lexer;
+
+static void error(int start_line, int start_column, int end_line, int end_column,
+                  const char* message)
+{
+  lexer.error = true;
+  lexer.errors++;
+  lexer.error_callback(start_line, start_column, end_line, end_column, message);
+}
 
 static void add_custom_token(TokenKind type, const char* lexeme, int length)
 {
@@ -642,9 +654,9 @@ static void scan_indentation(void)
 
   if ((lexer.indentation_type & INDENTATION_SPACE) && (lexer.indentation_type & INDENTATION_TAB))
   {
+    lexer.indentation_type = INDENTATION_NONE;
     error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
           "Mixing of tabs and spaces.");
-    lexer.indentation_type = INDENTATION_NONE;
   }
 
   if (indentation > array_last(&lexer.indentation))
@@ -668,8 +680,10 @@ static void scan_indentation(void)
   }
 }
 
-void lexer_init(char* source)
+void lexer_init(char* source, void (*error_callback)(int start_line, int start_column, int end_line,
+                                                     int end_column, const char* message))
 {
+
   lexer.start = source;
   lexer.current = source;
   lexer.start_line = 1;
@@ -678,10 +692,18 @@ void lexer_init(char* source)
   lexer.current_column = lexer.start_column;
   lexer.multi_line = 0;
   lexer.indentation_type = INDENTATION_NONE;
+  lexer.errors = 0;
+  lexer.error = false;
+  lexer.error_callback = error_callback;
 
   array_init(&lexer.tokens);
   array_init(&lexer.indentation);
   array_add(&lexer.indentation, 0);
+}
+
+int lexer_errors(void)
+{
+  return lexer.errors;
 }
 
 ArrayToken lexer_scan(void)

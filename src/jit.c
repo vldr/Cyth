@@ -6,6 +6,7 @@
 #include "main.h"
 #include "map.h"
 #include "memory.h"
+#include "parser.h"
 #include "statement.h"
 
 #include <ctype.h>
@@ -68,6 +69,8 @@ struct _JIT
   Function string_int_cast;
   Function string_float_cast;
   Function string_char_cast;
+
+  void (*panic_callback)(const char* name, int line, int column);
 };
 
 uintptr_t sig_fp;
@@ -5143,11 +5146,39 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
   jit_longjmp(*jit->jmp, 1);
 }
 
-Jit* jit_init(ArrayStmt statements)
+Jit* jit_init(char* source,
+              void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
+                                     const char* message),
+              void (*panic_callback)(const char* name, int line, int column))
 {
-  Jit* jit = malloc(sizeof(Jit));
-  memset(jit, 0, sizeof(Jit));
+  lexer_init(source, error_callback);
+  ArrayToken tokens = lexer_scan();
 
+  if (lexer_errors())
+  {
+    memory_reset();
+    return NULL;
+  }
+
+  parser_init(tokens, error_callback);
+  ArrayStmt statements = parser_parse();
+
+  if (parser_errors())
+  {
+    memory_reset();
+    return NULL;
+  }
+
+  checker_init(statements, error_callback);
+  checker_validate();
+
+  if (checker_errors())
+  {
+    memory_reset();
+    return NULL;
+  }
+
+  Jit* jit = malloc(sizeof(Jit));
   jit->statements = statements;
   jit->ctx = MIR_init();
   jit->module = MIR_new_module(jit->ctx, "main");
@@ -5155,6 +5186,7 @@ Jit* jit_init(ArrayStmt statements)
   jit->continue_label = NULL;
   jit->break_label = NULL;
   jit->jmp = NULL;
+  jit->panic_callback = panic_callback;
 
   MIR_load_external(jit->ctx, "panic", (uintptr_t)panic);
   jit->panic.proto = MIR_new_proto_arr(jit->ctx, "panic.proto", 0, NULL, 4,
@@ -5249,7 +5281,7 @@ Jit* jit_init(ArrayStmt statements)
   return jit;
 }
 
-void* jit_alloc(bool atomic, size_t size)
+void* jit_alloc(int atomic, uintptr_t size)
 {
   return atomic ? GC_malloc_atomic(size) : GC_malloc(size);
 }
@@ -5289,7 +5321,7 @@ uintptr_t jit_get_variable(Jit* jit, const char* name)
   return 0;
 }
 
-void jit_generate(Jit* jit, bool logging)
+void jit_generate(Jit* jit, int logging)
 {
   init_statements(jit, &jit->statements);
   generate_statements(jit, &jit->statements);
@@ -5321,6 +5353,8 @@ void jit_generate(Jit* jit, bool logging)
 
     GC_add_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
   }
+
+  memory_reset();
 }
 
 #ifdef _WIN32

@@ -2,6 +2,7 @@
 #define lexer_h
 
 #include "array.h"
+#include "main.h"
 #include "memory.h"
 
 #define TOKEN_EMPTY() ((Token){ 0 })
@@ -139,7 +140,9 @@ typedef struct _DATA_TYPE_TOKEN
   };
 } DataTypeToken;
 
-void lexer_init(char* source);
+void lexer_init(char* source, void (*error_callback)(int start_line, int start_column, int end_line,
+                                                     int end_column, const char* message));
+int lexer_errors(void);
 void lexer_print(void);
 ArrayToken lexer_scan(void);
 

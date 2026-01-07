@@ -15,11 +15,6 @@
 #include <io.h>
 #endif
 
-typedef void (*error_callback_t)(int start_line, int start_column, int end_line, int end_column,
-                                 const char* message);
-typedef void (*result_callback_t)(size_t size, void* data, size_t source_map_size,
-                                  void* source_map);
-
 static struct
 {
   bool error;
@@ -31,8 +26,9 @@ static struct
   const char* input_path;
   const char* output_path;
 
-  error_callback_t error_callback;
-  result_callback_t result_callback;
+  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
+                         const char* message);
+  void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
 } cyth;
 
 #ifdef WASM
@@ -62,32 +58,6 @@ static void log_string(String* n)
   fwrite(n->data, 1, n->size, stdout);
   putchar('\n');
 }
-
-Jit* jit(char* source)
-{
-  cyth.error = false;
-  memory_reset();
-
-  lexer_init(source);
-  ArrayToken tokens = lexer_scan();
-
-  if (cyth.error)
-    return NULL;
-
-  parser_init(tokens);
-  ArrayStmt statements = parser_parse();
-
-  if (cyth.error)
-    return NULL;
-
-  checker_init(statements);
-  checker_validate();
-
-  if (cyth.error)
-    return NULL;
-
-  return jit_init(statements);
-}
 #endif
 
 void set_logging(bool logging)
@@ -95,90 +65,76 @@ void set_logging(bool logging)
   cyth.logging = logging;
 }
 
-void set_error_callback(error_callback_t callback)
+void set_error_callback(void (*error_callback)(int start_line, int start_column, int end_line,
+                                               int end_column, const char* message))
 {
-  cyth.error_callback = callback;
+  cyth.error_callback = error_callback;
 }
 
-void set_result_callback(result_callback_t callback)
+void set_result_callback(void (*result_callback)(size_t size, void* data, size_t source_map_size,
+                                                 void* source_map))
 {
-  cyth.result_callback = callback;
-}
-
-void error(int start_line, int start_column, int end_line, int end_column, const char* message)
-{
-  if (cyth.error_callback)
-    cyth.error_callback(start_line, start_column, end_line, end_column, message);
-
-  cyth.error = true;
+  cyth.result_callback = result_callback;
 }
 
 void run(char* source, bool codegen)
 {
-  cyth.error = false;
-
-  lexer_init(source);
-  ArrayToken tokens = lexer_scan();
-
-  if (cyth.error)
-    goto clean_up;
-
-  parser_init(tokens);
-  ArrayStmt statements = parser_parse();
-
-  if (cyth.error)
-    goto clean_up;
-
-  checker_init(statements);
-  checker_validate();
-
-  if (cyth.error)
-    goto clean_up;
-
+  if (codegen)
+  {
 #ifdef EMSCRIPTEN
-  if (codegen)
-  {
-    codegen_init(statements);
-    Codegen codegen = codegen_generate(cyth.logging);
-
-    cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
-  }
+    if (codegen_init(source, cyth.error_callback, cyth.result_callback))
+      codegen_generate(cyth.logging);
 #else
-  if (codegen)
-  {
 #ifdef WASM
     if (cyth.wasm)
     {
-      codegen_init(statements);
-      Codegen codegen = codegen_generate(cyth.logging);
-
-      cyth.result_callback(codegen.size, codegen.data, codegen.source_map_size, codegen.source_map);
+      if (codegen_init(source, cyth.error_callback, cyth.result_callback))
+        codegen_generate(cyth.logging);
     }
     else
 #endif
     {
-      Jit* jit = jit_init(statements);
-      jit_set_function(jit, "env.log", (uintptr_t)log_int);
-      jit_set_function(jit, "env.log(int)", (uintptr_t)log_int);
-      jit_set_function(jit, "env.log(bool)", (uintptr_t)log_int);
-      jit_set_function(jit, "env.log(float)", (uintptr_t)log_float);
-      jit_set_function(jit, "env.log(char)", (uintptr_t)log_char);
-      jit_set_function(jit, "env.log(string)", (uintptr_t)log_string);
-      jit_set_function(jit, "env.log<int>", (uintptr_t)log_int);
-      jit_set_function(jit, "env.log<bool>", (uintptr_t)log_int);
-      jit_set_function(jit, "env.log<float>", (uintptr_t)log_float);
-      jit_set_function(jit, "env.log<char>", (uintptr_t)log_char);
-      jit_set_function(jit, "env.log<string>", (uintptr_t)log_string);
-
-      jit_generate(jit, cyth.logging);
-      jit_run(jit);
-      jit_destroy(jit);
+      Jit* jit = jit_init(source, cyth.error_callback, NULL);
+      if (jit)
+      {
+        jit_set_function(jit, "env.log", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log(int)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log(bool)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log(float)", (uintptr_t)log_float);
+        jit_set_function(jit, "env.log(char)", (uintptr_t)log_char);
+        jit_set_function(jit, "env.log(string)", (uintptr_t)log_string);
+        jit_set_function(jit, "env.log<int>", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log<bool>", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log<float>", (uintptr_t)log_float);
+        jit_set_function(jit, "env.log<char>", (uintptr_t)log_char);
+        jit_set_function(jit, "env.log<string>", (uintptr_t)log_string);
+        jit_generate(jit, cyth.logging);
+        jit_run(jit);
+        jit_destroy(jit);
+      }
     }
-  }
 #endif
+  }
+  else
+  {
+    lexer_init(source, cyth.error_callback);
+    ArrayToken tokens = lexer_scan();
 
-clean_up:
-  memory_reset();
+    if (lexer_errors())
+      goto clean_up;
+
+    parser_init(tokens, cyth.error_callback);
+    ArrayStmt statements = parser_parse();
+
+    if (parser_errors())
+      goto clean_up;
+
+    checker_init(statements, cyth.error_callback);
+    checker_validate();
+
+  clean_up:
+    memory_reset();
+  }
 }
 
 static void run_file(void)
@@ -262,6 +218,8 @@ static void run_file(void)
 static void handle_error(int start_line, int start_column, int end_line, int end_column,
                          const char* message)
 {
+  cyth.error = true;
+
   fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.input_path ? cyth.input_path : "",
           cyth.input_path ? ":" : "", start_line, start_column, end_line, end_column, message);
 }

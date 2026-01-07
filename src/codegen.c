@@ -6,6 +6,7 @@
 #include "main.h"
 #include "map.h"
 #include "memory.h"
+#include "parser.h"
 #include "statement.h"
 
 #include <binaryen-c.h>
@@ -84,6 +85,8 @@ static struct
   const char* function;
   int strings;
   int loop;
+
+  void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
 } codegen;
 
 static const char* get_function_member(DataType data_type, const char* name)
@@ -5150,14 +5153,46 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-void codegen_init(ArrayStmt statements)
+int codegen_init(char* source,
+                 void (*error_callback)(int start_line, int start_column, int end_line,
+                                        int end_column, const char* message),
+                 void (*result_callback)(size_t size, void* data, size_t source_map_size,
+                                         void* source_map))
 {
+  lexer_init(source, error_callback);
+  ArrayToken tokens = lexer_scan();
+
+  if (lexer_errors())
+  {
+    memory_reset();
+    return false;
+  }
+
+  parser_init(tokens, error_callback);
+  ArrayStmt statements = parser_parse();
+
+  if (parser_errors())
+  {
+    memory_reset();
+    return false;
+  }
+
+  checker_init(statements, error_callback);
+  checker_validate();
+
+  if (checker_errors())
+  {
+    memory_reset();
+    return false;
+  }
+
   codegen.module = BinaryenModuleCreate();
   codegen.class = BinaryenTypeNone();
   codegen.statements = statements;
   codegen.loop = 0;
   codegen.strings = 0;
   codegen.function = "<start>";
+  codegen.result_callback = result_callback;
 
   array_init(&codegen.debug_info);
   array_init(&codegen.global_local_types);
@@ -5169,11 +5204,12 @@ void codegen_init(ArrayStmt statements)
   codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, false);
   map_init_sint(&codegen.string_constants, 0, 0);
   map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
+
+  return true;
 }
 
-Codegen codegen_generate(bool logging)
+void codegen_generate(int logging)
 {
-  Codegen result = { 0 };
   BinaryenExpressionRef body = generate_statements(&codegen.statements);
 
   VarStmt* statement;
@@ -5203,18 +5239,16 @@ Codegen codegen_generate(bool logging)
   {
     BinaryenModuleOptimize(codegen.module);
 
-    BinaryenModuleAllocateAndWriteResult binaryen_result =
+    BinaryenModuleAllocateAndWriteResult result =
       BinaryenModuleAllocateAndWrite(codegen.module, "");
 
-    result.data = binaryen_result.binary;
-    result.size = binaryen_result.binaryBytes;
-    result.source_map = binaryen_result.sourceMap;
-    result.source_map_size = strlen(binaryen_result.sourceMap);
+    codegen.result_callback(result.binaryBytes, result.binary, strlen(result.sourceMap),
+                            result.sourceMap);
   }
 
   if (logging)
     BinaryenModulePrint(codegen.module);
 
   BinaryenModuleDispose(codegen.module);
-  return result;
+  memory_reset();
 }

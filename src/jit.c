@@ -5054,10 +5054,8 @@ static void init_statements(Jit* jit, ArrayStmt* statements)
 
 static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 {
-  if (!jit->panic_callback)
-    return;
-
-  jit->panic_callback(what, 0, 0);
+  if (jit->panic_callback)
+    jit->panic_callback(what, 0, 0);
 
   for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_PREV(MIR_item_t, item))
@@ -5074,7 +5072,8 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
       if (pc >= ptr && pc < ptr + insn->size)
       {
         if (insn->line && insn->column)
-          jit->panic_callback(item->u.func->name, insn->line, insn->column);
+          if (jit->panic_callback)
+            jit->panic_callback(item->u.func->name, insn->line, insn->column);
       }
 
       offset += insn->size;
@@ -5113,7 +5112,8 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
         if (pc >= ptr && pc < ptr + insn->size)
         {
           if (insn->line && insn->column)
-            jit->panic_callback(item->u.func->name, insn->line, insn->column);
+            if (jit->panic_callback)
+              jit->panic_callback(item->u.func->name, insn->line, insn->column);
         }
       }
     }

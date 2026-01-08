@@ -70,7 +70,7 @@ struct _JIT
   Function string_float_cast;
   Function string_char_cast;
 
-  void (*panic_callback)(const char* name, int line, int column);
+  void (*panic_callback)(const char* function, int line, int column);
 };
 
 uintptr_t sig_fp;
@@ -5054,7 +5054,10 @@ static void init_statements(Jit* jit, ArrayStmt* statements)
 
 static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 {
-  fprintf(stderr, "%s\n", what);
+  if (!jit->panic_callback)
+    return;
+
+  jit->panic_callback(what, 0, 0);
 
   for (MIR_item_t item = DLIST_TAIL(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_PREV(MIR_item_t, item))
@@ -5071,7 +5074,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
       if (pc >= ptr && pc < ptr + insn->size)
       {
         if (insn->line && insn->column)
-          fprintf(stderr, "  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
+          jit->panic_callback(item->u.func->name, insn->line, insn->column);
       }
 
       offset += insn->size;
@@ -5086,9 +5089,6 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
     fp = (uintptr_t)_AddressOfReturnAddress() - 8;
 #endif
   }
-
-  uintptr_t previous_ptr = 0;
-  uintptr_t previous_count = 0;
 
   uintptr_t sig_fp_min = (uintptr_t)alloca(sizeof(uintptr_t));
 
@@ -5113,23 +5113,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
         if (pc >= ptr && pc < ptr + insn->size)
         {
           if (insn->line && insn->column)
-          {
-            if (ptr != previous_ptr)
-            {
-              fprintf(stderr, "  at %s:%d:%d\n", item->u.func->name, insn->line, insn->column);
-
-              previous_count = 0;
-            }
-            else
-            {
-              if (previous_count == 0)
-                fprintf(stderr, "  at ...\n");
-
-              previous_count++;
-            }
-          }
-
-          previous_ptr = ptr;
+            jit->panic_callback(item->u.func->name, insn->line, insn->column);
         }
       }
     }
@@ -5149,7 +5133,7 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
 Jit* jit_init(char* source,
               void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
                                      const char* message),
-              void (*panic_callback)(const char* name, int line, int column))
+              void (*panic_callback)(const char* function, int line, int column))
 {
   lexer_init(source, error_callback);
   ArrayToken tokens = lexer_scan();
@@ -5386,7 +5370,7 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_ACCESS_VIOLATION:
-    panic(sig_jit, "Null pointer access", pc, fp);
+    panic(sig_jit, "Invalid memory or null pointer access", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   default:
@@ -5442,7 +5426,7 @@ static void sig_handler(int sig, siginfo_t* si, void* ctx)
     if (fault < (uint8_t*)stack_base && fault >= (uint8_t*)stack_base - stack_size)
       panic(sig_jit, "Stack overflow", pc, fp);
     else if (fault < (uint8_t*)0xffff)
-      panic(sig_jit, "Null pointer access", pc, fp);
+      panic(sig_jit, "Invalid memory or null pointer access", pc, fp);
     else
       panic(sig_jit, "Internal runtime error", pc, fp);
   }

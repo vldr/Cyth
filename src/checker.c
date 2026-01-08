@@ -57,8 +57,9 @@ static void error(Token token, const char* message)
                      checker.template->start_line, checker.template->start_column);
 
   if (!checker.error)
-    checker.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
-                           message);
+    if (checker.error_callback)
+      checker.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
+                             message);
 
   checker.error = true;
   checker.errors++;

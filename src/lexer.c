@@ -52,7 +52,9 @@ static void error(int start_line, int start_column, int end_line, int end_column
 {
   lexer.error = true;
   lexer.errors++;
-  lexer.error_callback(start_line, start_column, end_line, end_column, message);
+
+  if (lexer.error_callback)
+    lexer.error_callback(start_line, start_column, end_line, end_column, message);
 }
 
 static void add_custom_token(TokenKind type, const char* lexeme, int length)

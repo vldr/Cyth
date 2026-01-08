@@ -29,8 +29,9 @@ static struct
 static void error(Token token, const char* message)
 {
   if (!parser.error)
-    parser.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
-                          message);
+    if (parser.error_callback)
+      parser.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
+                            message);
 
   parser.error = true;
   parser.errors++;

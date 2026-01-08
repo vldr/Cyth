@@ -5239,11 +5239,14 @@ void codegen_generate(int logging)
   {
     BinaryenModuleOptimize(codegen.module);
 
-    BinaryenModuleAllocateAndWriteResult result =
-      BinaryenModuleAllocateAndWrite(codegen.module, "");
+    if (codegen.result_callback)
+    {
+      BinaryenModuleAllocateAndWriteResult result =
+        BinaryenModuleAllocateAndWrite(codegen.module, "");
 
-    codegen.result_callback(result.binaryBytes, result.binary, strlen(result.sourceMap),
-                            result.sourceMap);
+      codegen.result_callback(result.binaryBytes, result.binary, strlen(result.sourceMap),
+                              result.sourceMap);
+    }
   }
 
   if (logging)

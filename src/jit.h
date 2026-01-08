@@ -41,7 +41,7 @@ extern "C"
   Jit* jit_init(char* source,
                 void (*error_callback)(int start_line, int start_column, int end_line,
                                        int end_column, const char* message),
-                void (*panic_callback)(const char* name, int line, int column));
+                void (*panic_callback)(const char* function, int line, int column));
   void* jit_alloc(int atomic, uintptr_t size);
   void jit_generate(Jit* jit, int logging);
   void jit_run(Jit* jit);

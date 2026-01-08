@@ -26,6 +26,11 @@ static struct
   const char* input_path;
   const char* output_path;
 
+  const char* previous_function;
+  int previous_line;
+  int previous_column;
+  int previous_count;
+
   void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
                          const char* message);
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
@@ -58,7 +63,84 @@ static void log_string(String* n)
   fwrite(n->data, 1, n->size, stdout);
   putchar('\n');
 }
+
+static void panic_callback(const char* function, int line, int column)
+{
+  if (line && column)
+  {
+    if (function == cyth.previous_function && line == cyth.previous_line &&
+        column == cyth.previous_column)
+    {
+      if (cyth.previous_count == 0)
+        fprintf(stderr, "  at ...\n");
+
+      cyth.previous_count++;
+    }
+    else
+    {
+      fprintf(stderr, "  at %s:%d:%d\n", function, line, column);
+      cyth.previous_count = 0;
+    }
+  }
+  else
+  {
+    fprintf(stderr, "%s\n", function);
+  }
+
+  cyth.previous_line = line;
+  cyth.previous_column = column;
+  cyth.previous_function = function;
+  cyth.error = true;
+}
 #endif
+
+static void error_callback(int start_line, int start_column, int end_line, int end_column,
+                           const char* message)
+{
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.input_path ? cyth.input_path : "",
+          cyth.input_path ? ":" : "", start_line, start_column, end_line, end_column, message);
+
+  cyth.error = true;
+}
+
+static void result_callback(size_t size, void* data, size_t source_map_size, void* source_map)
+{
+  (void)source_map_size;
+
+  if (!cyth.io && !cyth.output_path)
+    goto clean_up;
+
+  FILE* file;
+
+  if (cyth.io)
+    file = stdout;
+  else
+    file = fopen(cyth.output_path, "wb");
+
+  if (!file)
+  {
+    fprintf(stderr, "error: could not open file: %s\n", cyth.output_path);
+
+    cyth.error = true;
+    goto clean_up;
+  }
+
+  size_t bytes_written = fwrite(data, sizeof(unsigned char), size, file);
+  if (size != bytes_written)
+  {
+    fprintf(stderr, "error: could not write file: %s\n", cyth.output_path);
+
+    cyth.error = true;
+    goto clean_up_fd;
+  }
+
+clean_up_fd:
+  fclose(file);
+
+clean_up:
+  free(data);
+  free(source_map);
+}
 
 void set_logging(bool logging)
 {
@@ -94,7 +176,7 @@ void run(char* source, bool codegen)
     else
 #endif
     {
-      Jit* jit = jit_init(source, cyth.error_callback, NULL);
+      Jit* jit = jit_init(source, error_callback, panic_callback);
       if (jit)
       {
         jit_set_function(jit, "env.log", (uintptr_t)log_int);
@@ -215,54 +297,6 @@ static void run_file(void)
   }
 }
 
-static void handle_error(int start_line, int start_column, int end_line, int end_column,
-                         const char* message)
-{
-  cyth.error = true;
-
-  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.input_path ? cyth.input_path : "",
-          cyth.input_path ? ":" : "", start_line, start_column, end_line, end_column, message);
-}
-
-static void handle_result(size_t size, void* data, size_t source_map_size, void* source_map)
-{
-  (void)source_map_size;
-
-  if (!cyth.io && !cyth.output_path)
-    goto clean_up;
-
-  FILE* file;
-
-  if (cyth.io)
-    file = stdout;
-  else
-    file = fopen(cyth.output_path, "wb");
-
-  if (!file)
-  {
-    fprintf(stderr, "error: could not open file: %s\n", cyth.output_path);
-
-    cyth.error = true;
-    goto clean_up;
-  }
-
-  size_t bytes_written = fwrite(data, sizeof(unsigned char), size, file);
-  if (size != bytes_written)
-  {
-    fprintf(stderr, "error: could not write file: %s\n", cyth.output_path);
-
-    cyth.error = true;
-    goto clean_up_fd;
-  }
-
-clean_up_fd:
-  fclose(file);
-
-clean_up:
-  free(data);
-  free(source_map);
-}
-
 int main(int argc, char* argv[])
 {
   if (argc < 2)
@@ -334,8 +368,8 @@ int main(int argc, char* argv[])
     }
   }
 
-  set_error_callback(handle_error);
-  set_result_callback(handle_result);
+  set_error_callback(error_callback);
+  set_result_callback(result_callback);
   set_logging(cyth.logging);
 
   run_file();

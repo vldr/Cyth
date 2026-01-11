@@ -114,20 +114,18 @@ for (const filename of scripts) {
 
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
-          "log": log,
+          "log<bool>.void(bool)": log,
+          "log<int>.void(int)": log,
+          "log<float>.void(float)": log,
+          "log<string>.void(string)": log,
+          "log<char>.void(char)": log,
 
-          "log<bool>": log,
-          "log<int>": log,
-          "log<float>": log,
-          "log<string>": log,
-          "log<char>": log,
-
-          "log()": log,
-          "log(int)": log,
-          "log(float)": log,
-          "log(string)": log,
-          "log(char)": log,
-          "log(bool)": log,
+          "log.void()": log,
+          "log.void(int)": log,
+          "log.void(float)": log,
+          "log.void(string)": log,
+          "log.void(char)": log,
+          "log.void(bool)": log,
         },
       });
 

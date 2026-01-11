@@ -9,5 +9,5 @@ class A<Q>
 A<int>().test<int, float>(10, 10.0)
 A<int>().test<int, float>(10, 10)
 
-#! 9:10-9:14 Call of overloaded 'A<int>.test<int, float>(int, int)' is ambiguous; parameter types conflict with another function.
-#! 10:10-10:14 Call of overloaded 'A<int>.test<int, float>(int, int)' is ambiguous; parameter types conflict with another function.
+#! 9:10-9:14 Call of overloaded 'A<int>.test<int, float>.void(int, int)' is ambiguous; parameter types conflict with another function.
+#! 10:10-10:14 Call of overloaded 'A<int>.test<int, float>.void(int, int)' is ambiguous; parameter types conflict with another function.

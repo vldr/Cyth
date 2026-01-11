@@ -4865,9 +4865,12 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement)
   MIR_type_t res_types[] = { statement->import ? data_type_to_sized_mir_type(statement->data_type)
                                                : data_type_to_mir_type(statement->data_type) };
 
-  statement->proto =
-    MIR_new_proto_arr(jit->ctx, memory_sprintf("%s.proto", statement->name.lexeme),
-                      statement->data_type.type != TYPE_VOID, res_types, vars.size, vars.elems);
+  statement->proto = MIR_new_proto_arr(
+    jit->ctx,
+    memory_sprintf("%s.proto", statement->import ? memory_sprintf("%s.%s", statement->import,
+                                                                  statement->name.lexeme)
+                                                 : statement->name.lexeme),
+    statement->data_type.type != TYPE_VOID, res_types, vars.size, vars.elems);
 
   if (statement->import)
   {
@@ -5007,8 +5010,10 @@ static void init_variable_declaration(Jit* jit, VarStmt* statement)
   if (statement->scope == SCOPE_GLOBAL)
   {
     uint64_t init = 0;
-    statement->item = MIR_new_data(jit->ctx, statement->name.lexeme,
-                                   data_type_to_mir_type(statement->data_type), 1, &init);
+    statement->item = MIR_new_data(
+      jit->ctx,
+      memory_sprintf("%s.%s", statement->name.lexeme, data_type_to_string(statement->data_type)),
+      data_type_to_mir_type(statement->data_type), 1, &init);
   }
   else
   {

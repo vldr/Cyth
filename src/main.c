@@ -179,17 +179,16 @@ void run(char* source, bool codegen)
       Jit* jit = jit_init(source, error_callback, panic_callback);
       if (jit)
       {
-        jit_set_function(jit, "env.log", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log(int)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log(bool)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log(float)", (uintptr_t)log_float);
-        jit_set_function(jit, "env.log(char)", (uintptr_t)log_char);
-        jit_set_function(jit, "env.log(string)", (uintptr_t)log_string);
-        jit_set_function(jit, "env.log<int>", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log<bool>", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log<float>", (uintptr_t)log_float);
-        jit_set_function(jit, "env.log<char>", (uintptr_t)log_char);
-        jit_set_function(jit, "env.log<string>", (uintptr_t)log_string);
+        jit_set_function(jit, "env.log.void(int)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log.void(bool)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log.void(float)", (uintptr_t)log_float);
+        jit_set_function(jit, "env.log.void(char)", (uintptr_t)log_char);
+        jit_set_function(jit, "env.log.void(string)", (uintptr_t)log_string);
+        jit_set_function(jit, "env.log<int>.void(int)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log<bool>.void(bool)", (uintptr_t)log_int);
+        jit_set_function(jit, "env.log<float>.void(float)", (uintptr_t)log_float);
+        jit_set_function(jit, "env.log<char>.void(char)", (uintptr_t)log_char);
+        jit_set_function(jit, "env.log<string>.void(string)", (uintptr_t)log_string);
         jit_generate(jit, cyth.logging);
         jit_run(jit);
         jit_destroy(jit);

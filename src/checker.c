@@ -330,6 +330,10 @@ const char* function_data_type_to_string(const char* name, DataType data_type)
   {
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER: {
+    unsigned int offset = data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
+    FuncStmt* function = data_type.type == TYPE_FUNCTION_MEMBER ? data_type.function_member.function
+                                                                : data_type.function;
+
     ArrayChar string;
     array_init(&string);
 
@@ -337,15 +341,17 @@ const char* function_data_type_to_string(const char* name, DataType data_type)
     while (*c)
       array_add(&string, *c++);
 
-    unsigned int offset = data_type.type == TYPE_FUNCTION_MEMBER ? 1 : 0;
-    FuncStmt* function = data_type.type == TYPE_FUNCTION_MEMBER ? data_type.function_member.function
-                                                                : data_type.function;
+    array_add(&string, '.');
+
+    c = data_type_to_string(function->data_type);
+    while (*c)
+      array_add(&string, *c++);
 
     array_add(&string, '(');
 
     for (unsigned int i = offset; i < function->parameters.size; i++)
     {
-      const char* c = data_type_to_string(function->parameters.elems[i]->data_type);
+      c = data_type_to_string(function->parameters.elems[i]->data_type);
       while (*c)
         array_add(&string, *c++);
 
@@ -866,8 +872,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   return variable->data_type;
 }
 
-static DataType function_template_to_data_type(DataType template, DataTypeToken function_type,
-                                               bool overloaded)
+static DataType function_template_to_data_type(DataType template, DataTypeToken function_type)
 {
   const char* name = data_type_token_to_string(function_type, NULL);
   VarStmt* variable =
@@ -949,13 +954,6 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     init_function_declaration(function_statement);
 
   check_function_declaration(function_statement);
-
-  if (overloaded)
-  {
-    function_statement->name.lexeme = function_data_type_to_string(
-      function_statement->name.lexeme, function_statement->function_data_type);
-    function_statement->name.length = strlen(function_statement->name.lexeme);
-  }
 
   checker.class = previous_class;
   checker.function = previous_function;
@@ -1478,7 +1476,7 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
     function_type.token.end_line = name.end_line;
     function_type.token.end_column = name.end_column;
 
-    *data_type = function_template_to_data_type(*data_type, function_type, false);
+    *data_type = function_template_to_data_type(*data_type, function_type);
   }
   else if (data_type->type == TYPE_FUNCTION_GROUP)
   {
@@ -1512,7 +1510,7 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
           function_type.token.end_column = name.end_column;
 
           DataType function_data_type =
-            function_template_to_data_type(function_template_data_type, function_type, true);
+            function_template_to_data_type(function_template_data_type, function_type);
 
           if (checker.error)
           {
@@ -1552,20 +1550,6 @@ static void expand_template_types(ArrayDataTypeToken* types, DataType* data_type
 static void init_function_declaration(FuncStmt* statement)
 {
   const char* name = statement->name.lexeme;
-
-  if (checker.function)
-  {
-    statement->name.lexeme =
-      memory_sprintf("%s.%s:%d:%d", checker.function->name.lexeme, statement->name.lexeme,
-                     statement->name.start_line, statement->name.start_column);
-    statement->name.length = strlen(statement->name.lexeme);
-  }
-  else if (checker.loop || checker.cond)
-  {
-    statement->name.lexeme = memory_sprintf(
-      "%s:%d:%d", statement->name.lexeme, statement->name.start_line, statement->name.start_column);
-    statement->name.length = strlen(statement->name.lexeme);
-  }
 
   if (checker.class)
   {
@@ -1616,6 +1600,17 @@ static void init_function_declaration(FuncStmt* statement)
     statement->function_data_type.function = statement;
   }
 
+  statement->name.lexeme = function_data_type_to_string(name, statement->function_data_type);
+  statement->name.length = strlen(statement->name.lexeme);
+
+  if (checker.function || checker.loop || checker.cond)
+  {
+    statement->name.lexeme =
+      memory_sprintf("%s[%d:%d]", statement->name.lexeme, statement->name.start_line,
+                     statement->name.start_column);
+    statement->name.length = strlen(statement->name.lexeme);
+  }
+
   if (environment_check_variable(checker.environment, name))
   {
     VarStmt* variable = environment_get_variable(checker.environment, name);
@@ -1628,20 +1623,8 @@ static void init_function_declaration(FuncStmt* statement)
       if (variable->data_type.type != TYPE_FUNCTION_GROUP)
       {
         DataType function_data_type = variable->data_type;
-
-        if (variable->data_type.type == TYPE_FUNCTION ||
-            variable->data_type.type == TYPE_FUNCTION_MEMBER)
-        {
-          FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
-                                 ? function_data_type.function_member.function
-                                 : function_data_type.function;
-
-          function->name.lexeme =
-            function_data_type_to_string(function->name.lexeme, function_data_type);
-          function->name.length = strlen(function->name.lexeme);
-        }
-
         variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+
         array_init(&variable->data_type.function_group);
         array_add(&variable->data_type.function_group, function_data_type);
       }
@@ -1680,9 +1663,6 @@ static void init_function_declaration(FuncStmt* statement)
       }
 
       array_add(&variable->data_type.function_group, statement->function_data_type);
-
-      statement->name.lexeme = function_data_type_to_string(name, statement->function_data_type);
-      statement->name.length = strlen(statement->name.lexeme);
     }
     else
     {
@@ -1772,20 +1752,8 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
       if (variable->data_type.type != TYPE_FUNCTION_GROUP)
       {
         DataType function_data_type = variable->data_type;
-
-        if (variable->data_type.type == TYPE_FUNCTION ||
-            variable->data_type.type == TYPE_FUNCTION_MEMBER)
-        {
-          FuncStmt* function = function_data_type.type == TYPE_FUNCTION_MEMBER
-                                 ? function_data_type.function_member.function
-                                 : function_data_type.function;
-
-          function->name.lexeme =
-            function_data_type_to_string(function->name.lexeme, function_data_type);
-          function->name.length = strlen(function->name.lexeme);
-        }
-
         variable->data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+
         array_init(&variable->data_type.function_group);
         array_add(&variable->data_type.function_group, function_data_type);
       }

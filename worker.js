@@ -5,6 +5,17 @@ let context;
 let canvas;
 let debug;
 
+let startFunction;
+let lengthFunction;
+let atFunction;
+let drawFunction;
+let keyPressedFunction;
+let keyReleasedFunction;
+let mousePressedFunction;
+let mouseReleasedFunction;
+let mouseDraggedFunction;
+let mouseMovedFunction;
+
 function postError(error) {
   function decodeMappings(mappings) {
     const A = "A".charCodeAt(0);
@@ -142,6 +153,17 @@ function postError(error) {
   });
 };
 
+function log(text) {
+  if (typeof text === "object") {
+    const array = new Uint8Array(lengthFunction(text));
+    for (let i = 0; i < array.byteLength; i++) array[i] = atFunction(text, i);
+
+    postMessage({ type: "print", text: textDecoder.decode(array) });
+  } else {
+    postMessage({ type: "print", text });
+  }
+}
+
 onmessage = (event) => {
   const data = event.data;
 
@@ -154,28 +176,26 @@ onmessage = (event) => {
       module = new WebAssembly.Module(data.bytecode);
       instance = new WebAssembly.Instance(module, {
         env: {
-          log: function (text) {
-            if (typeof text === "object") {
-              const length = instance.exports["string.length"];
-              const at = instance.exports["string.at"];
+          "log<bool>.void(bool)": log,
+          "log<int>.void(int)": log,
+          "log<float>.void(float)": log,
+          "log<string>.void(string)": log,
+          "log<char>.void(char)": log,
+          "log.void()": log,
+          "log.void(int)": log,
+          "log.void(float)": log,
+          "log.void(string)": log,
+          "log.void(char)": log,
+          "log.void(bool)": log,
 
-              const array = new Uint8Array(length(text));
-              for (let i = 0; i < array.byteLength; i++) array[i] = at(text, i);
-
-              postMessage({ type: "print", text: textDecoder.decode(array) });
-            } else {
-              postMessage({ type: "print", text });
-            }
-          },
-
-          size: function (width, height) {
+          "size.void(int, int)": function (width, height) {
             canvas.width = width;
             canvas.height = height;
 
-            if (instance.exports["draw"]) {
+            if (drawFunction) {
               function render(time) {
                 try {
-                  instance.exports["draw"](time);
+                  drawFunction(time);
                   requestAnimationFrame(render);
                 } catch (error) {
                   postError(error);
@@ -186,46 +206,57 @@ onmessage = (event) => {
             }
           },
 
-          fill: function (r, g, b) {
+          "fill.void(int, int, int)": function (r, g, b) {
             context.fillStyle = `rgb(${r}, ${g}, ${b})`;
           },
 
-          clear: function () {
+          "clear.void()": function () {
             context.fillRect(0, 0, canvas.width, canvas.height);
           },
 
-          rect: function (x, y, width, height) {
+          "rect.void(int, int, int, int)": function (x, y, width, height) {
             context.fillRect(x, y, width, height);
           },
 
-          circle: function (x, y, radius) {
+          "circle.void(int, int, int)": function (x, y, radius) {
             context.beginPath();
             context.arc(x, y, radius, 0, 2 * Math.PI, false);
             context.fill();
           },
 
-          millis: function () {
+          "millis.int()": function () {
             return performance.now();
           },
 
-          random: Math.random,
-          sqrt: Math.sqrt,
-          cos: Math.cos,
-          sin: Math.sin,
-          tan: Math.tan,
-          atan: Math.atan,
-          atan2: Math.atan2,
-          pow: Math.pow,
+          "random.float()": Math.random,
+          "sqrt.float(float)": Math.sqrt,
+          "cos.float(float)": Math.cos,
+          "sin.float(float)": Math.sin,
+          "tan.float(float)": Math.tan,
+          "atan.float(float)": Math.atan,
+          "atan2.float(float, float)": Math.atan2,
+          "pow.float(float, float)": Math.pow,
         },
       });
 
+      startFunction = instance.exports["<start>"];
+      lengthFunction = instance.exports["string.length"];
+      atFunction = instance.exports["string.at"];
+      drawFunction = instance.exports["draw.void(int)"];
+      keyPressedFunction = instance.exports["keyPressed.void(char)"];
+      keyReleasedFunction = instance.exports["keyReleased.void(char)"];
+      mousePressedFunction = instance.exports["mousePressed.void(int, int)"];
+      mouseReleasedFunction = instance.exports["mouseReleased.void(int, int)"];
+      mouseDraggedFunction = instance.exports["mouseDragged.void(int, int)"];
+      mouseMovedFunction = instance.exports["mouseMoved.void(int, int)"];
+
       try {
-        instance.exports["<start>"]();
+        startFunction();
       } catch (error) {
         postError(error);
       }
 
-      if (!instance.exports["draw"]) {
+      if (!drawFunction) {
         postMessage({ type: "stop" });
       }
 
@@ -233,9 +264,9 @@ onmessage = (event) => {
     }
 
     case "keydown": {
-      if (instance.exports["keyPressed"]) {
+      if (keyPressedFunction) {
         try {
-          instance.exports["keyPressed"](data.key);
+          keyPressedFunction(data.key);
         } catch (error) {
           postError(error);
         }
@@ -245,9 +276,9 @@ onmessage = (event) => {
     }
 
     case "keyup": {
-      if (instance.exports["keyReleased"]) {
+      if (keyReleasedFunction) {
         try {
-          instance.exports["keyReleased"](data.key);
+          keyReleasedFunction(data.key);
         } catch (error) {
           postError(error);
         }
@@ -257,9 +288,9 @@ onmessage = (event) => {
     }
 
     case "mousedown": {
-      if (instance.exports["mousePressed"]) {
+      if (mousePressedFunction) {
         try {
-          instance.exports["mousePressed"](data.x, data.y);
+          mousePressedFunction(data.x, data.y);
         } catch (error) {
           postError(error);
         }
@@ -270,17 +301,17 @@ onmessage = (event) => {
 
     case "mousemove": {
       if (data.buttons) {
-        if (instance.exports["mouseDragged"]) {
+        if (mouseDraggedFunction) {
           try {
-            instance.exports["mouseDragged"](data.x, data.y);
+            mouseDraggedFunction(data.x, data.y);
           } catch (error) {
             postError(error);
           }
         }
       } else {
-        if (instance.exports["mouseMoved"]) {
+        if (mouseMovedFunction) {
           try {
-            instance.exports["mouseMoved"](data.x, data.y);
+            mouseMovedFunction(data.x, data.y);
           } catch (error) {
             postError(error);
           }
@@ -291,9 +322,9 @@ onmessage = (event) => {
     }
 
     case "mouseup": {
-      if (instance.exports["mouseReleased"]) {
+      if (mouseReleasedFunction) {
         try {
-          instance.exports["mouseReleased"](data.x, data.y);
+          mouseReleasedFunction(data.x, data.y);
         } catch (error) {
           postError(error);
         }

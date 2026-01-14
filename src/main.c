@@ -97,8 +97,8 @@ static void panic_callback(const char* function, int line, int column)
 static void error_callback(int start_line, int start_column, int end_line, int end_column,
                            const char* message)
 {
-  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.input_path ? cyth.input_path : "",
-          cyth.input_path ? ":" : "", start_line, start_column, end_line, end_column, message);
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.io ? "" : cyth.input_path,
+          cyth.io ? "" : ":", start_line, start_column, end_line, end_column, message);
 
   cyth.error = true;
 }
@@ -310,7 +310,7 @@ int main(int argc, char* argv[])
            "Available options are:\n"
            "  -t Parse and type-check only.\n"
            "  -l Print IR.\n"
-           "  -  Read from stdin and output to stdout (will ignore options).\n");
+           "  -  Read from stdin and output to stdout (will ignore other options).\n");
 
     return 0;
   }

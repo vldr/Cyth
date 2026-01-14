@@ -57,18 +57,25 @@ static void error(int start_line, int start_column, int end_line, int end_column
     lexer.error_callback(start_line, start_column, end_line, end_column, message);
 }
 
-static void add_custom_token(TokenKind type, const char* lexeme, int length)
+static void add_custom_token_offset(TokenKind type, int start_line, int start_column, int end_line,
+                                    int end_column, const char* lexeme, int length)
 {
   Token token;
   token.type = type;
-  token.start_line = lexer.start_line;
-  token.start_column = lexer.start_column;
-  token.end_line = lexer.current_line;
-  token.end_column = lexer.current_column;
+  token.start_line = start_line;
+  token.start_column = start_column;
+  token.end_line = end_line;
+  token.end_column = end_column;
   token.length = length;
   token.lexeme = memory_strldup(lexeme, length);
 
   array_add(&lexer.tokens, token);
+}
+
+static void add_custom_token(TokenKind type, const char* lexeme, int length)
+{
+  add_custom_token_offset(type, lexer.start_line, lexer.start_column, lexer.current_line,
+                          lexer.current_column, lexeme, length);
 }
 
 static void add_token(TokenKind type)
@@ -615,6 +622,7 @@ static void scan_indentation(void)
     return;
 
   int indentation = 0;
+  int indentation_type = INDENTATION_NONE;
 
   while (peek() == ' ' || peek() == '\t' || peek() == '\r' || peek() == '\n' || peek() == '#')
   {
@@ -633,13 +641,13 @@ static void scan_indentation(void)
       break;
     case ' ':
       indentation += 1;
-      lexer.indentation_type |= INDENTATION_SPACE;
+      indentation_type = INDENTATION_SPACE;
 
       advance();
       break;
     case '\t':
-      indentation += 4;
-      lexer.indentation_type |= INDENTATION_TAB;
+      indentation += 1;
+      indentation_type = INDENTATION_TAB;
 
       advance();
       break;
@@ -654,11 +662,21 @@ static void scan_indentation(void)
     return;
   }
 
-  if ((lexer.indentation_type & INDENTATION_SPACE) && (lexer.indentation_type & INDENTATION_TAB))
+  if (lexer.indentation_type == INDENTATION_SPACE)
   {
-    lexer.indentation_type = INDENTATION_NONE;
-    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Mixing of tabs and spaces.");
+    if (indentation_type == INDENTATION_TAB)
+      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
+            lexer.current_column, "Using tabs here but expected spaces.");
+  }
+  else if (lexer.indentation_type == INDENTATION_TAB)
+  {
+    if (indentation_type == INDENTATION_SPACE)
+      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
+            lexer.current_column, "Using spaces here but expected tabs.");
+  }
+  else if (indentation_type)
+  {
+    lexer.indentation_type = indentation_type;
   }
 
   if (indentation > array_last(&lexer.indentation))
@@ -676,8 +694,14 @@ static void scan_indentation(void)
 
     if (indentation != array_last(&lexer.indentation))
     {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unexpected deindent.");
+      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
+            lexer.current_column,
+            memory_sprintf("Unexpected indentation, expected %d %s%s but got %d %s%s.",
+                           array_last(&lexer.indentation),
+                           lexer.indentation_type == INDENTATION_SPACE ? "space" : "tab",
+                           array_last(&lexer.indentation) == 1 ? "" : "s", indentation,
+                           lexer.indentation_type == INDENTATION_SPACE ? "space" : "tab",
+                           indentation == 1 ? "" : "s"));
     }
   }
 }
@@ -776,6 +800,18 @@ void lexer_print(void)
       "TOKEN_PERCENT_EQUAL",
       "TOKEN_QUESTION",
 
+      "TOKEN_TILDE",
+      "TOKEN_AMPERSAND",
+      "TOKEN_AMPERSAND_EQUAL",
+      "TOKEN_PIPE",
+      "TOKEN_PIPE_EQUAL",
+      "TOKEN_CARET",
+      "TOKEN_CARET_EQUAL",
+      "TOKEN_LESS_LESS",
+      "TOKEN_LESS_LESS_EQUAL",
+      "TOKEN_GREATER_GREATER",
+      "TOKEN_GREATER_GREATER_EQUAL",
+
       "TOKEN_BANG",
       "TOKEN_BANG_EQUAL",
       "TOKEN_EQUAL",
@@ -787,6 +823,7 @@ void lexer_print(void)
 
       "TOKEN_IDENTIFIER",
       "TOKEN_IDENTIFIER_VOID",
+      "TOKEN_IDENTIFIER_ANY",
       "TOKEN_IDENTIFIER_INT",
       "TOKEN_IDENTIFIER_FLOAT",
       "TOKEN_IDENTIFIER_BOOL",

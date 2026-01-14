@@ -10,6 +10,6 @@ else()
     target_compile_options(mir PRIVATE -fsigned-char)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        target_compile_options(mir PRIVATE -flto)
+        target_compile_options(mir PRIVATE -flto=auto)
     endif()
 endif()

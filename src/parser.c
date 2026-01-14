@@ -9,8 +9,8 @@
 
 static Expr* prefix_unary(void);
 static Expr* expression(void);
-static Stmt* statement(void);
-static ArrayStmt statements(void);
+static void statement(ArrayStmt* stmts);
+static void statements(ArrayStmt* stmts);
 
 static DataTypeToken data_type_array_function(bool* skip_greater_greater);
 
@@ -992,7 +992,7 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
   consume(TOKEN_NEWLINE, "Expected a newline after ')'.");
 
   if (check(TOKEN_INDENT))
-    stmt->func.body = statements();
+    statements(&stmt->func.body);
 
   return stmt;
 }
@@ -1053,7 +1053,11 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   consume(TOKEN_NEWLINE, "Expected a newline after ')'.");
 
   if (check(TOKEN_INDENT))
-    statements();
+  {
+    ArrayStmt stmts;
+    array_init(&stmts);
+    statements(&stmts);
+  }
 
   return stmt;
 }
@@ -1122,9 +1126,11 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
   if (check(TOKEN_INDENT))
   {
-    Stmt* body_statement;
-    ArrayStmt body_statements = statements();
+    ArrayStmt body_statements;
+    array_init(&body_statements);
+    statements(&body_statements);
 
+    Stmt* body_statement;
     array_foreach(&body_statements, body_statement)
     {
       if (body_statement->type != STMT_FUNCTION_DECL &&
@@ -1158,9 +1164,11 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
 
   if (check(TOKEN_INDENT))
   {
-    Stmt* body_statement;
-    ArrayStmt body_statements = statements();
+    ArrayStmt body_statements;
+    array_init(&body_statements);
+    statements(&body_statements);
 
+    Stmt* body_statement;
     array_foreach(&body_statements, body_statement)
     {
       if (body_statement->type == STMT_FUNCTION_DECL)
@@ -1197,9 +1205,11 @@ static Stmt* import_declaration_statement(void)
 
   if (check(TOKEN_INDENT))
   {
-    Stmt* body_statement;
-    ArrayStmt body_statements = statements();
+    ArrayStmt body_statements;
+    array_init(&body_statements);
+    statements(&body_statements);
 
+    Stmt* body_statement;
     array_foreach(&body_statements, body_statement)
     {
       if (body_statement->type == STMT_FUNCTION_DECL)
@@ -1291,7 +1301,7 @@ static Stmt* if_statement(void)
   consume(TOKEN_NEWLINE, "Expected a newline after condition.");
 
   if (check(TOKEN_INDENT))
-    stmt->cond.then_branch = statements();
+    statements(&stmt->cond.then_branch);
 
   if (match(TOKEN_ELSE))
   {
@@ -1304,7 +1314,7 @@ static Stmt* if_statement(void)
       consume(TOKEN_NEWLINE, "Expected a newline after else.");
 
       if (check(TOKEN_INDENT))
-        stmt->cond.else_branch = statements();
+        statements(&stmt->cond.else_branch);
     }
   }
 
@@ -1325,7 +1335,7 @@ static Stmt* while_statement(void)
   consume(TOKEN_NEWLINE, "Expected a newline after condition.");
 
   if (check(TOKEN_INDENT))
-    stmt->loop.body = statements();
+    statements(&stmt->loop.body);
 
   return stmt;
 }
@@ -1438,7 +1448,7 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
 
   array_init(&stmt->loop.body);
   if (check(TOKEN_INDENT))
-    stmt->loop.body = statements();
+    statements(&stmt->loop.body);
 
   {
     Expr* counter = EXPR();
@@ -1548,30 +1558,30 @@ static Stmt* for_statement(void)
   array_init(&stmt->loop.body);
 
   if (check(TOKEN_INDENT))
-  {
-    stmt->loop.body = statements();
-  }
+    statements(&stmt->loop.body);
 
   return stmt;
 }
 
-static Stmt* statement(void)
+static void statement(ArrayStmt* stmts)
 {
   if (is_data_type_and_identifier())
   {
     DataTypeToken type = consume_data_type("Expected a type.");
     Token name = consume(TOKEN_IDENTIFIER, "Expected identifier after type.");
-
     Token token = peek();
 
     switch (token.type)
     {
     case TOKEN_LEFT_PAREN:
-      return function_declaration_statement(type, name);
+      array_add(stmts, function_declaration_statement(type, name));
+      break;
     case TOKEN_LESS:
-      return function_template_declaration_statement(type, name);
+      array_add(stmts, function_template_declaration_statement(type, name));
+      break;
     default:
-      return variable_declaration_statement(type, name, true);
+      array_add(stmts, variable_declaration_statement(type, name, true));
+      break;
     }
   }
   else
@@ -1581,44 +1591,54 @@ static Stmt* statement(void)
     switch (token.type)
     {
     case TOKEN_RETURN:
-      return return_statement();
+      array_add(stmts, return_statement());
+      break;
     case TOKEN_CONTINUE:
-      return continue_statement();
+      array_add(stmts, continue_statement());
+      break;
     case TOKEN_BREAK:
-      return break_statement();
+      array_add(stmts, break_statement());
+      break;
     case TOKEN_IF:
-      return if_statement();
+      array_add(stmts, if_statement());
+      break;
     case TOKEN_WHILE:
-      return while_statement();
+      array_add(stmts, while_statement());
+      break;
     case TOKEN_FOR:
-      return for_statement();
+      array_add(stmts, for_statement());
+      break;
     case TOKEN_IMPORT:
-      return import_declaration_statement();
+      array_add(stmts, import_declaration_statement());
+      break;
+    case TOKEN_INDENT:
+      statements(stmts);
+      break;
     case TOKEN_CLASS: {
       Token keyword = advance();
       Token name = consume(TOKEN_IDENTIFIER, "Expected class name.");
 
       if (check(TOKEN_LESS))
-        return class_template_declaration_statement(keyword, name);
+        array_add(stmts, class_template_declaration_statement(keyword, name));
       else
-        return class_declaration_statement(keyword, name);
+        array_add(stmts, class_declaration_statement(keyword, name));
+
+      break;
     }
     default:
-      return expression_statement(true);
+      array_add(stmts, expression_statement(true));
+      break;
     }
   }
 }
 
-static ArrayStmt statements(void)
+static void statements(ArrayStmt* stmts)
 {
-  ArrayStmt statements;
-  array_init(&statements);
-
   consume(TOKEN_INDENT, "Expected an indent.");
 
   while (!eof() && !check(TOKEN_DEDENT))
   {
-    array_add(&statements, statement());
+    statement(stmts);
 
     if (parser.error)
     {
@@ -1629,8 +1649,6 @@ static ArrayStmt statements(void)
   }
 
   consume(TOKEN_DEDENT, "Expected a dedent.");
-
-  return statements;
 }
 
 void parser_init(ArrayToken tokens,
@@ -1653,12 +1671,12 @@ int parser_errors(void)
 
 ArrayStmt parser_parse(void)
 {
-  ArrayStmt statements;
-  array_init(&statements);
+  ArrayStmt stmts;
+  array_init(&stmts);
 
   while (!eof())
   {
-    array_add(&statements, statement());
+    statement(&stmts);
 
     if (parser.error)
     {
@@ -1668,7 +1686,7 @@ ArrayStmt parser_parse(void)
     }
   }
 
-  return statements;
+  return stmts;
 }
 
 Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token name)

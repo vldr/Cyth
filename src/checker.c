@@ -1922,6 +1922,8 @@ static void init_import_declaration(ImportStmt* statement)
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
   {
+    checker.error = false;
+
     if (body_statement->type == STMT_FUNCTION_DECL)
       init_function_declaration(&body_statement->func);
     else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)

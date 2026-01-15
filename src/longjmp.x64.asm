@@ -28,8 +28,8 @@
 ;     uint128_t Xmm15;
 ; } *jmp_buf;
 
-; int jit_setjmp(jmp_buf env);   // jit_setjmp(rcx)
-jit_setjmp proc
+; int cyth_setjmp(jmp_buf env);   // cyth_setjmp(rcx)
+cyth_setjmp proc
     mov [rcx], rdx      ; Frame
     mov [rcx+8], rbx
     lea r8, [rsp+8]
@@ -57,10 +57,10 @@ jit_setjmp proc
     movdqa [rcx+0f0h], xmm15
     xor eax, eax    ; first phase: 0
     ret  
-jit_setjmp endp
+cyth_setjmp endp
 
-; void jit_longjmp(jmp_buf env, int retval);   // jit_longjmp(rcx, edx)
-jit_longjmp proc
+; void cyth_longjmp(jmp_buf env, int retval);   // cyth_longjmp(rcx, edx)
+cyth_longjmp proc
     mov eax, edx
     mov rdx, [rcx]      ; Frame
     mov rbx, [rcx+8]
@@ -84,6 +84,6 @@ jit_longjmp proc
     movdqa xmm14, [rcx+0e0h]
     movdqa xmm15, [rcx+0f0h]
     jmp r8
-jit_longjmp endp
+cyth_longjmp endp
 
 end

@@ -1,10 +1,10 @@
     AREA |.text|, CODE, READONLY
-    EXPORT jit_setjmp
+    EXPORT cyth_setjmp
 
-; int jit_setjmp(jmp_buf* env)
+; int cyth_setjmp(jmp_buf* env)
 ; x0 = env
 
-jit_setjmp PROC
+cyth_setjmp PROC
     stp x19, x20, [x0,#0]
 	stp x21, x22, [x0,#16]
 	stp x23, x24, [x0,#32]
@@ -19,15 +19,15 @@ jit_setjmp PROC
 	stp d14, d15, [x0,#160]
 	mov x0, #0
 	ret
-jit_setjmp ENDP
+cyth_setjmp ENDP
 
-    EXPORT jit_longjmp
+    EXPORT cyth_longjmp
 
-; void jit_longjmp(jmp_buf* env, int retval)
+; void cyth_longjmp(jmp_buf* env, int retval)
 ; x0 = env
 ; x1 = retval
 
-jit_longjmp PROC
+cyth_longjmp PROC
 	ldp x19, x20, [x0,#0]
 	ldp x21, x22, [x0,#16]
 	ldp x23, x24, [x0,#32]
@@ -45,6 +45,6 @@ jit_longjmp PROC
 ret_ok
 	mov x0, #1
 	br x30
-jit_longjmp ENDP
+cyth_longjmp ENDP
 
     END

@@ -58,13 +58,13 @@ set(SOURCES
 
 if (WASM OR EMSCRIPTEN)
     add_subdirectory(third_party/binaryen)
-    list(APPEND SOURCES src/codegen.c src/codegen.h)
+    list(APPEND SOURCES src/codegen.c)
 endif()
 
 if (NOT EMSCRIPTEN)
     add_subdirectory(third_party/mir)
     add_subdirectory(third_party/bdwgc)
-    list(APPEND SOURCES src/jit.c src/jit.h)
+    list(APPEND SOURCES src/jit.c)
 
     if (MSVC)
         if (CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
@@ -89,7 +89,7 @@ endif()
 
 if (NOT EMSCRIPTEN)
     add_library(libcyth STATIC ${SOURCES})
-    target_include_directories(libcyth PUBLIC src/)
+    target_include_directories(libcyth PUBLIC src/include/)
 
     set_property(TARGET libcyth PROPERTY OUTPUT_NAME cyth)
 endif()

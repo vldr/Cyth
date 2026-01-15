@@ -1,7 +1,7 @@
 #include "main.h"
 #include "array.h"
 #include "checker.h"
-#include "jit.h"
+#include "include/cyth.h"
 #include "lexer.h"
 #include "memory.h"
 #include "parser.h"
@@ -36,13 +36,7 @@ static struct
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
 } cyth;
 
-#ifdef WASM
-#include "codegen.h"
-#endif
-
 #ifndef EMSCRIPTEN
-#include "jit.h"
-
 static void log_int(int n)
 {
   printf("%d\n", n);
@@ -164,34 +158,34 @@ void run(char* source, bool codegen)
   if (codegen)
   {
 #ifdef EMSCRIPTEN
-    if (codegen_init(source, cyth.error_callback, cyth.result_callback))
-      codegen_generate(cyth.logging);
+    if (cyth_wasm_init(source, cyth.error_callback, cyth.result_callback))
+      cyth_wasm_generate(cyth.logging);
 #else
 #ifdef WASM
     if (cyth.wasm)
     {
-      if (codegen_init(source, cyth.error_callback, cyth.result_callback))
-        codegen_generate(cyth.logging);
+      if (cyth_wasm_init(source, cyth.error_callback, cyth.result_callback))
+        cyth_wasm_generate(cyth.logging);
     }
     else
 #endif
     {
-      Jit* jit = jit_init(source, error_callback, panic_callback);
+      Jit* jit = cyth_init(source, error_callback, panic_callback);
       if (jit)
       {
-        jit_set_function(jit, "env.log.void(int)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log.void(bool)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log.void(float)", (uintptr_t)log_float);
-        jit_set_function(jit, "env.log.void(char)", (uintptr_t)log_char);
-        jit_set_function(jit, "env.log.void(string)", (uintptr_t)log_string);
-        jit_set_function(jit, "env.log<int>.void(int)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log<bool>.void(bool)", (uintptr_t)log_int);
-        jit_set_function(jit, "env.log<float>.void(float)", (uintptr_t)log_float);
-        jit_set_function(jit, "env.log<char>.void(char)", (uintptr_t)log_char);
-        jit_set_function(jit, "env.log<string>.void(string)", (uintptr_t)log_string);
-        jit_generate(jit, cyth.logging);
-        jit_run(jit);
-        jit_destroy(jit);
+        cyth_set_function(jit, "env.log.void(int)", (uintptr_t)log_int);
+        cyth_set_function(jit, "env.log.void(bool)", (uintptr_t)log_int);
+        cyth_set_function(jit, "env.log.void(float)", (uintptr_t)log_float);
+        cyth_set_function(jit, "env.log.void(char)", (uintptr_t)log_char);
+        cyth_set_function(jit, "env.log.void(string)", (uintptr_t)log_string);
+        cyth_set_function(jit, "env.log<int>.void(int)", (uintptr_t)log_int);
+        cyth_set_function(jit, "env.log<bool>.void(bool)", (uintptr_t)log_int);
+        cyth_set_function(jit, "env.log<float>.void(float)", (uintptr_t)log_float);
+        cyth_set_function(jit, "env.log<char>.void(char)", (uintptr_t)log_char);
+        cyth_set_function(jit, "env.log<string>.void(string)", (uintptr_t)log_string);
+        cyth_generate(jit, cyth.logging);
+        cyth_run(jit);
+        cyth_destroy(jit);
       }
     }
 #endif

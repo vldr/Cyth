@@ -1,7 +1,7 @@
-#include "jit.h"
 #include "array.h"
 #include "checker.h"
 #include "expression.h"
+#include "include/cyth.h"
 #include "lexer.h"
 #include "main.h"
 #include "map.h"
@@ -132,8 +132,8 @@ static String* string_char_cast(char n)
 
 static String* string_bool_cast(bool n)
 {
-  jit_init_string(true_string, "true");
-  jit_init_string(false_string, "false");
+  cyth_static_string(true_string, "true");
+  cyth_static_string(false_string, "false");
 
   return n ? (String*)&true_string : (String*)&false_string;
 }
@@ -5132,13 +5132,13 @@ static void panic(Jit* jit, const char* what, uintptr_t pc, uintptr_t fp)
     exit(-1);
   }
 
-  jit_longjmp(*jit->jmp, 1);
+  cyth_longjmp(*jit->jmp, 1);
 }
 
-Jit* jit_init(char* source,
-              void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                                     const char* message),
-              void (*panic_callback)(const char* function, int line, int column))
+Jit* cyth_init(char* source,
+               void (*error_callback)(int start_line, int start_column, int end_line,
+                                      int end_column, const char* message),
+               void (*panic_callback)(const char* function, int line, int column))
 {
   lexer_init(source, error_callback);
   ArrayToken tokens = lexer_scan();
@@ -5270,17 +5270,17 @@ Jit* jit_init(char* source,
   return jit;
 }
 
-void* jit_alloc(int atomic, uintptr_t size)
+void* cyth_alloc(int atomic, uintptr_t size)
 {
   return atomic ? GC_malloc_atomic(size) : GC_malloc(size);
 }
 
-void jit_set_function(Jit* jit, const char* name, uintptr_t func)
+void cyth_set_function(Jit* jit, const char* name, uintptr_t func)
 {
   MIR_load_external(jit->ctx, name, func);
 }
 
-uintptr_t jit_get_function(Jit* jit, const char* name)
+uintptr_t cyth_get_function(Jit* jit, const char* name)
 {
   for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_NEXT(MIR_item_t, item))
@@ -5295,7 +5295,7 @@ uintptr_t jit_get_function(Jit* jit, const char* name)
   return 0;
 }
 
-uintptr_t jit_get_variable(Jit* jit, const char* name)
+uintptr_t cyth_get_variable(Jit* jit, const char* name)
 {
   for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_NEXT(MIR_item_t, item))
@@ -5310,7 +5310,7 @@ uintptr_t jit_get_variable(Jit* jit, const char* name)
   return 0;
 }
 
-void jit_generate(Jit* jit, int logging)
+void cyth_generate(Jit* jit, int logging)
 {
   init_statements(jit, &jit->statements);
   generate_statements(jit, &jit->statements);
@@ -5442,7 +5442,7 @@ static void sig_handler(int sig, siginfo_t* si, void* ctx)
 }
 #endif
 
-void* jit_push_jmp(Jit* jit, void* new)
+void* cyth_push_jmp(Jit* jit, void* new)
 {
   jmp_buf* old = jit->jmp;
   jit->jmp = new;
@@ -5485,7 +5485,7 @@ void* jit_push_jmp(Jit* jit, void* new)
   return old;
 }
 
-void jit_pop_jmp(Jit* jit, void* old)
+void cyth_pop_jmp(Jit* jit, void* old)
 {
   jit->jmp = old;
 
@@ -5504,12 +5504,12 @@ void jit_pop_jmp(Jit* jit, void* old)
   }
 }
 
-void jit_run(Jit* jit)
+void cyth_run(Jit* jit)
 {
-  jit_try_catch(jit, { jit->start(); });
+  cyth_try_catch(jit, { jit->start(); });
 }
 
-void jit_destroy(Jit* jit)
+void cyth_destroy(Jit* jit)
 {
   for (MIR_item_t item = DLIST_HEAD(MIR_item_t, jit->module->items); item != NULL;
        item = DLIST_NEXT(MIR_item_t, item))

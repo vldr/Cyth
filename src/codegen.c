@@ -1,4 +1,3 @@
-#include "codegen.h"
 #include "array.h"
 #include "checker.h"
 #include "expression.h"
@@ -5153,11 +5152,11 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-int codegen_init(char* source,
-                 void (*error_callback)(int start_line, int start_column, int end_line,
-                                        int end_column, const char* message),
-                 void (*result_callback)(size_t size, void* data, size_t source_map_size,
-                                         void* source_map))
+int cyth_wasm_init(char* source,
+                   void (*error_callback)(int start_line, int start_column, int end_line,
+                                          int end_column, const char* message),
+                   void (*result_callback)(size_t size, void* data, size_t source_map_size,
+                                           void* source_map))
 {
   lexer_init(source, error_callback);
   ArrayToken tokens = lexer_scan();
@@ -5208,7 +5207,7 @@ int codegen_init(char* source,
   return true;
 }
 
-void codegen_generate(int logging)
+void cyth_wasm_generate(int logging)
 {
   BinaryenExpressionRef body = generate_statements(&codegen.statements);
 

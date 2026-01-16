@@ -52,8 +52,8 @@ endif()
 
 set(SOURCES
     src/array.h src/checker.c src/checker.h src/environment.c src/environment.h
-    src/expression.h src/lexer.c src/lexer.h src/main.h src/map.c
-    src/map.h src/memory.c src/memory.h src/parser.c src/parser.h src/statement.h
+    src/expression.h src/lexer.c src/lexer.h src/main.h src/map.c src/map.h
+    src/memory.c src/memory.h src/parser.c src/parser.h src/statement.h
 )
 
 if (WASM OR EMSCRIPTEN)
@@ -67,7 +67,7 @@ if (NOT EMSCRIPTEN)
     list(APPEND SOURCES src/jit.c)
 
     if (MSVC)
-        if (CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+        if (CMAKE_VS_PLATFORM_NAME STREQUAL "ARM64")
             enable_language(C ASM_MARMASM)
             list(APPEND SOURCES src/longjmp.arm64.asm)
         else()

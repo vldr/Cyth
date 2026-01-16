@@ -25,6 +25,7 @@ extern "C"
   } Array;
 
   // Create a new JIT instance.
+  //
   // This will return NULL if a compilation error has occurred.
   // This function can only be called on a single thread.
   //
@@ -141,14 +142,14 @@ extern "C"
   // Executes a block of code and catches any runtime panics.
   //
   // This macro installs a temporary exception handler using setjmp/longjmp and signals (VEH on
-  // Windows). If a Cyth runtime error (panic) occurs while executing the block, control flow will
+  // Windows). If a runtime error (panic) occurs while executing the block, control flow will
   // jump to the "else" clause instead of terminating the program. The "else" clause is optional.
   // This can be used recursively.
   //
-  // You MUST use this whenever calling generated code, otherwise the program will crash or get in a
-  // corrupted state.
+  // You MUST use this whenever calling generated code, otherwise the program will crash or get into
+  // a corrupted state.
   //
-  // You MUST never call "return" or "break" inside this macro, otherwise the program get in a
+  // You MUST never call "return" or "break" inside this macro, the program will get into a
   // corrupted state.
   //
   //   jit_try_catch(jit, {
@@ -160,8 +161,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
-    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
+    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
+    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \

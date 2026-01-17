@@ -45,6 +45,28 @@ extern "C"
                                         int end_column, const char* message),
                  void (*panic_callback)(const char* function, int line, int column));
 
+  // Adds an external C function.
+  //
+  // You MUST call this after "cyth_init" and before "cyth_generate".
+  //
+  // [name] must be in the format: <module>.<function name>.<signature>
+  //
+  // For example, if I have the following Cyth code:
+  //
+  //    import "env"
+  //      void println(string data)
+  //
+  // The corresponding C code would look like:
+  //
+  //    void println(String* string) {
+  //      printf("%s\n", string->data);
+  //    }
+  //
+  //    cyth_set_function(jit, "env.println.void(string)", (uintptr_t)println);
+  //
+  // [func] must be the address to the corresponding external C function.
+  void cyth_set_function(Jit* jit, const char* name, uintptr_t func);
+
   // Generates the assembly instructions for a given JIT instance.
   // After this function, it is safe to run the generated code.
   //
@@ -77,31 +99,12 @@ extern "C"
   // [size] is the size in bytes to allocate.
   void* cyth_alloc(int atomic, uintptr_t size);
 
-  // Adds an external C function.
+  // Returns the address to a Cyth function.
   //
-  // [name] must be in the format: <module>.<function name>.<signature>
+  // You MUST wrap all calls to Cyth functions with "cyth_try_catch" (see below).
   //
-  // For example, if I have the following Cyth code:
-  //
-  //    import "env"
-  //      void println(string data)
-  //
-  // The corresponding C code would look like:
-  //
-  //    void println(String* string) {
-  //      printf("%s\n", string->data);
-  //    }
-  //
-  //    cyth_set_function(jit, "env.println.void(string)", (uintptr_t)println);
-  //
-  // [func] must be a pointer to the corresponding external C function.
-  void cyth_set_function(Jit* jit, const char* name, uintptr_t func);
-
-  // Returns a pointer to a Cyth function.
-  //
-  // You MUST wrap all calls to Cyth functions with "cyth_try_catch".
-  // You MUST call "cyth_run" before calling Cyth functions, otherwise global variables will be
-  // uninitialized.
+  // You MUST call "cyth_run" before calling functions obtained from this function, otherwise global
+  // variables will be uninitialized.
   //
   // [name] must be in the format: <function name>.<signature>
   //
@@ -122,7 +125,7 @@ extern "C"
   //
   uintptr_t cyth_get_function(Jit* jit, const char* name);
 
-  // Returns a pointer to a global variable (top-level scope).
+  // Returns the address to the memory that contains a global variable (top-level scope).
   //
   // You MUST call "cyth_run" before accessing global variables, otherwise
   // they will be uninitialized.
@@ -149,8 +152,8 @@ extern "C"
   // You MUST use this whenever calling generated code, otherwise the program will crash or get into
   // a corrupted state.
   //
-  // You MUST never call "return" or "break" inside this macro, the program will get into a
-  // corrupted state.
+  // You MUST never call "return" or "break" inside this macro, otherwise the program will get into
+  // a corrupted state.
   //
   //   jit_try_catch(jit, {
   //     foo(1, 2);
@@ -161,8 +164,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
-    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
+    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
+    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \

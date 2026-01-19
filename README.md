@@ -20,9 +20,10 @@ A tiny, embeddable and statically typed programming language combining the simpl
     - [`any`](#any)
     - [Objects](#objects)
     - [Arrays](#arrays)
+    - [Function Pointers](#function-pointers)
 
 ## Motivation
-Suppose we want to add a print function to print out "Hello World!". First, add an import statement and list the `print` function from the `std` module (you can name this anything you want) and then, call it directly from Cyth:
+Suppose we want to print "Hello World!". In most embedded languages, this takes boilerplate, stack juggling, and wrappers. In Cyth, you just import the function and call it.
 
 ```cpp
 import "std"
@@ -31,7 +32,7 @@ import "std"
 print("Hello World!")
 ```
 
-In C, we initialize the Cyth runtime, bind our print implementation, and run the program:
+On the C side, we have to just initialize the Cyth runtime, provide our implementation of `print` and run the program:
 
 ```cpp
 #include <stdio.h>
@@ -55,7 +56,7 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-That's it! With a couple of lines of code you easily interact with C from Cyth and vice-versa.
+That is it. With just a few lines of code, Cyth can call into C, and C can call back into Cyth.
 
 If you're interested, you can look at some of the [examples](#examples) or read through the [overview](#overview) of the language.
 ## Binaries
@@ -161,11 +162,17 @@ string mystring = "hello world"
 
 ### `any`
 Possible values: `null`, `string`, Array or Object   
-Default value: null  
+Default value: null 
+- Casting `any` to the incorrect underlying type will trigger a panic. 
 
+_Example:_
+```cpp
+any myany = "hello world"
+string mystring = (string)myany
+```
 
 #### Objects
-Possible values: `null` or a pointer (reference).  
+Possible values: `null` or a valid pointer (reference).  
 Default value: `null`  
 
 _Example:_
@@ -176,10 +183,12 @@ class Vector
   float y
   float z
 
-Vector myvector = Vector()
-myvector.x = 10
-myvector.y = 20
-myvector.z = 30
+  void __init__(int x, int y, int z)
+    this.x = x
+    this.y = y
+    this.z = z
+
+Vector myvector = Vector(10, 20, 30)
 ```
 
 Although the keyword `class` is used, there is no support for inheritance or other common object-oriented concepts in Cyth.
@@ -218,7 +227,7 @@ All method functions have an implicit `this` parameter.
 > ```
 >
 
-Objects have special methods:
+Objects have special method functions:
 
 *Constructors*
 ```cpp
@@ -229,6 +238,7 @@ void __init__()
 ```cpp
 V __get__(T index)
 ```
+
 
 *Index and assign overload*
 ```cpp
@@ -257,7 +267,7 @@ V __str__(T other)
 ```
 
 #### Arrays
-Possible values: Empty list or a list of one or more elements..  
+Possible values: Empty list or a list of one or more elements.  
 Default value: `[]` (empty list)   
 
 - Arrays can be multi-dimensional.
@@ -274,4 +284,20 @@ a.push(3)
 string[][] b = [["I'm", "multidimensional"]]
 ```
 
-#### 
+#### Function Pointers
+Possible values: `null` or a valid pointer (reference).  
+Default value: `null`  
+
+- Function pointers cannot be placed into `any`.
+
+_Example:_
+
+```cpp
+int adder(int a, int b)
+  return a + b
+
+int(int, int) myfunctionpointer = adder
+myfnptr(10, 20)
+```
+
+> Cyth function pointers are compatible with C.

@@ -1,5 +1,5 @@
 # Cyth
-A tiny, embeddable and statically typed programming language combining the simplicity of C and Python, targeting WebAssembly, x86-64, and ARM64.
+A tiny, embeddable and statically typed programming language inspired by C and Python, targeting WebAssembly, x86-64, and ARM64.
 
 - [Motivation](#motivation)
 - [Binaries](#binaries)

@@ -1,5 +1,5 @@
 # Cyth
-A tiny, embeddable and statically typed language combining the simplicity of C and Python, targeting WebAssembly, x86-64, and ARM64.
+A tiny, embeddable and statically typed programming language combining the simplicity of C and Python, targeting WebAssembly, x86-64, and ARM64.
 
 - [Motivation](#motivation)
 - [Binaries](#binaries)
@@ -10,9 +10,19 @@ A tiny, embeddable and statically typed language combining the simplicity of C a
   - [Windows](#windows)
   - [Web](#web)
 - [Overview](#overview)
+  - [Primitive Types](#primitive-types)
+    - [`bool`](#bool)
+    - [`char`](#char)
+    - [`int`](#int)
+    - [`float`](#float)
+  - [Types](#types)
+    - [`string`](#string)
+    - [`any`](#any)
+    - [Objects](#objects)
+    - [Arrays](#arrays)
 
 ## Motivation
-Suppose we want to print "Hello World!". First, import the `print` function from the `std` module (you can name this anything you want) and then, call it directly from Cyth:
+Suppose we want to add a print function to print out "Hello World!". First, add an import statement and list the `print` function from the `std` module (you can name this anything you want) and then, call it directly from Cyth:
 
 ```cpp
 import "std"
@@ -45,7 +55,7 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-That's it! With a couple of lines of code you easily interop with C from Cyth.
+That's it! With a couple of lines of code you easily interact with C from Cyth and vice-versa.
 
 If you're interested, you can look at some of the [examples](#examples) or read through the [overview](#overview) of the language.
 ## Binaries
@@ -56,47 +66,212 @@ Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/re
 
 ## Building
 
-To build Cyth, you will need to have [CMake](https://cmake.org/) and gcc/clang/MSVC installed. To run the test suite, you will need to have [Node.js](https://nodejs.org/) (v22 or higher) installed.
+To build Cyth, you will need to have [CMake](https://cmake.org/) and gcc/clang/MSVC installed. To run the test suite, you will need to have [Node.js](https://nodejs.org/) (v20 or higher) installed.
 
 If you want to build the WASM backend, provide the `-DWASM=1` flag to CMake.
 
 ### Linux
 
-Debug:  
+_Debug_:  
 `cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build`  
 
-Release:  
+_Release_:  
 `cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
 
-Manual C compilation:  
+_Manual C compilation_:  
 `cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/main.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -flto -o cyth`
 
 ### MacOS
 
-Xcode project:  
+_Xcode project_:  
 `cmake -S . -B xbuild -G Xcode`
 
-Makefile (Debug):  
+_Makefile (Debug)_:  
 `cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build`
 
-Makefile (Release):  
+_Makefile (Release)_:  
 `cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
 
 ### Windows
 
-Visual Studio 2022 project:  
+_Visual Studio 2022 project_:  
 `cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"`
 
-Visual Studio 2026 project:  
+_Visual Studio 2026 project_:  
 `cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"`
 
 ### Web
 For web builds, you will need to have [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed.
 
-Debug:  
+_Debug_:  
 `emcmake cmake -DCMAKE_BUILD_TYPE=Debug -S . -B embuild`  
 
-Release:  
+_Release_:  
 `emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild`
 
 ## Overview
+
+### Primitive Types
+#### `bool`
+Possible values: `false` or `true`  
+Default value: `false`  
+
+_Example:_
+```cpp
+bool mybool = true
+```
+
+#### `char`
+Possible values: `0` to `255`  
+Default value: `'\0'`  
+
+_Example:_
+```cpp
+char mychar = 'a'
+```
+
+#### `int`
+Possible values: `-2147483648` to `2147483647`  
+Default value: `0`  
+
+_Example:_
+```cpp
+int myint = 10
+```
+
+#### `float`
+Possible values: `± 1.5 x 10−45` to `± 3.4 x 1038`  
+Default value: `0.0`  
+
+_Example:_
+```cpp
+int myfloat = 12.25
+```
+
+### Types
+
+#### `string`
+Possible values: UTF-8 text  
+Default value: `""` (empty string)  
+
+_Example:_
+```cpp
+string mystring = "hello world"
+```
+
+### `any`
+Possible values: `null`, `string`, Array or Object   
+Default value: null  
+
+
+#### Objects
+Possible values: `null` or a pointer (reference).  
+Default value: `null`  
+
+_Example:_
+
+```cpp
+class Vector
+  float x
+  float y
+  float z
+
+Vector myvector = Vector()
+myvector.x = 10
+myvector.y = 20
+myvector.z = 30
+```
+
+Although the keyword `class` is used, there is no support for inheritance or other common object-oriented concepts in Cyth.
+
+Objects in Cyth closely resemble structs rather than proper classes, except there are method functions.
+
+```cpp
+class Vector
+  float x
+  float y
+  float z
+
+  float length()
+    return (x*x  + y*y + z*z).sqrt()
+```
+
+All method functions have an implicit `this` parameter.
+
+> Cyth objects are compatible with C structs. In C, the Vector object would look like:
+> ```c
+> struct Vector {
+>   float x;
+>   float y;
+>   float z;
+> };
+> ```
+> 
+> Calling the `length` method function from C would look like:
+> ```c
+> typedef float (*LengthFunction)(Vector*);
+>
+> LengthFunction length = (LengthFunction) cyth_get_function(jit, "Vector.length.float()");
+> 
+> Vector vec = {1.0f, 1.0f, 1.0f};
+> float len = length(&vec);
+> ```
+>
+
+Objects have special methods:
+
+*Constructors*
+```cpp
+void __init__()
+```
+
+*Index overload*
+```cpp
+V __get__(T index)
+```
+
+*Index and assign overload*
+```cpp
+V __set__(T index, U value)
+```
+
+*Operator overloads*
+```python
+V __add__(T other)
+V __sub__(T other)
+V __div__(T other)
+V __mul__(T other)
+V __mod__(T other)
+V __and__(T other)
+V __or__(T other)
+V __xor__(T other)
+V __lshift__(T other)
+V __rshift__(T other)
+V __lt__(T other)
+V __le__(T other)
+V __gt__(T other)
+V __ge__(T other)
+V __eq__(T other)
+V __ne__(T other)
+V __str__(T other)
+```
+
+#### Arrays
+Possible values: Empty list or a list of one or more elements..  
+Default value: `[]` (empty list)   
+
+- Arrays can be multi-dimensional.
+- All arrays are dynamic, meaning they can be resized.
+
+_Example:_
+
+```cpp
+int[] a 
+a.push(1)
+a.push(2)
+a.push(3)
+
+string[][] b = [["I'm", "multidimensional"]]
+```
+
+#### 

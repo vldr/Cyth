@@ -47,7 +47,7 @@ extern "C"
 
   // Adds an external C function.
   //
-  // You MUST call this after "cyth_init" and before "cyth_generate".
+  // You MUST call this after "cyth_init" but before "cyth_generate".
   //
   // [name] must be in the format: <module>.<function name>.<signature>
   //
@@ -164,8 +164,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
-    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
+    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
+    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \

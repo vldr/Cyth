@@ -146,7 +146,7 @@ Default value: `0.0`
 
 _Example:_
 ```cpp
-int myfloat = 12.25
+float myfloat = 12.25
 ```
 
 ### Types

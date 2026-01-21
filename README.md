@@ -119,7 +119,7 @@ Default value: `false`
 
 _Example:_
 ```cpp
-bool mybool = true
+bool myBool = true
 ```
 
 #### `char`
@@ -128,7 +128,7 @@ Default value: `'\0'`
 
 _Example:_
 ```cpp
-char mychar = 'a'
+char myChar = 'a'
 ```
 
 #### `int`
@@ -137,7 +137,7 @@ Default value: `0`
 
 _Example:_
 ```cpp
-int myint = 10
+int myInt = 10
 ```
 
 #### `float`
@@ -146,7 +146,7 @@ Default value: `0.0`
 
 _Example:_
 ```cpp
-float myfloat = 12.25
+float myFloat = 12.25
 ```
 
 ### Types
@@ -155,9 +155,11 @@ float myfloat = 12.25
 Possible values: UTF-8 text  
 Default value: `""` (empty string)  
 
+- All types can be cast to a `string`, which will convert to the type's string representation; casting `any` to a string will attempt to convert the `any` to the underlying string type rather than its string representation.
+
 _Example:_
 ```cpp
-string mystring = "hello world"
+string myString = "hello world"
 ```
 
 ### `any`
@@ -167,8 +169,8 @@ Default value: null
 
 _Example:_
 ```cpp
-any myany = "hello world"
-string mystring = (string)myany
+any myAny = "hello world"
+string myString = (string)myAny
 ```
 
 #### Objects
@@ -188,12 +190,14 @@ class Vector
     this.y = y
     this.z = z
 
-Vector myvector = Vector(10, 20, 30)
+Vector myVector = Vector(10, 20, 30)
 ```
 
 Although the keyword `class` is used, there is no support for inheritance or other common object-oriented concepts in Cyth.
 
-Objects in Cyth closely resemble structs rather than proper classes, except there are method functions.
+Objects in Cyth closely resemble structs rather than proper classes, except there are method functions. All method functions have an implicit `this` parameter.
+
+_Example:_
 
 ```cpp
 class Vector
@@ -204,8 +208,6 @@ class Vector
   float length()
     return (x*x  + y*y + z*z).sqrt()
 ```
-
-All method functions have an implicit `this` parameter.
 
 > Cyth objects are compatible with C structs. In C, the Vector object would look like:
 > ```c
@@ -288,7 +290,8 @@ string[][] b = [["I'm", "multidimensional"]]
 Possible values: `null` or a valid pointer (reference).  
 Default value: `null`  
 
-- Function pointers cannot be placed into `any`.
+- Function pointers cannot be placed into `any` (limitation added due to WASM not supporting them).
+- Function pointers compatible with C function pointers.
 
 _Example:_
 
@@ -296,8 +299,23 @@ _Example:_
 int adder(int a, int b)
   return a + b
 
-int(int, int) myfunctionpointer = adder
-myfnptr(10, 20)
+int(int, int) myFunctionPointer = adder
+myFunctionPointer(10, 20)
 ```
 
-> Cyth function pointers are compatible with C.
+_Example (Function Member):_
+
+```cpp
+class Vector
+  float x
+  float y
+  float z
+
+  float length()
+    return (x*x  + y*y + z*z).sqrt()
+
+Vector myVector = Vector()
+
+float(Vector) myFunctionPointer = Vector.length
+myFunctionPointer(myVector)
+```

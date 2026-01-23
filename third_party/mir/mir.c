@@ -337,6 +337,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_PRBNE, "prbne", {MIR_OP_LABEL, MIR_OP_UNDEF, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_USE, "use", {MIR_OP_BOUND}},
   {MIR_PHI, "phi", {MIR_OP_BOUND}},
+  {MIR_CCLEAR, "cclear", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT,MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
 
@@ -3868,7 +3869,7 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 #endif
 
 #ifndef MIR_MAX_INSNS_FOR_CALL_INLINE
-#define MIR_MAX_INSNS_FOR_CALL_INLINE 50
+#define MIR_MAX_INSNS_FOR_CALL_INLINE 100
 #endif
 
 #ifndef MIR_MAX_FUNC_INLINE_GROWTH

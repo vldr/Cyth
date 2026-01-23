@@ -1004,6 +1004,16 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       insn->ops[2] = creg_op;
       break;
     }
+    case MIR_CCLEAR: {
+      MIR_op_t areg_op = _MIR_new_var_op (ctx, AX_HARD_REG);
+
+      new_insn = MIR_new_insn (ctx, MIR_MOV, areg_op, insn->ops[1]);
+      gen_add_insn_before (gen_ctx, insn, new_insn);
+      new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], areg_op);
+      gen_add_insn_after (gen_ctx, insn, new_insn);
+      insn->ops[0] = areg_op;
+      break;
+    }
     case MIR_UMULO:
     case MIR_UMULOS: {
       /* We can use only ax as zero and the 1st operand: */
@@ -1584,6 +1594,9 @@ struct pattern {
   {ICODE, "L mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " L0", 0},
 
 static struct pattern patterns[] = {
+  /* xor r0, r0; cmp r2, r3; cmovb r0, r1 */
+  {MIR_CCLEAR, "h0 r r r", "X 33 r0 R0; X 3B r2 R3; X 0F 42 r0 R1", 0},
+
   {MIR_MOV, "r z", "Y 33 r0 R0", 0},      /* xor r0,r0 -- 32 bit xor */
   {MIR_MOV, "r r", "X 8B r0 R1", 0},      /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1", 0},     /* mov r0,m1 */
@@ -2377,7 +2390,7 @@ static int get_max_insn_size (gen_ctx_t gen_ctx MIR_UNUSED, const char *replacem
       case 'R':
       case 'S':
         ch = *++p;
-        gen_assert ('0' <= ch && ch <= '2');
+        gen_assert ('0' <= ch && ch <= '3');
         modrm_p = TRUE;
         break;
       case 'm':
@@ -2569,7 +2582,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 'R':
       case 'S':
         ch = *++p;
-        gen_assert ('0' <= ch && ch <= '2');
+        gen_assert ('0' <= ch && ch <= '3');
         op_ref = &insn->ops[ch - '0'];
         gen_assert (op_ref->mode == MIR_OP_VAR);
         if (start_ch == 'r')

@@ -886,16 +886,10 @@ static Function* generate_array_remove_function(Jit* jit, DataType data_type)
     MIR_reg_t index = MIR_reg(jit->ctx, "index", jit->function->u.func);
 
     {
-      MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
-
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
-                                   MIR_new_reg_op(jit->ctx, index),
+                      MIR_new_insn(jit->ctx, MIR_CCLEAR, MIR_new_reg_op(jit->ctx, ptr),
+                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, index),
                                    generate_array_length_op(jit, ptr)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, ptr),
-                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
 
       MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
@@ -4050,16 +4044,10 @@ static void generate_assignment_expression(Jit* jit, MIR_reg_t dest, AssignExpr*
     }
     else
     {
-      MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
-
       MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
-                                   MIR_new_reg_op(jit->ctx, index),
+                      MIR_new_insn(jit->ctx, MIR_CCLEAR, MIR_new_reg_op(jit->ctx, ptr),
+                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, index),
                                    generate_array_length_op(jit, ptr)));
-
-      MIR_append_insn(jit->ctx, jit->function,
-                      MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, ptr),
-                                   MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
 
       MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
@@ -4234,20 +4222,21 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
   switch (expression->expr_data_type.type)
   {
   case TYPE_STRING: {
-    MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+    MIR_reg_t length = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
-                                 MIR_new_reg_op(jit->ctx, index),
+                    MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, length),
                                  generate_string_length_op(jit, ptr)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, ptr),
-                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
+                    MIR_new_insn(jit->ctx, MIR_CCLEAR, MIR_new_reg_op(jit->ctx, ptr),
+                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, index),
+                                 MIR_new_reg_op(jit->ctx, length)));
 
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, index),
-                                 MIR_new_reg_op(jit->ctx, index), MIR_new_reg_op(jit->ctx, mask)));
+                    MIR_new_insn(jit->ctx, MIR_CCLEAR, MIR_new_reg_op(jit->ctx, index),
+                                 MIR_new_reg_op(jit->ctx, index), MIR_new_reg_op(jit->ctx, index),
+                                 MIR_new_reg_op(jit->ctx, length)));
 
     MIR_append_insn(
       jit->ctx, jit->function,
@@ -4258,16 +4247,10 @@ static void generate_index_expression(Jit* jit, MIR_reg_t dest, IndexExpr* expre
     return;
   }
   case TYPE_ARRAY: {
-    MIR_reg_t mask = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
-
     MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_ULTS, MIR_new_reg_op(jit->ctx, mask),
-                                 MIR_new_reg_op(jit->ctx, index),
+                    MIR_new_insn(jit->ctx, MIR_CCLEAR, MIR_new_reg_op(jit->ctx, ptr),
+                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, index),
                                  generate_array_length_op(jit, ptr)));
-
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_MUL, MIR_new_reg_op(jit->ctx, ptr),
-                                 MIR_new_reg_op(jit->ctx, ptr), MIR_new_reg_op(jit->ctx, mask)));
 
     MIR_reg_t array_ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
 

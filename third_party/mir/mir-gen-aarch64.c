@@ -1268,6 +1268,9 @@ struct pattern {
 #define ARM_INSN_BOUND (MUL_BNO + 1)
 
 static const struct pattern patterns[] = {
+  /* cmp Wn, Wm; csel Rd, Rn, xzr */
+  {MIR_CCLEAR, "r r r r", "6b00001f:ff20001f rn2 rm3; 9a9f3000:fffffc00 rd0 rn1"},
+
   {MIR_MOV, "r h31", "91000000:fffffc00 rd0 hn1f"}, /* mov Rd,SP */
   {MIR_MOV, "h31 r", "91000000:fffffc00 hd1f rn1"}, /* mov SP,Rn */
   {MIR_MOV, "r r", "aa0003e0:ffe0ffe0 rd0 rm1"},    /* mov Rd,Rm */
@@ -2210,7 +2213,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (start_ch == 'h') {
           reg = read_hex (&p);
         } else {
-          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < (int) insn->nops);
+          gen_assert ('0' <= ch && ch <= '3' && ch - '0' < (int) insn->nops);
           op = insn->ops[ch - '0'];
           gen_assert (op.mode == MIR_OP_VAR);
           reg = op.u.var;

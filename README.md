@@ -18,8 +18,8 @@ A tiny, embeddable and statically typed programming language inspired by C and P
   - [Types](#types)
     - [`string`](#string)
     - [`any`](#any)
-    - [Objects](#objects)
     - [Arrays](#arrays)
+    - [Objects](#objects)
     - [Function Pointers](#function-pointers)
 
 ## Motivation
@@ -173,6 +173,24 @@ any myAny = "hello world"
 string myString = (string)myAny
 ```
 
+#### Arrays
+Possible values: Empty list or a list of one or more elements.  
+Default value: `[]` (empty list)   
+
+- Arrays can be multi-dimensional.
+- All arrays are dynamic, meaning they can be resized.
+
+_Example:_
+
+```cpp
+int[] a 
+a.push(1)
+a.push(2)
+a.push(3)
+
+string[][] b = [["I'm", "multidimensional"]]
+```
+
 #### Objects
 Possible values: `null` or a valid pointer (reference).  
 Default value: `null`  
@@ -268,23 +286,6 @@ V __ne__(T other)
 V __str__(T other)
 ```
 
-#### Arrays
-Possible values: Empty list or a list of one or more elements.  
-Default value: `[]` (empty list)   
-
-- Arrays can be multi-dimensional.
-- All arrays are dynamic, meaning they can be resized.
-
-_Example:_
-
-```cpp
-int[] a 
-a.push(1)
-a.push(2)
-a.push(3)
-
-string[][] b = [["I'm", "multidimensional"]]
-```
 
 #### Function Pointers
 Possible values: `null` or a valid pointer (reference).  

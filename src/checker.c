@@ -3445,6 +3445,13 @@ static DataType check_index_expression(IndexExpr* expression)
     }
 
     FuncStmt* function = function_data_type.function_member.function;
+    if (function->parameters.size < 2)
+    {
+      error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                           value_data_type);
+      return DATA_TYPE(TYPE_VOID);
+    }
+
     if (!equal_data_type(index_data_type, array_at(&function->parameters, 1)->data_type) &&
         !assignable_data_type(&expression->index, array_at(&function->parameters, 1)->data_type,
                               index_data_type))
@@ -3456,6 +3463,13 @@ static DataType check_index_expression(IndexExpr* expression)
 
     if (checker.assignment)
     {
+      if (function->parameters.size < 3)
+      {
+        error_not_indexable_missing_overload(expression->expr_token, index_data_type,
+                                             value_data_type);
+        return DATA_TYPE(TYPE_VOID);
+      }
+
       if (!equal_data_type(value_data_type, array_at(&function->parameters, 2)->data_type) &&
           !assignable_data_type(&checker.assignment->value,
                                 array_at(&function->parameters, 2)->data_type,
@@ -3759,6 +3773,8 @@ static void check_get_function_declaration(FuncStmt* function)
     if (expected != got)
     {
       error_invalid_get_arity(function->name);
+
+      checker.error = false;
       return;
     }
   }
@@ -3774,6 +3790,8 @@ static void check_set_function_declaration(FuncStmt* function)
     if (expected != got)
     {
       error_invalid_set_arity(function->name);
+
+      checker.error = false;
       return;
     }
   }
@@ -3789,12 +3807,16 @@ static void check_str_function_declaration(FuncStmt* function)
     if (expected != got)
     {
       error_invalid_str_arity(function->name);
+
+      checker.error = false;
       return;
     }
 
     if (function->data_type.type != TYPE_STRING)
     {
       error_invalid_str_return_type(function->name);
+
+      checker.error = false;
       return;
     }
   }
@@ -3810,6 +3832,8 @@ static void check_binary_overload_function_declaration(FuncStmt* function, const
     if (expected != got)
     {
       error_invalid_binary_arity(function->name, name);
+
+      checker.error = false;
       return;
     }
   }

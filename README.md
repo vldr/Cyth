@@ -21,6 +21,8 @@ A tiny, embeddable and statically typed programming language inspired by C and P
     - [Arrays](#arrays)
     - [Objects](#objects)
     - [Function Pointers](#function-pointers)
+  - [Variables](#variables)
+  - [Functions](#functions)
 
 ## Motivation
 Suppose we want to print "Hello World!". In most embedded languages, this takes boilerplate, stack juggling, and wrappers. In Cyth, you just import the function and call it.
@@ -74,41 +76,77 @@ If you want to build the WASM backend, provide the `-DWASM=1` flag to CMake.
 ### Linux
 
 _Debug_:  
-`cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build`  
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build
+cd build
+make
+```
 
 _Release_:  
-`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+cd build
+make
+```
 
 _Manual C compilation_:  
-`cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/main.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -flto -o cyth`
+```bash
+cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/main.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -flto -o cyth
+```
 
 ### MacOS
 
 _Xcode project_:  
-`cmake -S . -B xbuild -G Xcode`
+```
+cmake -S . -B xbuild -G Xcode
+```
+
+Then, in the `xbuild` directory, open `cyth.xcodeproj` in Xcode.
 
 _Makefile (Debug)_:  
-`cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build`
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build
+cd build
+make
+```
 
 _Makefile (Release)_:  
-`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build`
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+cd build
+make
+```
 
 ### Windows
 
 _Visual Studio 2022 project_:  
-`cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"`
+```
+cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
+```
 
 _Visual Studio 2026 project_:  
-`cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"`
+```
+cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"
+```
+
+Then, in the `winbuild` directory, open `cyth.sln` in Visual Studio.
 
 ### Web
 For web builds, you will need to have [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed.
 
 _Debug_:  
-`emcmake cmake -DCMAKE_BUILD_TYPE=Debug -S . -B embuild`  
+```
+emcmake cmake -DCMAKE_BUILD_TYPE=Debug -S . -B embuild
+cd embuild
+make
+``` 
 
 _Release_:  
-`emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild`
+```
+emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
+cd embuild
+make
+```
 
 ## Overview
 
@@ -183,12 +221,12 @@ Default value: `[]` (empty list)
 _Example:_
 
 ```cpp
-int[] a 
-a.push(1)
-a.push(2)
-a.push(3)
+int[] myArray
+myArray.push(1)
+myArray.push(2)
+myArray.push(3)
 
-string[][] b = [["I'm", "multidimensional"]]
+string[][] myArray2D = [["I'm", "multidimensional"]]
 ```
 
 #### Objects
@@ -320,3 +358,31 @@ Vector myVector = Vector()
 float(Vector) myFunctionPointer = Vector.length
 myFunctionPointer(myVector)
 ```
+
+## Variables
+
+You can declare variables like this:
+
+```c
+int myVariable = 12
+float mySecondVariable
+```
+
+If you do not initialize a variable, a default value is assigned automatically. For example, `mySecondVariable` will be set to `0.0`.
+
+You can declare variables in the top-level scope of your program which will make them a global variable. 
+
+> You can easily access global variables from C using the `cyth_get_variable`.
+>
+> For example, getting `myVariable` from C:
+> ```c
+> int* myVariable = (int*) cyth_get_variable(jit, "myVariable.int");
+> ```
+>
+> Make sure to only call `cyth_get_variable` after calling `cyth_run`, otherwise global variables will be 
+> uninitialized which can lead to issues if you're using array types.
+>
+> Also, the pointer returned from `cyth_get_variable` will be `NULL` if it was not found, or the signature is incorrect.
+>
+
+## Functions

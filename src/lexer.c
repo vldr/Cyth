@@ -20,6 +20,8 @@
     }                                                                                              \
   }
 
+#define LITERAL_MAX_SIZE 64
+
 static struct
 {
   int start_line;
@@ -128,6 +130,11 @@ static char peek_next(void)
     return '\0';
 
   return *(lexer.current + 1);
+}
+
+static char peek_previous(void)
+{
+  return *(lexer.current - 1);
 }
 
 static bool match(char c)
@@ -254,40 +261,103 @@ static void text(TokenKind token_type, char terminator)
 
 static void hex(void)
 {
+  char lexeme[LITERAL_MAX_SIZE];
+  unsigned int length = 0;
+
+  bool underscore = true;
+  bool invalid = false;
+
   advance();
 
-  while (isxdigit(peek()))
-    advance();
+  while (isxdigit(peek()) || peek() == '_')
+  {
+    if (length >= sizeof(lexeme))
+    {
+      invalid = true;
+      break;
+    }
 
-  int length = (int)(lexer.current - lexer.start - 2);
-  if (!length)
+    char c = peek();
+    if (c == '_')
+    {
+      if (underscore)
+      {
+        invalid = true;
+      }
+
+      underscore = true;
+      advance();
+    }
+    else
+    {
+      underscore = false;
+      lexeme[length++] = advance();
+    }
+  }
+
+  if (invalid || underscore || length == 0)
   {
     error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
           "Invalid hexadecimal literal.");
-    return;
   }
 
-  add_custom_token(TOKEN_HEX_INTEGER, lexer.start + 2, length);
+  add_custom_token(TOKEN_HEX_INTEGER, lexeme, length);
 }
 
 static void number(void)
 {
-  TokenKind type = TOKEN_INTEGER;
+  char lexeme[LITERAL_MAX_SIZE];
+  unsigned int length = 0;
 
-  while (isdigit(peek()))
-    advance();
+  bool underscore = false;
+  bool period = false;
+  bool invalid = false;
 
-  if (peek() == '.' && isdigit(peek_next()))
+  lexeme[length++] = peek_previous();
+
+  while (isdigit(peek()) || peek() == '_' || peek() == '.')
   {
-    advance();
+    if (length >= sizeof(lexeme))
+    {
+      invalid = true;
+      break;
+    }
 
-    while (isdigit(peek()))
+    char c = peek();
+    if (c == '_')
+    {
+      if (underscore || peek_next() == '.' || peek_previous() == '.')
+      {
+        invalid = true;
+      }
+
+      underscore = true;
       advance();
+    }
+    else if (c == '.')
+    {
+      if (period)
+      {
+        break;
+      }
 
-    type = TOKEN_FLOAT;
+      period = true;
+      lexeme[length++] = advance();
+    }
+    else
+    {
+      underscore = false;
+      lexeme[length++] = advance();
+    }
   }
 
-  add_token(type);
+  if (invalid || underscore)
+  {
+    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
+          "Invalid numeric literal.");
+  }
+
+  add_custom_token(period ? TOKEN_FLOAT : TOKEN_INTEGER, lexeme, length);
 }
 
 static void literal(void)

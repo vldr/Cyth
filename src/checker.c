@@ -162,9 +162,9 @@ static void error_recursive_template_type(Token token, const char* name)
   error(token, memory_sprintf("Cannot instiantiate '%s' template, recursion limit reached.", name));
 }
 
-static void error_not_a_function(Token token)
+static void error_not_callable(Token token)
 {
-  error(token, "The expression is not a function.");
+  error(token, "The expression is not callable.");
 }
 
 static void error_not_an_object(Token token)
@@ -2606,6 +2606,12 @@ static DataType check_call_expression(CallExpr* expression)
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
 
+  if (callee_data_type.type == TYPE_ALIAS && callee_data_type.alias.data_type->type == TYPE_OBJECT)
+  {
+    callee_data_type = *callee_data_type.alias.data_type;
+    callee_data_type.type = TYPE_PROTOTYPE;
+  }
+
   DataType* argument_data_types = alloca(expression->arguments.size * sizeof(DataType));
   for (unsigned int i = 0; i < expression->arguments.size; i++)
     argument_data_types[i] = check_expression(expression->arguments.elems[i]);
@@ -2872,7 +2878,7 @@ static DataType check_call_expression(CallExpr* expression)
   }
   else
   {
-    error_not_a_function(expression->callee_token);
+    error_not_callable(expression->callee_token);
     return DATA_TYPE(TYPE_VOID);
   }
 }

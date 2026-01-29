@@ -129,7 +129,7 @@ _Visual Studio 2026 project_:
 cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"
 ```
 
-Then, in the `winbuild` directory, open `cyth.sln` in Visual Studio.
+Then, in the `winbuild` directory, open `cyth.sln` / `cyth.slnx` in Visual Studio.
 
 ### Web
 For web builds, you will need to have [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed.
@@ -351,7 +351,7 @@ class Vector
   float z
 
   float length()
-    return (x*x  + y*y + z*z).sqrt()
+    return (x * x  + y * y + z * z).sqrt()
 
 Vector myVector = Vector()
 
@@ -372,7 +372,7 @@ If you do not initialize a variable, a default value is assigned automatically. 
 
 You can declare variables in the top-level scope of your program which will make them a global variable. 
 
-> You can easily access global variables from C using the `cyth_get_variable`.
+> You can easily access global variables from C using `cyth_get_variable`.
 >
 > For example, getting `myVariable` from C:
 > ```c

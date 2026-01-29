@@ -6931,19 +6931,6 @@ void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len) {
 #include "mir-x86_64.c"
 #elif defined(__aarch64__) || defined(_M_ARM64)
 #include "mir-aarch64.c"
-#elif defined(__PPC64__)
-#include "mir-ppc64.c"
-#elif defined(__s390x__)
-#include "mir-s390x.c"
-#elif defined(__riscv)
-#if __riscv_xlen != 64 || __riscv_flen < 64 || !__riscv_float_abi_double || !__riscv_mul \
-  || !__riscv_div || !__riscv_compressed
-#error "only 64-bit RISCV supported (at least rv64imafdc)"
-#endif
-#if __riscv_flen == 128
-#error "RISCV 128-bit floats (Q set) is not supported"
-#endif
-#include "mir-riscv64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif

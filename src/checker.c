@@ -26,9 +26,10 @@ static struct
 
   bool error;
   int errors;
+
   void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
                          const char* message);
-
+  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
 } checker;
 
 static void check_statement(Stmt* statement, bool synchronize);
@@ -63,6 +64,13 @@ static void error(Token token, const char* message)
 
   checker.error = true;
   checker.errors++;
+}
+
+static void link(Token reference, Token definition)
+{
+  if (checker.link_callback)
+    checker.link_callback(reference.start_line, reference.start_column, definition.start_line,
+                          definition.start_column, reference.length);
 }
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
@@ -720,6 +728,7 @@ static void data_type_inference(DataType* source, DataType* target)
           !assignable_data_type(&source->array.values.elems[i], element_data_type, data_type))
       {
         error_type_mismatch(token, element_data_type, data_type);
+        checker.error = false;
       }
     }
   }
@@ -760,6 +769,7 @@ static DataType token_to_data_type(Token token)
       DataType object = DATA_TYPE(TYPE_OBJECT);
       object.class = variable->data_type.class;
 
+      link(token, object.class->name);
       return object;
     }
     else if (variable->data_type.type == TYPE_ALIAS)
@@ -1176,6 +1186,12 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
+  if (data_type.type == TYPE_ARRAY && data_type.array.data_type->type == TYPE_VOID)
+  {
+    error_array_type_is_unresolved(data_type.array.token);
+    return NULL;
+  }
+
   if (boolable_data_type(data_type))
   {
     Expr* cast_expression = EXPR();
@@ -1286,6 +1302,14 @@ static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, Data
   if (!boolable_data_type(*left) && !boolable_data_type(*right))
     return false;
 
+  if ((left->type == TYPE_ARRAY && left->array.data_type->type == TYPE_VOID) ||
+      (right->type == TYPE_ARRAY && right->array.data_type->type == TYPE_VOID))
+  {
+    error_array_type_is_unresolved(left->type == TYPE_ARRAY ? left->array.token
+                                                            : right->array.token);
+    return false;
+  }
+
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
@@ -1315,6 +1339,13 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
           {
             DataType argument_data_type = argument_data_types[i - offset];
             DataType parameter_data_type = function->parameters.elems[i]->data_type;
+
+            if (argument_data_type.type == TYPE_ARRAY &&
+                argument_data_type.array.data_type->type == TYPE_VOID)
+            {
+              error_array_type_is_unresolved(argument_data_type.array.token);
+              return;
+            }
 
             if (!equal_data_type(parameter_data_type, argument_data_type) &&
                 !assignable_data_type(NULL, parameter_data_type, argument_data_type))
@@ -1560,7 +1591,9 @@ static void init_function_declaration(FuncStmt* statement)
     }
 
     VarStmt* parameter = ALLOC(VarStmt);
-    parameter->name = (Token){ .lexeme = "this", .length = sizeof("this") - 1 };
+    parameter->name = checker.class->name;
+    parameter->name.lexeme = "this";
+    parameter->name.length = sizeof("this") - 1;
     parameter->type = (DataTypeToken){
       .type = DATA_TYPE_TOKEN_PRIMITIVE,
       .token = checker.class->name,
@@ -2350,6 +2383,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
+    data_type_inference(&right, &array_at(&function->parameters, 1)->data_type);
+
     if (!equal_data_type(right, array_at(&function->parameters, 1)->data_type) &&
         !assignable_data_type(&expression->right, array_at(&function->parameters, 1)->data_type,
                               right))
@@ -2362,6 +2397,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     expression->return_data_type = function->data_type;
     expression->operand_data_type = left;
 
+    link(expression->op, expression->function->name);
     return expression->return_data_type;
   }
 
@@ -2513,6 +2549,9 @@ static DataType check_variable_expression(VarExpr* expression)
   expression->data_type = variable->data_type;
 
   expand_template_types(expression->template_types, &expression->data_type, expression->name);
+
+  if (expression->data_type.type != TYPE_PROTOTYPE)
+    link(expression->name, variable->name);
 
   return expression->data_type;
 }
@@ -2860,6 +2899,10 @@ static DataType check_call_expression(CallExpr* expression)
     expression->callee_data_type = callee_data_type;
     expression->return_data_type = token_to_data_type(class->name);
 
+    Token link_token = expression->callee_token;
+    link_token.length = class->name.length;
+    link(link_token, expression->function->name);
+
     return expression->return_data_type;
   }
   else if (callee_data_type.type == TYPE_ALIAS)
@@ -2916,19 +2959,46 @@ static DataType check_access_expression(AccessExpr* expression)
 
     if (expression->data_type.type == TYPE_FUNCTION_MEMBER)
     {
-      expression->data_type.function_member.this = expression->expr;
+      if (data_type.type == TYPE_PROTOTYPE)
+      {
+        expression->data_type.type = TYPE_FUNCTION;
+        expression->data_type.function = expression->data_type.function_member.function;
+      }
+      else
+      {
+        expression->data_type.function_member.this = expression->expr;
+      }
     }
     else if (expression->data_type.type == TYPE_FUNCTION_GROUP)
     {
-      for (unsigned int i = 0; i < expression->data_type.function_group.size; i++)
+      DataType expression_data_type = DATA_TYPE(TYPE_FUNCTION_GROUP);
+      array_init(&expression_data_type.function_group);
+
+      DataType item;
+      array_foreach(&expression->data_type.function_group, item)
       {
-        if (expression->data_type.function_group.elems[i].type == TYPE_FUNCTION_MEMBER)
+        if (item.type == TYPE_FUNCTION_MEMBER)
         {
-          expression->data_type.function_group.elems[i].function_member.this = expression->expr;
+          DataType function_data_type = item;
+
+          if (data_type.type == TYPE_PROTOTYPE)
+          {
+            function_data_type.type = TYPE_FUNCTION;
+            function_data_type.function = item.function_member.function;
+          }
+          else
+          {
+            function_data_type.function_member.this = expression->expr;
+          }
+
+          array_add(&expression_data_type.function_group, function_data_type);
         }
       }
+
+      expression->data_type = expression_data_type;
     }
 
+    link(expression->name, variable->name);
     return expression->data_type;
   }
   else if (data_type.type == TYPE_ARRAY)
@@ -4224,7 +4294,9 @@ void checker_init_globals(void)
 
 void checker_init(ArrayStmt statements,
                   void (*error_callback)(int start_line, int start_column, int end_line,
-                                         int end_column, const char* message))
+                                         int end_column, const char* message),
+                  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column,
+                                        int length))
 {
   checker.function = NULL;
   checker.template = NULL;
@@ -4237,6 +4309,7 @@ void checker_init(ArrayStmt statements,
   checker.errors = 0;
   checker.error = false;
   checker.error_callback = error_callback;
+  checker.link_callback = link_callback;
 
   checker.environment = environment_init(NULL);
   checker.global_environment = checker.environment;

@@ -1,6 +1,7 @@
 # Cyth
 A tiny, embeddable and statically typed programming language inspired by C and Python, targeting WebAssembly, x86-64, and ARM64.
 
+- [Try it out](#try-it-out)
 - [Motivation](#motivation)
 - [Binaries](#binaries)
 - [Examples](#examples)
@@ -10,22 +11,14 @@ A tiny, embeddable and statically typed programming language inspired by C and P
   - [Windows](#windows)
   - [Web](#web)
 - [Overview](#overview)
-  - [Primitive Types](#primitive-types)
-    - [`bool`](#bool)
-    - [`char`](#char)
-    - [`int`](#int)
-    - [`float`](#float)
-  - [Types](#types)
-    - [`string`](#string)
-    - [`any`](#any)
-    - [Arrays](#arrays)
-    - [Objects](#objects)
-    - [Function Pointers](#function-pointers)
-  - [Variables](#variables)
-  - [Functions](#functions)
+
+## Try it out
+
+You can try out Cyth in the web playground:
+[https://cyth.vldr.org](https://cyth.vldr.org)
 
 ## Motivation
-Suppose we want to print "Hello World!". In most embedded languages, this takes boilerplate, stack juggling, and wrappers. In Cyth, you just import the function and call it.
+Suppose we want to call a native C function from Cyth; for example, to print `Hello World!`. In Cyth, you just import the function and call it: no stack juggling and no wrapper code.
 
 ```cpp
 import "std"
@@ -61,17 +54,29 @@ int main(int argc, char *argv[]) {
 That is it. With just a few lines of code, Cyth can call into C, and C can call back into Cyth.
 
 If you're interested, you can look at some of the [examples](#examples) or read through the [overview](#overview) of the language.
+
 ## Binaries
 
 Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/releases).
 
 ## Examples
 
+- [CythCGI](https://github.com/vldr/CythCGI)  
+A FastCGI server written in Rust that integrates Cyth, enabling a PHP-like scripting environment for web applications.
+
+- [CythRay](https://github.com/vldr/CythRay)  
+Cyth with Raylib bindings, providing a lightweight framework for creating graphical programs and games directly in Cyth.
+
 ## Building
 
 To build Cyth, you will need to have [CMake](https://cmake.org/) and gcc/clang/MSVC installed. To run the test suite, you will need to have [Node.js](https://nodejs.org/) (v20 or higher) installed.
 
 If you want to build the WASM backend, provide the `-DWASM=1` flag to CMake.
+
+_Note:_ The supported platforms for the JIT compiler are:
+- Windows x64 and ARM64
+- Linux x64 and ARM64
+- MacOS x64 and ARM64
 
 ### Linux
 
@@ -149,6 +154,26 @@ make
 ```
 
 ## Overview
+
+- [Primitive Types](#primitive-types)
+  - [`bool`](#bool)
+  - [`char`](#char)
+  - [`int`](#int)
+  - [`float`](#float)
+- [Types](#types)
+  - [`string`](#string)
+  - [`any`](#any)
+  - [Arrays](#arrays)
+  - [Objects](#objects)
+  - [Function Pointers](#function-pointers)
+- [Variables](#variables)
+- [Functions](#functions)
+- [`if` statement](#if-statement)
+- [`while` loop](#while-loop)
+- [`for` loop](#for-loop)
+- [`break` statement](#break-statement)
+- [`continue` statement](#continue-statement)
+
 
 ### Primitive Types
 #### `bool`
@@ -374,15 +399,128 @@ You can declare variables in the top-level scope of your program which will make
 
 > You can easily access global variables from C using `cyth_get_variable`.
 >
-> For example, getting `myVariable` from C:
+> For example, to get `myVariable` from C, you would write:
 > ```c
 > int* myVariable = (int*) cyth_get_variable(jit, "myVariable.int");
 > ```
+> The address returned from `cyth_get_variable` will be `NULL` if it was not found, or the signature is incorrect.
 >
 > Make sure to only call `cyth_get_variable` after calling `cyth_run`, otherwise global variables will be 
-> uninitialized which can lead to issues if you're using array types.
->
-> Also, the pointer returned from `cyth_get_variable` will be `NULL` if it was not found, or the signature is incorrect.
+> uninitialized which can lead to issues if you're using types that have special default initializations (like arrays and strings).
 >
 
 ## Functions
+
+You can declare functions like this:
+
+```c
+int myFunction(int a, int b)
+  return a + b
+```
+
+You can place functions inside other functions:
+
+```c
+int myFunction(int a, int b)
+  int myInnerFunction(int c)
+    return 2 * c
+  
+  return myInnerFunction(a + b)
+```
+
+Nested functions are **not** closures, meaning they can't access variables outside their body.
+
+Functions can appear inside objects making them method functions:
+
+```python
+class MyClass
+  int a
+  int b
+
+  int myFunction()
+    return this.a + this.b
+```
+
+Method functions have an implicit `this` parameter which is a pointer to the object itself. This can be `null` if the method is called on a `null` pointer.
+
+```python
+class MyClass
+  int a
+  int b
+
+  int myFunction()
+    int myInnerFunction()
+      return 2 * (this.a + this.b)
+
+    return myInnerFunction()
+```
+
+Nested functions inside method functions are themselves method functions with an implicit `this` parameter. Meaning these nested method functions can access object fields inside them.
+
+## `if` statement
+
+You can declare `if` statements like this:
+
+```python
+bool condition
+
+if condition
+  # true
+else if not condition
+  # else if
+else
+  # false
+```
+
+## `while` loop
+
+You can declare a `while` loop like this:
+
+```python
+bool condition = true
+
+while condition
+  # while loop
+```
+
+## `for` loop
+
+You can declare a C-style `for` loop like this:
+
+```python
+for int i = 0; i < 10; i += 1
+  # for loops
+```
+
+You can also declare a `for` each loop like this:
+
+```python
+for int number in [1, 2, 3]
+  # for each loop
+```
+
+The index of the element is stored into an implicit `it` variable.
+
+## `break` statement
+
+You can use `break` to immediately exit a loop:
+
+```python
+for int i = 0; i < 10; i += 1
+  # Exit when i == 5
+  if i == 5
+    break
+```
+
+## `continue` statement
+
+You can use `continue` to immediately start the next iteration of a loop:
+
+```python
+for int i = 0; i < 10; i += 1
+  # Skip iteration when i == 5
+  if i == 5
+    continue
+```
+
+

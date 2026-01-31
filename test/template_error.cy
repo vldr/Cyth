@@ -9,8 +9,8 @@ class A
     return Q<T>()
 
 
-2 + A.test<void>(10)
-2 + A.test<void>(10)
+2 + A.test<void>(null, 10)
+2 + A.test<void>(null, 10)
 
 #! 2:3-2:4 The type cannot be void here. (occurred when creating A.test<void> at 12:7)
 #! 12:3-12:4 Mismatched types, expected 'int' but got 'Q<void>'.

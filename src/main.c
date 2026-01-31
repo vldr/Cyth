@@ -33,6 +33,7 @@ static struct
 
   void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
                          const char* message);
+  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
 } cyth;
 
@@ -153,6 +154,12 @@ void set_result_callback(void (*result_callback)(size_t size, void* data, size_t
   cyth.result_callback = result_callback;
 }
 
+void set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
+                                             int def_column, int length))
+{
+  cyth.link_callback = link_callback;
+}
+
 void run(char* source, bool codegen)
 {
   if (codegen)
@@ -204,7 +211,7 @@ void run(char* source, bool codegen)
     if (parser_errors())
       goto clean_up;
 
-    checker_init(statements, cyth.error_callback);
+    checker_init(statements, cyth.error_callback, cyth.link_callback);
     checker_validate();
 
   clean_up:

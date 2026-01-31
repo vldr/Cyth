@@ -5176,7 +5176,7 @@ int cyth_wasm_init(char* source,
     return false;
   }
 
-  checker_init(statements, error_callback);
+  checker_init(statements, error_callback, NULL);
   checker_validate();
 
   if (checker_errors())

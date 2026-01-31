@@ -15,7 +15,9 @@ DataType array_data_type_element(DataType array_data_type);
 
 void checker_init(ArrayStmt statements,
                   void (*error_callback)(int start_line, int start_column, int end_line,
-                                         int end_column, const char* message));
+                                         int end_column, const char* message),
+                  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column,
+                                        int length));
 int checker_errors(void);
 void checker_validate(void);
 

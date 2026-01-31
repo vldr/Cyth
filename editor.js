@@ -458,6 +458,10 @@ class Editor {
       Module.addFunction(this.onError.bind(this), "viiiii")
     );
 
+    Module._set_link_callback(
+      Module.addFunction(this.onLink.bind(this), "viiiii")
+    );
+
     monaco.languages.register({ id: "cyth" });
     monaco.languages.setLanguageConfiguration("cyth", {
       comments: { lineComment: "#" },
@@ -568,10 +572,10 @@ class Editor {
           [/#.*/, "comment"],
           [/\d+\.[fF]/, "number"],
           [/\d*\.\d+([eE][\-+]?\d+)?[Ff]?/, "number"],
-          [/0[xX][0-9a-fA-F_]+[uU]/, "number"],
-          [/0[xX][0-9a-fA-F_]+/, "number"],
-          [/(\d|_)+[uU]/, "number"],
-          [/(\d|_)+/, "number"],
+          [/0[xX]([0-9a-fA-F]_?)+[uU]/, "number"],
+          [/0[xX]([0-9a-fA-F]_?)+/, "number"],
+          [/(\d_?)+[uU]/, "number"],
+          [/(\d_?)+/, "number"],
           [/[A-Z][a-zA-Z_]*[\w$]*/, "class"],
           [
             /([a-zA-Z_][a-zA-Z_0-9]*)(\s*\()/,
@@ -661,10 +665,62 @@ class Editor {
       },
     });
 
+    monaco.languages.registerDefinitionProvider("cyth", {
+      provideDefinition: (model, position) => {
+        if (!this.linkSorted) {
+          this.linkSorted = true;
+          this.links.sort((a, b) => {
+            if (a.refLineNumber !== b.refLineNumber)
+              return a.refLineNumber - b.refLineNumber;
+            return a.refColumn - b.refColumn;
+          });
+        }
+
+        function findLink(links, position) {
+          let low = 0;
+          let high = links.length - 1;
+
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const link = links[mid];
+
+            if (position.lineNumber < link.refLineNumber) {
+              high = mid - 1;
+            } else if (position.lineNumber > link.refLineNumber) {
+              low = mid + 1;
+            } else {
+              if (position.column < link.refColumn)
+                high = mid - 1;
+              else if (position.column > link.refColumn + link.length)
+                low = mid + 1;
+              else
+                return link;
+            }
+          }
+
+          return null;
+        }
+
+        const link = findLink(this.links, position);
+        if (link) {
+          return {
+            uri: model.uri,
+            range: new monaco.Range(
+              link.defLineNumber,
+              link.defColumn,
+              link.defLineNumber,
+              link.defColumn
+            )
+          }
+        }
+      }
+    });
+
     this.errors = [];
+    this.links = [];
+    this.linkSorted = false;
     this.encoder = new TextEncoder();
     this.model = monaco.editor.createModel("", "cyth");
-
     this.editorDeltaDecorationsList = [];
     this.editorElement = document.getElementById("editor");
     this.editor = monaco.editor.create(this.editorElement, {
@@ -718,6 +774,16 @@ class Editor {
     return offset;
   }
 
+  onLink(refLineNumber, refColumn, defLineNumber, defColumn, length) {
+    this.links.push({
+      refLineNumber,
+      refColumn,
+      defLineNumber,
+      defColumn,
+      length,
+    });
+  }
+
   onError(startLineNumber, startColumn, endLineNumber, endColumn, message) {
     this.errors.push({
       startLineNumber,
@@ -730,6 +796,8 @@ class Editor {
 
   onInput() {
     this.errors.length = 0;
+    this.links.length = 0;
+    this.linkSorted = false;
 
     try {
       Module._run(this.getText(), false);

@@ -1,5 +1,7 @@
 editor/cyth.js
 editor/cyth.wasm
+editor/extension/cyth.js
+editor/extension/cyth.wasm
 compile_commands.json
 build/
 xbuild/
@@ -9,3 +11,4 @@ embuild/
 .vs/
 .vscode/
 .DS_Store
+*.vsix

@@ -1,0 +1,96 @@
+{
+  "scopeName": "source.cyth",
+  "name": "Cyth",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#operators" },
+    { "include": "#classes" },
+    { "include": "#functions" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.cyth",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.cyth",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cyth",
+              "match": "\\\\(?:[abfnrt0\"'\\\\]|x[0-9A-Fa-f]{1,2})"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.cyth",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cyth",
+              "match": "\\\\(?:[abfnrt0\"'\\\\]|x[0-9A-Fa-f]{1,2})"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.cyth", "match": "\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.cyth", "match": "\\b(return|for|while|break|continue|if|else|in|is)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.cyth",
+          "match": "\\b(import|class|string|int|any|float|bool|char|void|null|true|false|this|and|or|not|inf|nan)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.cyth",
+          "match": "(==|<=|>=|!=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|&=|\\|=|\\^=|%=|<<=|>>=|>>>|<<|>>|=|>|<|!|~|\\?|:|\\+|-|\\*|/|&|\\||\\^|%)"
+        }
+      ]
+    },
+    "classes": {
+      "patterns": [
+        { "name": "entity.name.type.class.cyth", "match": "\\b[A-Z][a-zA-Z_0-9]*\\b" }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.cyth",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\s*(?=\\()"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        { "name": "variable.other.cyth", "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b" }
+      ]
+    }
+  }
+}
+  

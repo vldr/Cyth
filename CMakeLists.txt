@@ -30,6 +30,12 @@ if (EMSCRIPTEN)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
+
+    add_custom_target(package
+        COMMAND npx @vscode/vsce package --allow-missing-repository
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor/extension
+        DEPENDS cyth
+    )
 else()
     if (NOT MSVC)
         add_link_options(-pthread -lm)
@@ -105,7 +111,15 @@ if (EMSCRIPTEN)
                 ${CMAKE_SOURCE_DIR}/editor/cyth.js
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE_DIR:cyth>/cyth.wasm
-                ${CMAKE_SOURCE_DIR}/editor/cyth.wasm)
+                ${CMAKE_SOURCE_DIR}/editor/cyth.wasm
+
+        COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE_DIR:cyth>/cyth.js
+                ${CMAKE_SOURCE_DIR}/editor/extension/cyth.js
+        COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE_DIR:cyth>/cyth.wasm
+                ${CMAKE_SOURCE_DIR}/editor/extension/cyth.wasm
+    )
 endif()
 
 if (WASM OR EMSCRIPTEN)

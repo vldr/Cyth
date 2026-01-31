@@ -1,0 +1,32 @@
+{
+  "name": "cyth",
+  "publisher": "vldr",
+  "version": "0.0.1",
+  "main": "./client.js",
+  "activationEvents": [
+    "onLanguage:cyth"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "cyth",
+        "extensions": [
+          ".cy"
+        ],
+        "aliases": [
+          "Cyth"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cyth",
+        "scopeName": "source.cyth",
+        "path": "./language.json"
+      }
+    ]
+  }
+}

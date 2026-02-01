@@ -159,6 +159,7 @@ typedef enum {
   INSN_EL (PHI), /* Used only internally in the generator, the first operand is output */
   INSN_EL (CCLEAR), /* Compares 3rd and 4th operand, if less than, 2nd operand is moved into 1st operand,
                        otherwise, zero is moved into the 1st operand. Used to perform bounds checking. */
+  INSN_EL (FSQRT),                    
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
 } MIR_insn_code_t;

@@ -1180,21 +1180,6 @@ static Function* generate_float_hash_function(Jit* jit)
   return function;
 }
 
-static float float_sqrt(float n)
-{
-#if defined(__x86_64__)
-  float out;
-  __asm__("sqrtss %1, %0" : "=x"(out) : "x"(n));
-  return out;
-#elif defined(__aarch64__)
-  float out;
-  __asm__("fsqrt %s0, %s1" : "=w"(out) : "w"(n));
-  return out;
-#else
-  return sqrtf(n);
-#endif
-}
-
 static Function* generate_float_sqrt_function(Jit* jit)
 {
   const char* name = "float.sqrt";
@@ -1207,14 +1192,35 @@ static Function* generate_float_sqrt_function(Jit* jit)
       { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
     };
 
+    MIR_item_t previous_function = jit->function;
+    MIR_func_t previous_func = MIR_get_curr_func(jit->ctx);
+    MIR_set_curr_func(jit->ctx, NULL);
+
     function = ALLOC(Function);
     function->proto =
       MIR_new_proto_arr(jit->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
                         &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(jit->ctx, name);
+    function->func = MIR_new_func_arr(jit->ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
 
-    MIR_load_external(jit->ctx, name, (uintptr_t)float_sqrt);
+    jit->function = function->func;
+
+    MIR_reg_t n = MIR_reg(jit->ctx, "n", jit->function->u.func);
+
+    {
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_FSQRT, MIR_new_reg_op(jit->ctx, n),
+                                   MIR_new_reg_op(jit->ctx, n)));
+
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_ret_insn(jit->ctx, 1, MIR_new_reg_op(jit->ctx, n)));
+    }
+
     map_put_function(&jit->functions, name, function);
+
+    MIR_finish_func(jit->ctx);
+    MIR_set_curr_func(jit->ctx, previous_func);
+    jit->function = previous_function;
   }
 
   return function;

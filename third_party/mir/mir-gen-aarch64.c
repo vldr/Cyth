@@ -1271,6 +1271,9 @@ static const struct pattern patterns[] = {
   /* cmp Wn, Wm; csel Rd, Rn, xzr */
   {MIR_CCLEAR, "r r r r", "6b00001f:ff20001f rn2 rm3; 9a9f3000:fffffc00 rd0 rn1"},
 
+  /* fsqrt Sd,Sn */
+  {MIR_FSQRT, "r r", "1e21c000:fffffc00 vd0 vn1"},
+
   {MIR_MOV, "r h31", "91000000:fffffc00 rd0 hn1f"}, /* mov Rd,SP */
   {MIR_MOV, "h31 r", "91000000:fffffc00 hd1f rn1"}, /* mov SP,Rn */
   {MIR_MOV, "r r", "aa0003e0:ffe0ffe0 rd0 rm1"},    /* mov Rd,Rm */

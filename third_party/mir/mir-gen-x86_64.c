@@ -1597,6 +1597,9 @@ static struct pattern patterns[] = {
   /* xor r0, r0; cmp r2, r3; cmovb r0, r1 */
   {MIR_CCLEAR, "h0 r r r", "X 33 r0 R0; X 3B r2 R3; X 0F 42 r0 R1", 0},
 
+  /* sqrtss r0, r1 */
+  {MIR_FSQRT, "r r", "F3 0F 51 r0 R1", 0},
+
   {MIR_MOV, "r z", "Y 33 r0 R0", 0},      /* xor r0,r0 -- 32 bit xor */
   {MIR_MOV, "r r", "X 8B r0 R1", 0},      /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1", 0},     /* mov r0,m1 */

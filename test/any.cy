@@ -108,7 +108,6 @@ class Map<K, V>
     return size
 
 Map<int, any> map = Map<int, any>()
-Map<int, string> malp = Map<int, string>()
 
 class Object
     int data

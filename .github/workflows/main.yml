@@ -13,17 +13,12 @@ env:
 
 jobs:
   build:
-    name: Linux and Web
+    name: Linux
     concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v11
-        with:
-          version: ${{env.EM_VERSION}}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,17 +36,23 @@ jobs:
           cd build
           make test
 
-      - name: Build (WASM)
-        run: |
-          cmake -DWASM=1 -DCMAKE_BUILD_TYPE=Debug -S . -B build
-          cd build
-          make -j4
+  build-web:
+    name: Web
+    concurrency: ci-${{ github.ref }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
 
-      - name: Test (WASM)
-        run: |
-          cd build
-          make test
-          make testwasm
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: ${{env.EM_VERSION}}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}
 
       - name: Build (Emscripten)
         run: |

@@ -15,7 +15,7 @@ jobs:
   build:
     name: Linux and Web
     concurrency: ci-${{ github.ref }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -34,7 +34,7 @@ jobs:
         run: |
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build
           cd build
-          make -j12
+          make -j4
 
       - name: Test (MIR)
         run: |
@@ -45,7 +45,7 @@ jobs:
         run: |
           cmake -DWASM=1 -DCMAKE_BUILD_TYPE=Debug -S . -B build
           cd build
-          make -j12
+          make -j4
 
       - name: Test (WASM)
         run: |
@@ -57,7 +57,7 @@ jobs:
         run: |
           emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
           cd embuild
-          make -j12
+          make -j4
 
       - name: Test (Emscripten)
         run: |

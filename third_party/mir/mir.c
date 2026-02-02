@@ -4040,7 +4040,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   mir_assert (func_item->item_type == MIR_func_item);
   vn_empty (ctx);
   func = func_item->u.func;
-  original_func_insns_num = func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
+  original_func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
+  func_insns_num = 0;
   func_top_alloca = func_alloca_features (ctx, func, &func_top_alloca_used_p, NULL, &alloca_size);
   mir_assert (func_top_alloca != NULL || !func_top_alloca_used_p);
   init_func_top_alloca_size = curr_func_top_alloca_size = max_func_top_alloca_size = 0;
@@ -4083,8 +4084,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     if (called_func->first_lref != NULL || called_func->vararg_p || called_func->jret_p
         || called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
                                                                 : MIR_MAX_INSNS_FOR_CALL_INLINE)
-        || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
-            && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
+        || func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE) {
       simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }

@@ -38,7 +38,7 @@ jobs:
 
   build-web:
     name: Web
-    concurrency: ci-${{ github.ref }}
+    concurrency: ci-web-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out code

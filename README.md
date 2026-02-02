@@ -61,11 +61,8 @@ Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/re
 
 ## Examples
 
-- [CythCGI](https://github.com/vldr/CythCGI)  
-A FastCGI server written in Rust that integrates Cyth, enabling a PHP-like scripting environment for web applications.
-
-- [CythRay](https://github.com/vldr/CythRay)  
-Cyth with Raylib bindings, providing a lightweight framework for creating graphical programs and games directly in Cyth.
+- [Raylib](https://github.com/vldr/CythRay)  
+Cyth with Raylib bindings, allowing direct access to Raylib functions from a Cyth script file.
 
 ## Building
 
@@ -79,6 +76,8 @@ _Note:_ The supported platforms for the JIT compiler are:
 - MacOS x64 and ARM64
 
 ### Linux
+
+Run the following commands from the root directory (in a terminal):
 
 _Debug_:  
 ```bash
@@ -98,6 +97,8 @@ _Manual C compilation_:
 `cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/main.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -flto -o cyth`
 
 ### MacOS
+
+Run the following commands from the root directory (in a terminal):
 
 _Xcode project_:  
 ```
@@ -122,6 +123,8 @@ make
 
 ### Windows
 
+Run the following commands from the root directory (in a terminal):
+
 _Visual Studio 2022 project_:  
 ```
 cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
@@ -136,6 +139,8 @@ Then, in the `winbuild` directory, open `cyth.sln` / `cyth.slnx` in Visual Studi
 
 ### Web
 For web builds, you will need to have [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed.
+
+Run the following commands from the root directory (in a terminal):
 
 _Debug_:  
 ```

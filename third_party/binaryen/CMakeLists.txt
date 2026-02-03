@@ -46,7 +46,9 @@ else()
     target_compile_options(binaryen PRIVATE -Wno-everything -w)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(binaryen PRIVATE -O1)
+        target_compile_options(binaryen PRIVATE -Og)
+    elseif (EMSCRIPTEN)
+        target_compile_options(binaryen PRIVATE -flto)
     endif()
 endif()
 

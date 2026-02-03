@@ -88,6 +88,8 @@ add_executable(cyth src/main.c ${SOURCES})
 if (NOT MSVC)
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(cyth PRIVATE -fsanitize=address -fsanitize=undefined -D_DEBUG)
+    elseif (EMSCRIPTEN)
+        target_compile_options(cyth PRIVATE -flto)
     endif()
 endif()
 

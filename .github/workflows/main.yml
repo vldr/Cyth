@@ -107,7 +107,7 @@ jobs:
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
 
-      - name: Test (MIR)
+      - name: Test (MIR) (x64)
         run: |
           cd winbuild
           msbuild test.vcxproj
@@ -116,7 +116,7 @@ jobs:
         run: |
           copy src\include\cyth.h winbuild\Release\
           cd winbuild\Release
-          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib cyth.h
+          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib
 
       - name: Publish (x64)
         uses: svenstaro/upload-release-action@v2
@@ -138,7 +138,7 @@ jobs:
         run: |
           copy src\include\cyth.h winbuild\Release\
           cd winbuild\Release
-          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib cyth.h
+          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib
 
       - name: Publish (ARM64)
         uses: svenstaro/upload-release-action@v2

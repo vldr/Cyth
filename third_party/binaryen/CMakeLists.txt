@@ -47,8 +47,6 @@ else()
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(binaryen PRIVATE -O1)
-    else()
-        target_compile_options(binaryen PRIVATE -flto=auto)
     endif()
 endif()
 

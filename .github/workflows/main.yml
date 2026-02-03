@@ -71,7 +71,7 @@ jobs:
 
       - name: Build (MIR)
         run: |
-          cmake -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
+          cmake -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
           cd build
           make -j3
 
@@ -112,7 +112,7 @@ jobs:
           overwrite: true
 
   build-windows:
-    name: Windows
+    name: Windows (x64)
     concurrency: ci-windows-${{ github.ref }}
     runs-on: windows-latest
     steps:
@@ -127,25 +127,25 @@ jobs:
         with:
           node-version: ${{env.NODE_VERSION}}  
 
-      - name: Build (MIR) (x64)
+      - name: Build (MIR)
         run: |
           cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
           msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
 
-      - name: Test (MIR) (x64)
+      - name: Test (MIR)
         run: |
           cd winbuild
           msbuild test.vcxproj
         
-      - name: Bundle (x64)
+      - name: Bundle
         run: |
           copy src\include\cyth.h winbuild\Release\
           cd winbuild\Release
           tar.exe -a -c -f cyth.zip cyth.exe cyth.lib
 
-      - name: Publish (x64)
+      - name: Publish
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -154,25 +154,45 @@ jobs:
           tag: Build
           overwrite: true
 
-      - name: Build (MIR) (ARM64)
+  build-windows-arm64:
+    name: Windows (ARM64)
+    concurrency: ci-windows-arm64-${{ github.ref }}
+    runs-on: windows-11-arm
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Add MSBUILD to PATH
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}  
+
+      - name: Build (MIR)
         run: |
-          rmdir /s /q winbuild
-          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022" -A ARM64
+          cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
           msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
 
-      - name: Bundle (ARM64)
+      - name: Test (MIR)
+        run: |
+          cd winbuild
+          msbuild test.vcxproj
+        
+      - name: Bundle
         run: |
           copy src\include\cyth.h winbuild\Release\
           cd winbuild\Release
           tar.exe -a -c -f cyth.zip cyth.exe cyth.lib
 
-      - name: Publish (ARM64)
+      - name: Publish
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: winbuild/Release/cyth.zip
-          asset_name: cyth-arm64-linux.zip
+          asset_name: cyth-arm64-windows.zip
           tag: Build
           overwrite: true

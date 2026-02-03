@@ -111,38 +111,40 @@ jobs:
         run: |
           cd winbuild
           msbuild test.vcxproj
-
-      - name: Build (MIR) (ARM64)
-        run: |
-          cd winbuild
-          msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
-
+        
       - name: Bundle (x64)
         run: |
-          copy src\include\cyth.h winbuild\x64\Release\
-          cd winbuild\x64\Release
-          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib cyth.h
-
-      - name: Bundle (ARM64)
-        run: |
-          copy src\include\cyth.h winbuild\ARM64\Release\
-          cd winbuild\ARM64\Release
+          copy src\include\cyth.h winbuild\Release\
+          cd winbuild\Release
           tar.exe -a -c -f cyth.zip cyth.exe cyth.lib cyth.h
 
       - name: Publish (x64)
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: winbuild/x64/Release/cyth.zip
+          file: winbuild/Release/cyth.zip
           asset_name: cyth-x86_64-windows.zip
           tag: Build
           overwrite: true
+
+      - name: Build (MIR) (ARM64)
+        run: |
+          rmdir /s /q winbuild
+          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022" -A ARM64
+          cd winbuild
+          msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
+
+      - name: Bundle (ARM64)
+        run: |
+          copy src\include\cyth.h winbuild\Release\
+          cd winbuild\Release
+          tar.exe -a -c -f cyth.zip cyth.exe cyth.lib cyth.h
 
       - name: Publish (ARM64)
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: winbuild/ARM64/Release/cyth.zip
+          file: winbuild/Release/cyth.zip
           asset_name: cyth-arm64-linux.zip
           tag: Build
           overwrite: true

@@ -54,7 +54,7 @@ jobs:
   build-web:
     name: Web
     concurrency: ci-web-${{ github.ref }}
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -63,6 +63,35 @@ jobs:
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: ${{env.EM_VERSION}}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}
+
+      - name: Build (Emscripten)
+        run: |
+          emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
+          cd embuild
+          make -j3
+
+      - name: Test (Emscripten)
+        run: |
+          cd embuild
+          make test
+
+      - name: Publish (Web)
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: editor
+
+  build-macos:
+    name: MacOS
+    concurrency: ci-macos-${{ github.ref }}
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -85,22 +114,6 @@ jobs:
           cp src/include/cyth.h build/
           cd build
           zip cyth.zip cyth cyth.h libcyth.a  
-
-      - name: Build (Emscripten)
-        run: |
-          emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
-          cd embuild
-          make -j3
-
-      - name: Test (Emscripten)
-        run: |
-          cd embuild
-          make test
-
-      - name: Publish (Web)
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: editor
 
       - name: Publish (MIR)
         uses: svenstaro/upload-release-action@v2
@@ -172,7 +185,7 @@ jobs:
 
       - name: Build (MIR)
         run: |
-          cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"
+          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
           msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64

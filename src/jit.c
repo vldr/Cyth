@@ -2397,14 +2397,14 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
   MIR_reg_t left = 0;
   MIR_reg_t right = 0;
 
-  DataType data_type = expression->operand_data_type;
+  DataType data_type = expression->left_data_type;
 
   if (expression->op.type != TOKEN_OR && expression->op.type != TOKEN_AND &&
       !(expression->op.type == TOKEN_PLUS && data_type.type == TYPE_STRING))
   {
-    left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+    left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->left_data_type),
                              jit->function->u.func);
-    right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+    right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->right_data_type),
                               jit->function->u.func);
 
     generate_expression(jit, left, expression->left);
@@ -2461,8 +2461,8 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
       Expr* string;
       array_foreach(&strings, string)
       {
-        MIR_reg_t n = _MIR_new_temp_reg(
-          jit->ctx, data_type_to_mir_type(expression->operand_data_type), jit->function->u.func);
+        MIR_reg_t n = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->left_data_type),
+                                        jit->function->u.func);
         generate_expression(jit, n, string);
 
         array_add(&arguments, MIR_new_reg_op(jit->ctx, n));
@@ -2703,7 +2703,7 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
       MIR_label_t cont_label = MIR_new_label(jit->ctx);
       MIR_label_t if_false_label = MIR_new_label(jit->ctx);
 
-      left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+      left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->left_data_type),
                                jit->function->u.func);
       generate_expression(jit, left, expression->left);
 
@@ -2720,7 +2720,7 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
 
       MIR_append_insn(jit->ctx, jit->function, if_false_label);
 
-      right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+      right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->right_data_type),
                                 jit->function->u.func);
       generate_expression(jit, right, expression->right);
 
@@ -2744,7 +2744,7 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
       MIR_label_t cont_label = MIR_new_label(jit->ctx);
       MIR_label_t if_false_label = MIR_new_label(jit->ctx);
 
-      left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+      left = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->left_data_type),
                                jit->function->u.func);
       generate_expression(jit, left, expression->left);
 
@@ -2752,7 +2752,7 @@ static void generate_binary_expression(Jit* jit, MIR_reg_t dest, BinaryExpr* exp
                       MIR_new_insn(jit->ctx, MIR_BNES, MIR_new_label_op(jit->ctx, if_false_label),
                                    MIR_new_reg_op(jit->ctx, left), MIR_new_int_op(jit->ctx, 0)));
 
-      right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->operand_data_type),
+      right = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(expression->right_data_type),
                                 jit->function->u.func);
       generate_expression(jit, right, expression->right);
 
@@ -4965,6 +4965,22 @@ static void init_variable_declaration(Jit* jit, VarStmt* statement)
       jit->ctx,
       memory_sprintf("%s.%s", statement->name.lexeme, data_type_to_string(statement->data_type)),
       data_type_to_mir_type(statement->data_type), 1, &init);
+
+    MIR_reg_t ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+    MIR_append_insn(jit->ctx, jit->function,
+                    MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, ptr),
+                                 MIR_new_ref_op(jit->ctx, statement->item)));
+
+    MIR_reg_t initializer = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(statement->data_type),
+                                              jit->function->u.func);
+    generate_default_initialization(jit, initializer, statement->data_type);
+
+    MIR_append_insn(
+      jit->ctx, jit->function,
+      MIR_new_insn(
+        jit->ctx, data_type_to_mov_type(statement->data_type),
+        MIR_new_mem_op(jit->ctx, data_type_to_mir_type(statement->data_type), 0, ptr, 0, 1),
+        MIR_new_reg_op(jit->ctx, initializer)));
   }
   else
   {

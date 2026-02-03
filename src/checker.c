@@ -2287,7 +2287,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
     expression->right->literal.data_type = DATA_TYPE(TYPE_BOOL);
     expression->right->literal.boolean = false;
 
-    expression->operand_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->left_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->right_data_type = DATA_TYPE(TYPE_BOOL);
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
 
     return DATA_TYPE(TYPE_BOOL);
@@ -2395,7 +2396,8 @@ static DataType check_binary_expression(BinaryExpr* expression)
 
     expression->function = function;
     expression->return_data_type = function->data_type;
-    expression->operand_data_type = left;
+    expression->left_data_type = left;
+    expression->right_data_type = right;
 
     link(expression->op, expression->function->name);
     return expression->return_data_type;
@@ -2442,8 +2444,9 @@ skip:
   }
 
   expression->function = NULL;
+  expression->left_data_type = left;
+  expression->right_data_type = right;
   expression->return_data_type = left;
-  expression->operand_data_type = left;
 
   switch (op.type)
   {
@@ -2469,7 +2472,8 @@ skip:
       }
     }
 
-    expression->operand_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->left_data_type = DATA_TYPE(TYPE_BOOL);
+    expression->right_data_type = DATA_TYPE(TYPE_BOOL);
     expression->return_data_type = DATA_TYPE(TYPE_BOOL);
     break;
   case TOKEN_EQUAL_EQUAL:

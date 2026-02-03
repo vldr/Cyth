@@ -143,7 +143,8 @@ typedef struct _LITERAL_ARRAY_EXPR
 typedef struct _BINARY_EXPR
 {
   DataType return_data_type;
-  DataType operand_data_type;
+  DataType left_data_type;
+  DataType right_data_type;
 
   Expr* left;
   Token op;

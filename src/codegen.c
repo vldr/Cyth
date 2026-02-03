@@ -3692,7 +3692,7 @@ static BinaryenExpressionRef generate_binary_expression(BinaryExpr* expression)
   BinaryenExpressionRef right = generate_expression(expression->right);
   BinaryenOp op = 0;
 
-  DataType data_type = expression->operand_data_type;
+  DataType data_type = expression->left_data_type;
 
   switch (expression->op.type)
   {

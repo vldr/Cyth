@@ -236,6 +236,32 @@ onmessage = (event) => {
           "atan.float(float)": Math.atan,
           "atan2.float(float, float)": Math.atan2,
           "pow.float(float, float)": Math.pow,
+
+          "createImage.any(int, int)": function (width, height) {
+            return context.createImageData(width, height);
+          },
+
+          "setImagePixel.void(any, int, int, int, int, int)": function (image, x, y, r, g, b) {
+            const index = (y * image.width * 4) + (x * 4);
+            image.data[index] = r;
+            image.data[index + 1] = g;
+            image.data[index + 2] = b;
+            image.data[index + 3] = 255;
+          },
+
+          "clearImage.void(any, int, int, int)": function (image, r, g, b) {
+            let i = 0;
+            while (i < image.data.length) {
+              image.data[i++] = r;
+              image.data[i++] = g;
+              image.data[i++] = b;
+              image.data[i++] = 255;
+            }
+          },
+
+          "drawImage.void(any, int, int)": function (image, x, y) {
+            context.putImageData(image, x, y)
+          }
         },
       });
 

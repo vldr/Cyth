@@ -36,13 +36,13 @@ jobs:
           cd build
           make test
       
-      - name: Bundle
+      - name: Bundle (MIR)
         run: |
           cp src/include/cyth.h build/
           cd build
           zip cyth.zip cyth cyth.h libcyth.a  
       
-      - name: Publish
+      - name: Publish (MIR)
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -69,6 +69,23 @@ jobs:
         with:
           node-version: ${{env.NODE_VERSION}}
 
+      - name: Build (MIR)
+        run: |
+          cmake -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
+          cd build
+          make -j3
+
+      - name: Test (MIR)
+        run: |
+          cd build
+          make test
+
+      - name: Bundle (MIR)
+        run: |
+          cp src/include/cyth.h build/
+          cd build
+          zip cyth.zip cyth cyth.h libcyth.a  
+
       - name: Build (Emscripten)
         run: |
           emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
@@ -84,6 +101,15 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: editor
+
+      - name: Publish (MIR)
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/cyth.zip
+          asset_name: cyth-universal-macos.zip
+          tag: Build
+          overwrite: true
 
   build-windows:
     name: Windows
@@ -106,6 +132,7 @@ jobs:
           cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
+          msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
 
       - name: Test (MIR) (x64)
         run: |
@@ -133,6 +160,7 @@ jobs:
           cmake.exe -S . -B winbuild -G "Visual Studio 17 2022" -A ARM64
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
+          msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=ARM64
 
       - name: Bundle (ARM64)
         run: |

@@ -18,13 +18,19 @@ You can try out Cyth in the web playground:
 [https://cyth.vldr.org](https://cyth.vldr.org)
 
 ## Motivation
-Suppose we want to call a native C function from Cyth; for example, to print `Hello World!`. In Cyth, you just import the function and call it: no stack juggling and no wrapper code.
+Suppose we want to call a native C function from Cyth; for example, to print the 12th fibonacci number. In Cyth, you just import the function and call it:
 
 ```cpp
 import "std"
   void print(string text)
 
-print("Hello World!")
+int fibonacci(int n)
+  if n <= 1
+    return n
+  else
+    return fibonacci(n - 2) + fibonacci(n - 1)
+
+print("Fibonacci = " + fibonacci(12))
 ```
 
 On the C side, we have to just initialize the Cyth runtime, provide our implementation of `print` and run the program:

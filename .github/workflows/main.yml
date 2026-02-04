@@ -96,6 +96,20 @@ jobs:
           cd embuild
           make test
 
+      - name: Package VSCode Extension
+        run: |
+          cd embuild
+          make package
+
+      - name: Publish VSCode Extension
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: editor/extension/cyth-0.0.1.vsix
+          asset_name: cyth-vscode-extension.vsix
+          tag: Build
+          overwrite: true
+
       - name: Publish (Web)
         uses: JamesIves/github-pages-deploy-action@v4
         with:

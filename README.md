@@ -20,7 +20,7 @@ You can try out Cyth in the web playground:
 ## Motivation
 Suppose we want to call a native C function from Cyth; for example, to print the 12th fibonacci number. In Cyth, you just import the function and call it:
 
-```cpp
+```jai
 import "std"
   void print(string text)
 

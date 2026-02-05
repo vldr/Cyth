@@ -40,6 +40,7 @@
 #define POINTER_MASK 0x0000FFFFFFFFFFFF
 #define GC_NOT_DLL
 #define NO_MSGBOX_ON_ERROR
+#define NO_DEBUGGING
 
 /*
  * Define version numbers here to allow test on build machine for

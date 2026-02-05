@@ -12,10 +12,10 @@ env:
   NODE_VERSION: 23
 
 jobs:
-  build:
-    name: Linux
+  build-linux:
+    name: Linux (x64)
     concurrency: ci-${{ github.ref }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -24,6 +24,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{env.NODE_VERSION}}
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
 
       - name: Build (WASM)
         run: |
@@ -43,27 +46,87 @@ jobs:
 
       - name: Build (MIR)
         run: |
-          cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
-          cd build
-          make -j4
+          mkdir build
+          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/main.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target x86_64-linux-gnu.2.5 -o build/cyth
+          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target x86_64-linux-gnu.2.5 -c -o build/cyth.o
+          zig ar rcs build/libcyth.a build/cyth.o
 
       - name: Test (MIR)
         run: |
           cd build
-          make test
+          node ../test/_test.js ./cyth
       
-      - name: Bundle (MIR)
+      - name: Bundle
         run: |
           cp src/include/cyth.h build/
           cd build
           zip cyth.zip cyth cyth.h libcyth.a  
       
-      - name: Publish (MIR)
+      - name: Publish
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/cyth.zip
           asset_name: cyth-linux-x86_64.zip
+          tag: Build
+          overwrite: true
+
+  build-linux-arm64:
+    name: Linux (ARM64)
+    concurrency: ci-${{ github.ref }}
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Build (WASM)
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Debug -DWASM=1 -S . -B build
+          cd build
+          make -j4
+
+      - name: Test (WASM)
+        run: |
+          cd build
+          make test
+          make testwasm
+
+      - name: Clean up
+        run: |
+          rm -rf build
+
+      - name: Build (MIR)
+        run: |
+          mkdir build
+          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/main.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target aarch64-linux-gnu.2.17 -o build/cyth
+          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target aarch64-linux-gnu.2.17 -c -o build/cyth.o
+          zig ar rcs build/libcyth.a build/cyth.o
+
+      - name: Test (MIR)
+        run: |
+          cd build
+          node ../test/_test.js ./cyth
+      
+      - name: Bundle
+        run: |
+          cp src/include/cyth.h build/
+          cd build
+          zip cyth.zip cyth cyth.h libcyth.a  
+      
+      - name: Publish
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/cyth.zip
+          asset_name: cyth-linux-arm64.zip
           tag: Build
           overwrite: true
           

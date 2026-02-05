@@ -2934,6 +2934,13 @@ static DataType check_access_expression(AccessExpr* expression)
 {
   DataType data_type = check_expression(expression->expr);
 
+  if (data_type.type != TYPE_OBJECT && data_type.type != TYPE_PROTOTYPE &&
+      expression->template_types)
+  {
+    error_not_a_template_type(expression->name, expression->name.lexeme);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
   if (data_type.type == TYPE_OBJECT || data_type.type == TYPE_PROTOTYPE)
   {
     const char* name = expression->name.lexeme;

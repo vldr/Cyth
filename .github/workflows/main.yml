@@ -47,8 +47,46 @@ jobs:
       - name: Build (MIR)
         run: |
           mkdir build
-          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/main.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target x86_64-linux-gnu.2.5 -o build/cyth
-          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target x86_64-linux-gnu.2.5 -c -o build/cyth.o
+          zig cc third_party/mir/mir.c \
+                 third_party/mir/mir-gen.c \
+                 third_party/bdwgc/extra/gc.c \
+                 src/main.c \
+                 src/jit.c \
+                 src/checker.c \
+                 src/environment.c \
+                 src/memory.c \
+                 src/lexer.c \
+                 src/map.c \
+                 src/parser.c \
+                 -Ithird_party/mir \
+                 -Ithird_party/bdwgc/include \
+                 -fsigned-char \
+                 -O3 \
+                 -s \
+                 -v \
+                 -target x86_64-linux-gnu.2.5 \
+                 -o build/cyth
+
+          zig cc third_party/mir/mir.c \
+                 third_party/mir/mir-gen.c \
+                 third_party/bdwgc/extra/gc.c \
+                 src/jit.c \
+                 src/checker.c \
+                 src/environment.c \
+                 src/memory.c \
+                 src/lexer.c \
+                 src/map.c \
+                 src/parser.c \
+                 -Ithird_party/mir \
+                 -Ithird_party/bdwgc/include \
+                 -fsigned-char \
+                 -O3 \
+                 -s \
+                 -v \
+                 -target x86_64-linux-gnu.2.5 \
+                 -c \
+                 -o build/cyth.o
+
           zig ar rcs build/libcyth.a build/cyth.o
 
       - name: Test (MIR)
@@ -73,7 +111,7 @@ jobs:
 
   build-linux-arm64:
     name: Linux (ARM64)
-    concurrency: ci-${{ github.ref }}
+    concurrency: ci-arm64-${{ github.ref }}
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Check out code
@@ -106,8 +144,46 @@ jobs:
       - name: Build (MIR)
         run: |
           mkdir build
-          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/main.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target aarch64-linux-gnu.2.17 -o build/cyth
-          zig cc third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/memory.c src/lexer.c src/map.c src/parser.c -Ithird_party/mir -Ithird_party/bdwgc/include -fsigned-char -O3 -s -target aarch64-linux-gnu.2.17 -c -o build/cyth.o
+          zig cc third_party/mir/mir.c \
+                 third_party/mir/mir-gen.c \
+                 third_party/bdwgc/extra/gc.c \
+                 src/main.c \
+                 src/jit.c \
+                 src/checker.c \
+                 src/environment.c \
+                 src/memory.c \
+                 src/lexer.c \
+                 src/map.c \
+                 src/parser.c \
+                 -Ithird_party/mir \
+                 -Ithird_party/bdwgc/include \
+                 -fsigned-char \
+                 -O3 \
+                 -s \
+                 -v \
+                 -target aarch64-linux-gnu.2.17 \
+                 -o build/cyth
+
+          zig cc third_party/mir/mir.c \
+                 third_party/mir/mir-gen.c \
+                 third_party/bdwgc/extra/gc.c \
+                 src/jit.c \
+                 src/checker.c \
+                 src/environment.c \
+                 src/memory.c \
+                 src/lexer.c \
+                 src/map.c \
+                 src/parser.c \
+                 -Ithird_party/mir \
+                 -Ithird_party/bdwgc/include \
+                 -fsigned-char \
+                 -O3 \
+                 -s \
+                 -v \
+                 -target aarch64-linux-gnu.2.17 \
+                 -c \
+                 -o build/cyth.o
+
           zig ar rcs build/libcyth.a build/cyth.o
 
       - name: Test (MIR)

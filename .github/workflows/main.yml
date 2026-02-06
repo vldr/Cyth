@@ -106,7 +106,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/cyth.zip
           asset_name: cyth-linux-x86_64.zip
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true
 
   build-linux-arm64:
@@ -203,7 +203,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/cyth.zip
           asset_name: cyth-linux-arm64.zip
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true
           
   build-web:
@@ -246,7 +246,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: editor/extension/cyth-0.0.1.vsix
           asset_name: cyth-vscode-extension.vsix
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true
 
       - name: Publish (Web)
@@ -306,7 +306,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/cyth.zip
           asset_name: cyth-macos-universal.zip
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true
 
   build-windows:
@@ -356,7 +356,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: winbuild/Release/cyth.zip
           asset_name: cyth-windows-x86_64.zip
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true
 
   build-windows-arm64:
@@ -406,5 +406,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: winbuild/Release/cyth.zip
           asset_name: cyth-windows-arm64.zip
-          tag: Build ${{ github.ref }}
+          tag: build-${{ github.sha }}
           overwrite: true

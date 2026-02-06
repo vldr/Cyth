@@ -1157,6 +1157,8 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->class.size = 0;
   stmt->class.alignment = 1;
   stmt->class.default_constructor = ALLOC(FuncStmt);
+  stmt->class.default_constructor->name = name;
+  stmt->class.default_constructor->name_raw = name;
 
   array_init(&stmt->class.variables);
   array_init(&stmt->class.functions);

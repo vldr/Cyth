@@ -18,9 +18,9 @@ a.reserve(1,2)
 
 test4()
 
-#! 8:1-8:9 Expected 3 parameters but got 2.
+#! 8:5-8:9 Expected 3 parameters but got 2.
 #! 9:1-9:5 Expected 3 parameters but got 2.
 #! 10:1-10:6 Expected 3 parameters but got 2.
 #! 16:1-16:6 Expected 4 parameters but got 2.
-#! 17:1-17:10 Expected 3 parameters but got 2.
+#! 17:3-17:10 Expected 3 parameters but got 2.
 #! 19:1-19:6 Expected 1 parameter but got 0.

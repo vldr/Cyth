@@ -4855,7 +4855,7 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
   FuncStmt* function;
   array_foreach(&statement->functions, function)
   {
-    if (strcmp(function->name_raw, "__init__") == 0)
+    if (strcmp(function->name_raw.lexeme, "__init__") == 0)
       array_add(&initializer_functions, function);
 
     generate_function_declaration(function);

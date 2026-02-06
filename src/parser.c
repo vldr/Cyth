@@ -622,6 +622,7 @@ static Expr* call(void)
       access->access.expr = expr;
       access->access.expr_token = combine_tokens(start_token, end_token);
 
+      start_token = access->access.name;
       expr = access;
     }
     else if (match(TOKEN_LEFT_BRACKET))
@@ -955,7 +956,7 @@ static Stmt* function_declaration_statement(DataTypeToken type, Token name)
   stmt->type = STMT_FUNCTION_DECL;
   stmt->func.type = type;
   stmt->func.name = name;
-  stmt->func.name_raw = name.lexeme;
+  stmt->func.name_raw = name;
   stmt->func.import = NULL;
   stmt->func.item = NULL;
   stmt->func.proto = NULL;
@@ -1151,6 +1152,7 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
   stmt->type = STMT_CLASS_DECL;
   stmt->class.keyword = keyword;
   stmt->class.name = name;
+  stmt->class.name_raw = name;
   stmt->class.ref = 0;
   stmt->class.size = 0;
   stmt->class.alignment = 1;

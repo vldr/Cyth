@@ -4606,7 +4606,7 @@ static void generate_class_declaration(Jit* jit, ClassStmt* statement)
   FuncStmt* function;
   array_foreach(&statement->functions, function)
   {
-    if (strcmp(function->name_raw, "__init__") == 0)
+    if (strcmp(function->name_raw.lexeme, "__init__") == 0)
       array_add(&initializer_functions, function);
 
     generate_function_declaration(jit, function);
@@ -4863,7 +4863,7 @@ static void init_class_declaration(Jit* jit, ClassStmt* statement)
   FuncStmt* function;
   array_foreach(&statement->functions, function)
   {
-    if (strcmp(function->name_raw, "__init__") == 0)
+    if (strcmp(function->name_raw.lexeme, "__init__") == 0)
       array_add(&initializer_functions, function);
 
     init_function_declaration(jit, function);

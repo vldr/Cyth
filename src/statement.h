@@ -60,7 +60,7 @@ typedef struct _FUNC_STMT
   DataTypeToken type;
 
   Token name;
-  const char* name_raw;
+  Token name_raw;
   const char* import;
 
   ArrayVarStmt variables;
@@ -121,6 +121,7 @@ typedef struct _CLASS_STMT
 {
   Token keyword;
   Token name;
+  Token name_raw;
 
   struct _ENVIRONMENT* environment;
   MapVarStmt* members;

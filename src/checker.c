@@ -66,11 +66,11 @@ static void error(Token token, const char* message)
   checker.errors++;
 }
 
-static void link(Token reference, Token definition)
+static void link(Token reference, Token definition, int length)
 {
   if (checker.link_callback)
     checker.link_callback(reference.start_line, reference.start_column, definition.start_line,
-                          definition.start_column, reference.length);
+                          definition.start_column, length);
 }
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
@@ -769,7 +769,7 @@ static DataType token_to_data_type(Token token)
       DataType object = DATA_TYPE(TYPE_OBJECT);
       object.class = variable->data_type.class;
 
-      link(token, object.class->name);
+      link(token, object.class->name_raw, object.class->name_raw.length);
       return object;
     }
     else if (variable->data_type.type == TYPE_ALIAS)
@@ -794,6 +794,12 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
 
   if (variable && variable->data_type.type == TYPE_PROTOTYPE)
   {
+    if (checker.link_callback)
+    {
+      for (unsigned int i = 0; i < template.class_template->types.size; i++)
+        data_type_token_to_data_type(array_at(&template_type.types, i));
+    }
+
     return variable->data_type;
   }
 
@@ -891,6 +897,12 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   if (variable && (variable->data_type.type == TYPE_FUNCTION ||
                    variable->data_type.type == TYPE_FUNCTION_MEMBER))
   {
+    if (checker.link_callback)
+    {
+      for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
+        data_type_token_to_data_type(array_at(&function_type.types, i));
+    }
+
     return variable->data_type;
   }
 
@@ -2399,7 +2411,7 @@ static DataType check_binary_expression(BinaryExpr* expression)
     expression->left_data_type = left;
     expression->right_data_type = right;
 
-    link(expression->op, expression->function->name);
+    link(expression->op, expression->function->name, expression->op.length);
     return expression->return_data_type;
   }
 
@@ -2554,8 +2566,11 @@ static DataType check_variable_expression(VarExpr* expression)
 
   expand_template_types(expression->template_types, &expression->data_type, expression->name);
 
-  if (expression->data_type.type != TYPE_PROTOTYPE)
-    link(expression->name, variable->name);
+  if (expression->data_type.type != TYPE_FUNCTION &&
+      expression->data_type.type != TYPE_FUNCTION_MEMBER &&
+      expression->data_type.type != TYPE_FUNCTION_GROUP &&
+      expression->data_type.type != TYPE_PROTOTYPE)
+    link(expression->name, variable->name, expression->name.length);
 
   return expression->data_type;
 }
@@ -2722,6 +2737,8 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
+    link(expression->callee_token, function->name_raw, function->name_raw.length);
+
     expression->function = function;
     expression->return_data_type = function->data_type;
     expression->callee_data_type = callee_data_type;
@@ -2758,6 +2775,8 @@ static DataType check_call_expression(CallExpr* expression)
                             argument_data_type);
       }
     }
+
+    link(expression->callee_token, function->name_raw, function->name_raw.length);
 
     expression->function = function;
     expression->return_data_type = function->data_type;
@@ -2900,12 +2919,10 @@ static DataType check_call_expression(CallExpr* expression)
       expression->function = class->default_constructor;
     }
 
+    link(expression->callee_token, expression->function->name, class->name_raw.length);
+
     expression->callee_data_type = callee_data_type;
     expression->return_data_type = token_to_data_type(class->name);
-
-    Token link_token = expression->callee_token;
-    link_token.length = class->name.length;
-    link(link_token, expression->function->name);
 
     return expression->return_data_type;
   }
@@ -3009,7 +3026,11 @@ static DataType check_access_expression(AccessExpr* expression)
       expression->data_type = expression_data_type;
     }
 
-    link(expression->name, variable->name);
+    if (expression->data_type.type != TYPE_FUNCTION &&
+        expression->data_type.type != TYPE_FUNCTION_MEMBER &&
+        expression->data_type.type != TYPE_FUNCTION_GROUP)
+      link(expression->name, variable->name, expression->name.length);
+
     return expression->data_type;
   }
   else if (data_type.type == TYPE_ARRAY)
@@ -3852,7 +3873,7 @@ static void check_variable_declaration(VarStmt* statement)
 
 static void check_get_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name_raw, "__get__") == 0)
+  if (strcmp(function->name_raw.lexeme, "__get__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 2;
@@ -3869,7 +3890,7 @@ static void check_get_function_declaration(FuncStmt* function)
 
 static void check_set_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name_raw, "__set__") == 0)
+  if (strcmp(function->name_raw.lexeme, "__set__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 3;
@@ -3886,7 +3907,7 @@ static void check_set_function_declaration(FuncStmt* function)
 
 static void check_str_function_declaration(FuncStmt* function)
 {
-  if (strcmp(function->name_raw, "__str__") == 0)
+  if (strcmp(function->name_raw.lexeme, "__str__") == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 1;
@@ -3911,7 +3932,7 @@ static void check_str_function_declaration(FuncStmt* function)
 
 static void check_binary_overload_function_declaration(FuncStmt* function, const char* name)
 {
-  if (strcmp(function->name_raw, name) == 0)
+  if (strcmp(function->name_raw.lexeme, name) == 0)
   {
     int got = array_size(&function->parameters);
     int expected = 2;

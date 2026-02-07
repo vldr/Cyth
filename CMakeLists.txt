@@ -38,7 +38,7 @@ if (EMSCRIPTEN)
     )
 else()
     if (NOT MSVC)
-        add_link_options(-pthread -lm)
+        add_link_options(-pthread)
     endif()
 
     add_custom_target(test
@@ -139,4 +139,3 @@ if (NOT EMSCRIPTEN)
     target_link_libraries(libcyth PRIVATE mir)
     target_link_libraries(libcyth PRIVATE bdwgc)
 endif()
-

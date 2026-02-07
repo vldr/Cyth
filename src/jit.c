@@ -88,7 +88,8 @@ static void init_function_declaration(Jit* jit, FuncStmt* statement);
 
 static int string_equals(String* left, String* right)
 {
-  return (left->size == right->size && memcmp(left->data, right->data, left->size) == 0) ? 1 : 0;
+  return left == right ||
+         (left->size == right->size && memcmp(left->data, right->data, left->size) == 0);
 }
 
 static String* string_int_cast(int n)

@@ -1603,7 +1603,7 @@ static void init_function_declaration(FuncStmt* statement)
     }
 
     VarStmt* parameter = ALLOC(VarStmt);
-    parameter->name = checker.class->name;
+    parameter->name = checker.class->name_raw;
     parameter->name.lexeme = "this";
     parameter->name.length = sizeof("this") - 1;
     parameter->type = (DataTypeToken){

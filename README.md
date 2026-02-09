@@ -177,12 +177,12 @@ make
   - [Function Pointers](#function-pointers)
 - [Variables](#variables)
 - [Functions](#functions)
+- [`import` statement](#import-statement)
 - [`if` statement](#if-statement)
 - [`while` loop](#while-loop)
 - [`for` loop](#for-loop)
 - [`break` statement](#break-statement)
 - [`continue` statement](#continue-statement)
-
 
 ### Primitive Types
 #### `bool`
@@ -230,7 +230,7 @@ Default value: `""` (empty string)
 - All types can be cast to a `string`, which will convert to the type's string representation; casting `any` to a string will attempt to convert the `any` to the underlying string type rather than its string representation.
 
 _Example:_
-```cpp
+```jai
 string myString = "hello world"
 ```
 
@@ -240,7 +240,7 @@ Default value: null
 - Casting `any` to the incorrect underlying type will trigger a panic. 
 
 _Example:_
-```cpp
+```jai
 any myAny = "hello world"
 string myString = (string)myAny
 ```
@@ -254,7 +254,7 @@ Default value: `[]` (empty list)
 
 _Example:_
 
-```cpp
+```jai
 int[] myArray
 myArray.push(1)
 myArray.push(2)
@@ -269,7 +269,7 @@ Default value: `null`
 
 _Example:_
 
-```cpp
+```jai
 class Vector
   float x
   float y
@@ -285,7 +285,7 @@ Vector myVector = Vector(10, 20, 30)
 
 Although the keyword `class` is used, there is no support for inheritance or other common object-oriented concepts in Cyth.
 
-Objects in Cyth closely resemble structs rather than proper classes, except there are method functions. All method functions have an implicit `this` parameter.
+Objects in Cyth closely resemble structs rather than traditional classes. The key difference is that they can have **method functions**, which are functions that include an implicit `this` parameter.
 
 _Example:_
 
@@ -314,8 +314,12 @@ class Vector
 >
 > LengthFunction length = (LengthFunction) cyth_get_function(jit, "Vector.length.float()");
 > 
-> Vector vec = {1.0f, 1.0f, 1.0f};
-> float len = length(&vec);
+> Vector* vector = (Vector*) cyth_alloc(true, sizeof(Vector));
+> vector->x = 1;
+> vector->y = 2;
+> vector->z = 3;
+>
+> float len = length(vector);
 > ```
 >
 
@@ -330,7 +334,6 @@ void __init__()
 ```cpp
 V __get__(T index)
 ```
-
 
 *Index and assign overload*
 ```cpp
@@ -357,7 +360,6 @@ V __eq__(T other)
 V __ne__(T other)
 V __str__(T other)
 ```
-
 
 #### Function Pointers
 Possible values: `null` or a valid pointer (reference).  
@@ -465,6 +467,29 @@ class MyClass
 ```
 
 Nested functions inside method functions are themselves method functions with an implicit `this` parameter. Meaning these nested method functions can access object fields inside them.
+
+## `import` statement
+
+The `import` statement allows you to specify external C functions that you can call from Cyth, effectively enabling a foreign function interface (FFI).
+
+First, you specify a module, and then you list the functions to import from that module (these are listed as any other function but without a body). For example:
+
+```jai
+import "myModule"
+  int myExternalFunction(int a, int b)
+```
+
+In the C code, you then call `cyth_set_function` to link the C function to the Cyth import. When calling `cyth_set_function`, you must provide the module name, function name, and function signature in the format `moduleName.functionName.signature`. For example:
+
+```cpp
+int my_external_function(int a, int b) {
+  return a + b;
+}
+
+cyth_set_function(jit, "myModule.myExternalFunction.int(int, int)", (uintptr_t)my_external_function);
+```
+
+In the above example, we are linking from the `myModule` module and the `myExternalFunction` function which accepts two `int` parameters and returns an `int`.
 
 ## `if` statement
 

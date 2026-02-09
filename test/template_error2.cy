@@ -10,5 +10,5 @@ class A
 
 A.test<void>
 
-#! 2:3-2:4 The type cannot be void here. (occurred when creating A.test<void> at 11:3)
-#! 9:10-9:11 The name 'q' already exists. (occurred when creating A.test<void> at 11:3)
+#! 2:3-2:4 The type cannot be void here.\n* occurred when creating Q<void> at 6:5\n* occurred when creating A.test<void> at 11:3
+#! 9:10-9:11 The name 'q' already exists.\n* occurred when creating A.test<void> at 11:3

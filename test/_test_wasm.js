@@ -54,10 +54,10 @@ for (const filename of scripts) {
     const errors = process.stderr
       .toString()
       .trim()
-      .split("\n")
+      .split(/\n(?!\*)/)
       .filter(Boolean)
       .map((line) => {
-        const matches = line.match(
+        const matches = line.replaceAll("\n", "\\n").replaceAll("\r", "").match(
           /^([0-9]+):([0-9]+)-([0-9]+):([0-9]+): error: (.+)/
         );
 
@@ -90,7 +90,7 @@ for (const filename of scripts) {
           logs.push(String(output));
         }
       }
-      
+
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log<bool>.void(bool)": log,

@@ -7,13 +7,6 @@
 #include <math.h>
 #include <stdio.h>
 
-static Expr* prefix_unary(void);
-static Expr* expression(void);
-static void statement(ArrayStmt* stmts);
-static void statements(ArrayStmt* stmts);
-
-static DataTypeToken data_type_array_function(bool* skip_greater_greater);
-
 static struct
 {
   int current;
@@ -25,6 +18,12 @@ static struct
   void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
                          const char* message);
 } parser;
+
+static void statements(ArrayStmt* stmts);
+static void statement(ArrayStmt* stmts);
+static Expr* prefix_unary(void);
+static Expr* expression(void);
+static DataTypeToken data_type_array_function(bool* skip_greater_greater);
 
 static void error(Token token, const char* message)
 {

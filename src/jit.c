@@ -29,18 +29,18 @@
 #endif
 #endif
 
+array_def(MIR_type_t, MIR_type_t);
+array_def(MIR_var_t, MIR_var_t);
+array_def(MIR_op_t, MIR_op_t);
+array_def(MIR_reg_t, MIR_reg_t);
+array_def(MIR_item_t, MIR_item_t);
+
 typedef void (*Start)(void);
 typedef struct _FUNCTION
 {
   MIR_item_t func;
   MIR_item_t proto;
 } Function;
-
-array_def(MIR_type_t, MIR_type_t);
-array_def(MIR_var_t, MIR_var_t);
-array_def(MIR_op_t, MIR_op_t);
-array_def(MIR_reg_t, MIR_reg_t);
-array_def(MIR_item_t, MIR_item_t);
 
 struct _JIT
 {

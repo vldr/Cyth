@@ -84,6 +84,7 @@ jobs:
                  -s \
                  -v \
                  -target x86_64-linux-gnu.2.5 \
+                 -Wa,-mrelax-relocations=no \
                  -c \
                  -o build/cyth.o
 

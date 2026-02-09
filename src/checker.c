@@ -9,6 +9,12 @@
 #include "parser.h"
 #include "statement.h"
 
+typedef struct _TOKEN_LINK
+{
+  Token token;
+  struct _TOKEN_LINK* previous;
+} TokenLink;
+
 static struct
 {
   ArrayStmt statements;
@@ -20,7 +26,7 @@ static struct
   FuncStmt* function;
   ClassStmt* class;
   IfStmt* cond;
-  Token* template;
+  TokenLink* template;
   WhileStmt* loop;
   AssignExpr* assignment;
 
@@ -53,9 +59,17 @@ static DataType data_type_token_to_data_type(DataTypeToken type);
 static void error(Token token, const char* message)
 {
   if (checker.template)
-    message =
-      memory_sprintf("%s (occurred when creating %s at %d:%d)", message, checker.template->lexeme,
-                     checker.template->start_line, checker.template->start_column);
+  {
+    TokenLink* template = checker.template;
+    while (template)
+    {
+      message =
+        memory_sprintf("%s\n* occurred when creating %s at %d:%d", message, template->token.lexeme,
+                       template->token.start_line, template->token.start_column);
+
+      template = template->previous;
+    }
+  }
 
   if (!checker.error)
     if (checker.error_callback)
@@ -836,12 +850,8 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.cond = NULL;
   checker.environment = checker.global_environment;
 
-  Token* previous_template = checker.template;
-  if (!previous_template)
-  {
-    checker.template = ALLOC(Token);
-    *checker.template = class_statement->name;
-  }
+  TokenLink next_template = { .token = class_statement->name, .previous = checker.template };
+  checker.template = &next_template;
 
   init_class_declaration(class_statement);
 
@@ -876,9 +886,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.loop = previous_loop;
   checker.cond = previous_cond;
   checker.environment = previous_environment;
-
-  if (!previous_template)
-    checker.template = NULL;
+  checker.template = checker.template->previous;
 
   array_add(&template.class_template->classes, class_statement);
 
@@ -946,12 +954,8 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.cond = template.function_template.function->cond;
   checker.environment = template.function_template.function->environment;
 
-  Token* previous_template = checker.template;
-  if (!previous_template)
-  {
-    checker.template = ALLOC(Token);
-    *checker.template = function_statement->name;
-  }
+  TokenLink next_template = { .token = function_statement->name, .previous = checker.template };
+  checker.template = &next_template;
 
   for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
   {
@@ -982,9 +986,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.loop = previous_loop;
   checker.cond = previous_cond;
   checker.environment = previous_environment;
-
-  if (!previous_template)
-    checker.template = NULL;
+  checker.template = checker.template->previous;
 
   array_add(&template.function_template.function->functions, function_statement);
 
@@ -4072,7 +4074,12 @@ static void check_class_template_declaration(ClassTemplateStmt* statement)
   ClassStmt* class_statement;
   array_foreach(&statement->classes, class_statement)
   {
+    TokenLink next_template = { .token = class_statement->name, .previous = checker.template };
+    checker.template = &next_template;
+
     check_class_declaration(class_statement);
+
+    checker.template = checker.template->previous;
   }
 }
 

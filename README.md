@@ -63,12 +63,15 @@ If you're interested, you can look at some of the [examples](#examples) or read 
 
 ## Binaries
 
-Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/releases).
+Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/releases/latest).
 
 ## Examples
 
 - [Raylib](https://github.com/vldr/CythRay)  
-Cyth with Raylib bindings, allowing direct access to Raylib functions from a Cyth script file.
+Raylib bindings for the Cyth programming language.
+
+- [CGI](https://github.com/vldr/CythCGI)  
+A server-side scripting environment for the Cyth programming language, written in Rust.
 
 ## Building
 

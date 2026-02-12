@@ -115,7 +115,8 @@ extern "C"
   //
   // The corresponding C code would look like:
   //
-  //    int(*)(int, int) adder = (int(*)(int, int)) cyth_get_function(jit, "adder.int(int, int)");
+  //    typedef int (*Func)(int, int);
+  //    Func adder = (Func) cyth_get_function(jit, "adder.int(int, int)");
   //
   //    cyth_try_catch(jit, {
   //      adder(10, 10);
@@ -130,7 +131,7 @@ extern "C"
   // You MUST call "cyth_run" before accessing global variables, otherwise
   // they will be uninitialized.
   //
-  // [name] must be in the format: <function name>.<signature>
+  // [name] must be in the format: <variable name>.<signature>
   //
   // For example, if I have the following Cyth code:
   //
@@ -138,7 +139,7 @@ extern "C"
   //
   // The corresponding C code would look like:
   //
-  //    cyth_get_variable(jit, "globalVariable.int");
+  //    int* myVariable = (int*) cyth_get_variable(jit, "globalVariable.int");
   //
   uintptr_t cyth_get_variable(Jit* jit, const char* name);
 
@@ -164,8 +165,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
-    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
+    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
+    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \
@@ -196,6 +197,8 @@ extern "C"
 #ifdef WASM
   // Initializes a WASM code generation instance.
   // This will return 0, if a compilation error has occurred. Otherwise, it will return 1.
+  //
+  // Note: You have to compile with -DWASM=1 to have access to the WASM backend.
   //
   // [source] is the source code to be compiled.
   //

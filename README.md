@@ -180,6 +180,9 @@ make
   - [Function Pointers](#function-pointers)
 - [Variables](#variables)
 - [Functions](#functions)
+- [Generics](#generics)
+  - [Functions](#functions-1)
+  - [Objects](#objects-1)
 - [`import` statement](#import-statement)
 - [`if` statement](#if-statement)
 - [`while` loop](#while-loop)
@@ -313,16 +316,19 @@ class Vector
 > 
 > Calling the `length` method function from C would look like:
 > ```c
-> typedef float (*LengthFunction)(Vector*);
+> typedef float (*LengthFunc)(Vector*);
 >
-> LengthFunction length = (LengthFunction) cyth_get_function(jit, "Vector.length.float()");
+> LengthFunc length = (LengthFunc) cyth_get_function(jit, "Vector.length.float()");
 > 
 > Vector* vector = (Vector*) cyth_alloc(true, sizeof(Vector));
 > vector->x = 1;
 > vector->y = 2;
 > vector->z = 3;
 >
-> float len = length(vector);
+> float len = 0.0f;
+> cyth_try_catch(jit, { 
+>   len = length(vector);
+> });
 > ```
 >
 
@@ -402,7 +408,7 @@ myFunctionPointer(myVector)
 
 You can declare variables like this:
 
-```c
+```jai
 int myVariable = 12
 float mySecondVariable
 ```
@@ -411,7 +417,7 @@ If you do not initialize a variable, a default value is assigned automatically. 
 
 You can declare variables in the top-level scope of your program which will make them a global variable. 
 
-> You can easily access global variables from C using `cyth_get_variable`.
+> You can access global variables from C using `cyth_get_variable`.
 >
 > For example, to get `myVariable` from C, you would write:
 > ```c
@@ -451,7 +457,7 @@ class MyClass
   int a
   int b
 
-  int myFunction()
+  int myMethodFunction()
     return this.a + this.b
 ```
 
@@ -462,14 +468,62 @@ class MyClass
   int a
   int b
 
-  int myFunction()
-    int myInnerFunction()
+  int myMethodFunction()
+    int myInnerMethodFunction()
       return 2 * (this.a + this.b)
 
-    return myInnerFunction()
+    return myInnerMethodFunction()
 ```
 
 Nested functions inside method functions are themselves method functions with an implicit `this` parameter. Meaning these nested method functions can access object fields inside them.
+
+> You can access global functions from C using `cyth_get_function`.
+>
+> For example, to get `myFunction` from C, you would write:
+> ```c
+> typedef int (*Func)(int, int);
+> Func my_function = (Func) cyth_get_function(jit, "myFunction.int(int, int)");
+>
+> int sum = 0;
+> cyth_try_catch(jit, { 
+>   sum = my_function(10, 20); 
+> });
+> ```
+> The address returned from `cyth_get_function` will be `NULL` if it was not found, or the signature is incorrect.
+> 
+> - Make sure you wrap all calls to Cyth functions with `cyth_try_catch` (see `cyth.h` for details).
+> - Make sure you call `cyth_run` before calling functions obtained from `cyth_get_function`, otherwise global variables will be uninitialized.
+>
+
+## Generics
+In Cyth, you can declare generic [functions](#functions-1) and [objects](#objects-1). Generics use duck typing and work similarly to [templates in C++](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
+
+Additionally, generic types must always be explicitly provided. This may change in the future, but the current requirement exists for readability reasons; especially since, in many cases, you may not have access to an LSP when writing Cyth code.
+
+### Functions
+
+You can declare a generic function like this:
+
+```cpp
+T myGenericFunction<T>(T a, T b)
+  return a + b
+
+int sum = myGenericFunction<int>(10, 20)
+```
+
+### Objects
+
+You can declare a generic object like this:
+
+```cpp
+class Object<T>
+  T myField
+
+  void __init__(T value)
+    myField = value
+
+Object<int> myObject = Object<int>(10)
+```
 
 ## `import` statement
 

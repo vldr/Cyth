@@ -188,6 +188,27 @@
       padding-bottom: 15px;
     }
 
+    #console-topbar-left {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    #console-github {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #console-github:hover {
+      opacity: 0.7;
+    }
+
+    #console-github svg {
+      height: 28px;
+      width: 28px;
+    }
+
     #console-action {
       font-family: "Open Sans", sans-serif;
       outline: none;
@@ -284,20 +305,44 @@
     <div id="dragger"></div>
     <div id="console">
       <div id="console-topbar">
-        <button id="console-action">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-            id="console-action-start-icon">
-            <path fill="#fff" d="M3 22v-20l18 10-18 10z" />
-          </svg>
+        <div id="console-topbar-left">
+          <button id="console-action">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+              id="console-action-start-icon">
+              <path fill="#fff" d="M3 22v-20l18 10-18 10z" />
+            </svg>
 
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-            id="console-action-stop-icon" style="display: none">
-            <path fill="#fff" d="M2 2h20v20h-20z" />
-          </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+              id="console-action-stop-icon" style="display: none">
+              <path fill="#fff" d="M2 2h20v20h-20z" />
+            </svg>
 
-          <span id="console-action-text">Run</span>
-        </button>
-        <p id="console-status">Press 'Run' to start a program.</p>
+            <span id="console-action-text">Run</span>
+          </button>
+          <p id="console-status">Press 'Run' to start a program.</p>
+        </div>
+        <a id="console-github" href="https://github.com/vldr/Cyth">
+          <svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98 96" width="98" height="96">
+            <defs>
+              <clipPath clipPathUnits="userSpaceOnUse" id="cp1">
+                <path d="m0 0h98v96h-98z" />
+              </clipPath>
+            </defs>
+            <style>
+              .a {
+                fill: #fff
+              }
+            </style>
+            <g clip-path="url(#cp1)">
+              <path class="a"
+                d="m41.4 69.4c-12.6-1.5-21.5-10.6-21.5-22.4 0-4.8 1.7-10 4.6-13.4-1.2-3.2-1.1-9.9 0.4-12.6 3.8-0.5 9 1.5 12 4.3 3.7-1.2 7.5-1.8
+              12.2-1.8 4.7 0 8.5 0.6 12 1.7 2.9-2.7 8.2-4.7 12-4.2 1.4 2.5 1.5 9.2 0.3 12.5 3.1 3.6 4.7 8.5 4.7 13.5 0 11.8-8.9 20.7-21.7 22.3
+              3.2 2.1 5.4 6.7 5.4 12v9.9c0 2.9 2.4 4.5 5.3 3.4 17.3-6.6 30.9-24 30.9-45.4 0-27.1-22-49.2-49.1-49.2-27.1 0-48.9 22.1-48.9 49.2
+              0 21.2 13.5 38.8 31.7 45.5 2.6 0.9 5-0.8 5-3.4v-7.7c-1.3 0.6-3 1-4.5 1-6.4 0-10.1-3.4-12.8-9.9-1-2.5-2.2-4.1-4.4-4.4-1.1-0.1-1.5-0.5-1.5-1.1
+              0-1.2 1.9-2 3.8-2 2.8 0 5.2 1.7 7.7 5.2 1.9 2.8 3.9 4.1 6.3 4.1 2.4 0 3.9-0.9 6.1-3.1 1.6-1.6 2.9-3.1 4-4z" />
+            </g>
+          </svg>
+        </a>
       </div>
       <div id="console-canvas"></div>
       <div id="console-output"></div>

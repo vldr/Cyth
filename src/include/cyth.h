@@ -165,8 +165,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
-    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
+    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
+    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \
@@ -193,8 +193,6 @@ extern "C"
 #define cyth_longjmp siglongjmp
 #endif
 #endif
-
-#ifdef WASM
   // Initializes a WASM code generation instance.
   // This will return 0, if a compilation error has occurred. Otherwise, it will return 1.
   //
@@ -218,8 +216,6 @@ extern "C"
   //
   // [logging] is 1, then generated WAT instructions will be printed to stdout.
   void cyth_wasm_generate(int logging);
-
-#endif
 #ifdef __cplusplus
 }
 #endif

@@ -96,8 +96,13 @@ endif()
 if (NOT EMSCRIPTEN)
     add_library(libcyth STATIC ${SOURCES})
     target_include_directories(libcyth PUBLIC src/include/)
-
     set_property(TARGET libcyth PROPERTY OUTPUT_NAME cyth)
+
+    if (NOT MSVC)
+        install(TARGETS cyth DESTINATION bin)
+        install(TARGETS libcyth DESTINATION lib)
+        install(DIRECTORY src/include/ DESTINATION include)
+    endif()
 endif()
 
 if (NOT MSVC)
@@ -129,6 +134,7 @@ if (WASM OR EMSCRIPTEN)
     if (NOT EMSCRIPTEN)
         target_compile_definitions(libcyth PRIVATE WASM=1)
         target_link_libraries(libcyth PRIVATE binaryen)
+        target_sources(libcyth PRIVATE $<TARGET_OBJECTS:binaryen>)
     endif()
 endif()
 

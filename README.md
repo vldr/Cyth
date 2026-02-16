@@ -375,7 +375,7 @@ Possible values: `null` or a valid pointer (reference).
 Default value: `null`  
 
 - Function pointers cannot be placed into `any` (limitation added due to WASM not supporting them).
-- Function pointers compatible with C function pointers.
+- Function pointers in Cyth are compatible with C function pointers.
 
 _Example:_
 

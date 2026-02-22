@@ -405,8 +405,8 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
         new_arg_op = _MIR_new_var_op (ctx, arg_reg);
         new_insn = MIR_new_insn (ctx, new_insn_code, new_arg_op, arg_op);
 
-        if (prev_call_insn)
-        {
+        /* copy debug info during call */
+        if (prev_call_insn) {
           new_insn->line = prev_call_insn->line;
           new_insn->column = prev_call_insn->column;
         }

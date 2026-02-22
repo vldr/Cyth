@@ -4154,8 +4154,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         inline_insns_after++;
         new_insn = MIR_copy_insn (ctx, insn);
 
-        if (call && new_insn->line == 0 && new_insn->column == 0)
-        {
+        /* copy debug info during inlining */
+        if (call && new_insn->line == 0 && new_insn->column == 0) {
           new_insn->line = call->line;
           new_insn->column = call->column;
         }
@@ -4173,8 +4173,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       inline_insns_after++;
       new_insn = MIR_copy_insn (ctx, insn);
 
-      if (call && new_insn->line == 0 && new_insn->column == 0)
-      {
+      /* copy debug info during inlining */
+      if (call && new_insn->line == 0 && new_insn->column == 0) {
         new_insn->line = call->line;
         new_insn->column = call->column;
       }

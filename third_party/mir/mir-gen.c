@@ -8760,6 +8760,13 @@ static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_
     fprintf (debug_file, "      deleting now dead insn ");
     print_bb_insn (gen_ctx, def_insn->data, TRUE);
   });
+
+  /* copy debug info during combine */
+  if (bb_insn->insn && bb_insn->insn->line == 0 && bb_insn->insn->column == 0) {
+    bb_insn->insn->line = def_insn->line;
+    bb_insn->insn->column = def_insn->column;
+  }
+
   remove_bb_insn_dead_var (gen_ctx, bb_insn, var);
   move_bb_insn_dead_vars (gen_ctx, bb_insn, def_insn->data, hard_reg_used_in_bb_insn_p);
   /* We should delete the def insn here because of possible substitution of the def

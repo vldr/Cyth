@@ -18,7 +18,9 @@ You can try out Cyth in the web playground:
 [https://cyth.vldr.org](https://cyth.vldr.org)
 
 ## Motivation
-Suppose we want to call a native C function from Cyth; for example, to print the 12th fibonacci number. In Cyth, you just import the function and call it:
+Suppose we want to call a native C function from Cyth; for example, to print the 12th fibonacci number.
+
+In Cyth, you just import the `print` function and call it:
 
 ```jai
 import "std"
@@ -33,7 +35,7 @@ int fibonacci(int n)
 print("Fibonacci = " + fibonacci(12))
 ```
 
-On the C side, we have to just initialize the Cyth runtime, provide our implementation of `print` and run the program:
+On the C side, we initialize the Cyth runtime, provide our implementation of `print` and run the program:
 
 ```cpp
 #include <stdio.h>
@@ -175,14 +177,15 @@ make
 - [Types](#types)
   - [`string`](#string)
   - [`any`](#any)
-  - [Arrays](#arrays)
-  - [Objects](#objects)
+  - [Array](#array)
+  - [Object](#object)
   - [Function Pointers](#function-pointers)
 - [Variables](#variables)
 - [Functions](#functions)
 - [Generics](#generics)
   - [Functions](#functions-1)
-  - [Objects](#objects-1)
+  - [Objects](#objects)
+- [Overloading](#overloading)
 - [`import` statement](#import-statement)
 - [`if` statement](#if-statement)
 - [`while` loop](#while-loop)
@@ -241,8 +244,8 @@ string myString = "hello world"
 ```
 
 ### `any`
-Possible values: `null`, `string`, Array or Object   
-Default value: null 
+Possible values: `null`, `string`, [Array](#array) or [Object](#object)   
+Default value: `null` 
 - Casting `any` to the incorrect underlying type will trigger a panic. 
 
 _Example:_
@@ -251,8 +254,8 @@ any myAny = "hello world"
 string myString = (string)myAny
 ```
 
-#### Arrays
-Possible values: Empty list or a list of one or more elements.  
+#### Array
+Possible values: `[]` (empty list) or a list with one or more elements.  
 Default value: `[]` (empty list)   
 
 - Arrays can be multi-dimensional.
@@ -269,7 +272,7 @@ myArray.push(3)
 string[][] myArray2D = [["I'm", "multidimensional"]]
 ```
 
-#### Objects
+#### Object
 Possible values: `null` or a valid pointer (reference).  
 Default value: `null`  
 
@@ -496,7 +499,7 @@ Nested functions inside method functions are themselves method functions with an
 >
 
 ## Generics
-In Cyth, you can declare generic [functions](#functions-1) and [objects](#objects-1). Generics use duck typing and work similarly to [templates in C++](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
+You can declare generic [functions](#functions-1) and [objects](#objects-1). Generics use duck typing and work similarly to [templates](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
 
 Additionally, generic types must always be explicitly provided. This may change in the future, but the current requirement exists for readability reasons; especially since, in many cases, you may not have access to an LSP when writing Cyth code.
 
@@ -525,6 +528,34 @@ class Object<T>
 Object<int> myObject = Object<int>(10)
 ```
 
+## Overloading
+
+You can overload functions based on their parameters, like this:
+
+```c++
+int myFunction(int a, int b)
+  return a + b
+
+int myFunction(int a, int b, int c)
+  return a + b + c
+
+myFunction(10, 20, 30)
+myFunction(10, 20)
+```
+
+Additionally, you can overload generic functions, like this:
+
+```c++
+T myFunction<T>(T a, T b)
+  return a + b
+
+T myFunction<T>(T a, T b, T c)
+  return a + b + c
+
+myFunction<int>(10, 20, 30)
+myFunction<float>(10, 20)
+```
+
 ## `import` statement
 
 The `import` statement allows you to specify external C functions that you can call from Cyth, effectively enabling a foreign function interface (FFI).
@@ -550,7 +581,7 @@ In the above example, we are linking from the `myModule` module and the `myExter
 
 ## `if` statement
 
-You can declare `if` statements like this:
+You can declare `if` statements, like this:
 
 ```python
 bool condition
@@ -565,7 +596,7 @@ else
 
 ## `while` loop
 
-You can declare a `while` loop like this:
+You can declare a `while` loop, like this:
 
 ```python
 bool condition = true
@@ -576,14 +607,14 @@ while condition
 
 ## `for` loop
 
-You can declare a C-style `for` loop like this:
+You can declare a C-style `for` loop, like this:
 
 ```python
 for int i = 0; i < 10; i += 1
   # for loops
 ```
 
-You can also declare a `for` each loop like this:
+You can also declare a `for` each loop, like this:
 
 ```python
 for int number in [1, 2, 3]

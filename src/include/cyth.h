@@ -9,7 +9,6 @@
 extern "C"
 {
 #endif
-#ifndef EMSCRIPTEN
   typedef struct _JIT Jit;
   typedef struct _STRING
   {
@@ -74,6 +73,7 @@ extern "C"
   void cyth_generate(Jit* jit, int logging);
 
   // Runs the top-level scope of the program (which is the <start> function).
+  //
   // This can only be called on a single thread.
   void cyth_run(Jit* jit);
 
@@ -85,12 +85,14 @@ extern "C"
 
   // Allocates a block of memory and returns a pointer to that memory.
   //
-  // This memory will be automatically cleaned up by the garbage collector.
+  // This memory is managed by the garbage collector and will be automatically
+  // cleaned up.
+  //
   // Do not store the returned pointer outside the program as the garbage
-  // collector won't be able to find it.
+  // collector won't be able to find it and might prematurely deallocate it.
   //
   // [atomic] is 0, if the memory you're allocating contains pointers to
-  // heap allocated like arrays and objects.
+  // heap allocated strings, arrays and objects.
   //
   // It is 1, if the memory you're allocating does NOT contain any pointers.
   //
@@ -165,8 +167,8 @@ extern "C"
 #define cyth_try_catch(_jit, _block)                                                               \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit * jit, void* new_jmp);                                                 \
-    void cyth_pop_jmp(Jit * jit, void* old_jmp);                                                   \
+    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
+    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \
@@ -218,5 +220,4 @@ extern "C"
   void cyth_wasm_generate(int logging);
 #ifdef __cplusplus
 }
-#endif
 #endif

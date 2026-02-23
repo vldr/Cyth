@@ -4318,24 +4318,23 @@ static void generate_variable_declaration(Jit* jit, VarStmt* statement)
 {
   if (statement->scope == SCOPE_GLOBAL)
   {
-    MIR_reg_t ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
-    MIR_append_insn(jit->ctx, jit->function,
-                    MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, ptr),
-                                 MIR_new_ref_op(jit->ctx, statement->item)));
-    MIR_reg_t initializer = _MIR_new_temp_reg(jit->ctx, data_type_to_mir_type(statement->data_type),
-                                              jit->function->u.func);
-
     if (statement->initializer)
+    {
+      MIR_reg_t ptr = _MIR_new_temp_reg(jit->ctx, MIR_T_I64, jit->function->u.func);
+      MIR_append_insn(jit->ctx, jit->function,
+                      MIR_new_insn(jit->ctx, MIR_MOV, MIR_new_reg_op(jit->ctx, ptr),
+                                   MIR_new_ref_op(jit->ctx, statement->item)));
+      MIR_reg_t initializer = _MIR_new_temp_reg(
+        jit->ctx, data_type_to_mir_type(statement->data_type), jit->function->u.func);
       generate_expression(jit, initializer, statement->initializer);
-    else
-      generate_default_initialization(jit, initializer, statement->data_type);
 
-    MIR_append_insn(
-      jit->ctx, jit->function,
-      MIR_new_insn(
-        jit->ctx, data_type_to_mov_type(statement->data_type),
-        MIR_new_mem_op(jit->ctx, data_type_to_mir_type(statement->data_type), 0, ptr, 0, 1),
-        MIR_new_reg_op(jit->ctx, initializer)));
+      MIR_append_insn(
+        jit->ctx, jit->function,
+        MIR_new_insn(
+          jit->ctx, data_type_to_mov_type(statement->data_type),
+          MIR_new_mem_op(jit->ctx, data_type_to_mir_type(statement->data_type), 0, ptr, 0, 1),
+          MIR_new_reg_op(jit->ctx, initializer)));
+    }
   }
   else if (statement->scope == SCOPE_LOCAL)
   {

@@ -1231,7 +1231,7 @@ static int string_hash(String* n)
 {
   uint32_t hash = 0x811c9dc5;
 
-  for (int i = 0; i < n->size; i++)
+  for (int64_t i = 0; i < (int64_t)n->size; i++)
   {
     hash ^= n->data[i];
     hash *= 0x01000193;
@@ -1270,11 +1270,11 @@ static int string_index_of(String* haystack, String* needle)
   if (needle->size == 0)
     return 0;
 
-  for (int i = 0; i <= haystack->size - needle->size; i++)
+  for (int64_t i = 0; i <= (int64_t)haystack->size - (int64_t)needle->size; i++)
   {
     bool match = true;
 
-    for (int j = 0; j < needle->size; j++)
+    for (int64_t j = 0; j < (int64_t)needle->size; j++)
     {
       if (haystack->data[i + j] != needle->data[j])
       {
@@ -1323,11 +1323,11 @@ static int string_count(String* haystack, String* needle)
 
   int count = 0;
 
-  for (int i = 0; i <= haystack->size - needle->size; i++)
+  for (int64_t i = 0; i <= (int64_t)haystack->size - (int64_t)needle->size; i++)
   {
     bool match = true;
 
-    for (int j = 0; j < needle->size; j++)
+    for (int64_t j = 0; j < (int64_t)needle->size; j++)
     {
       if (haystack->data[i + j] != needle->data[j])
       {
@@ -1339,7 +1339,7 @@ static int string_count(String* haystack, String* needle)
     if (match)
     {
       count++;
-      i += needle->size - 1;
+      i += (int64_t)needle->size - 1;
     }
   }
 
@@ -1381,7 +1381,7 @@ static String* string_replace(String* input, String* old, String* new)
   if (count == 0)
     return input;
 
-  int size = input->size + count * (new->size - old->size);
+  int64_t size = input->size + count * (new->size - old->size);
 
   String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
@@ -1389,13 +1389,13 @@ static String* string_replace(String* input, String* old, String* new)
 
   if (old->size > 0)
   {
-    for (int i = 0, k = 0; i < input->size;)
+    for (int64_t i = 0, k = 0; i < (int64_t)input->size;)
     {
       bool match = true;
 
-      for (int j = 0; j < old->size; j++)
+      for (int64_t j = 0; j < (int64_t)old->size; j++)
       {
-        if (i + j >= input->size || input->data[i + j] != old->data[j])
+        if (i + j >= (int64_t)input->size || input->data[i + j] != old->data[j])
         {
           match = false;
           break;
@@ -1404,7 +1404,7 @@ static String* string_replace(String* input, String* old, String* new)
 
       if (match)
       {
-        for (int j = 0; j < new->size; j++)
+        for (int64_t j = 0; j < (int64_t)new->size; j++)
           result->data[k + j] = new->data[j];
 
         i += old->size;
@@ -1421,14 +1421,14 @@ static String* string_replace(String* input, String* old, String* new)
   }
   else
   {
-    for (int i = 0, k = 0; i <= input->size;)
+    for (int64_t i = 0, k = 0; i <= (int64_t)input->size;)
     {
-      for (int j = 0; j < new->size; j++)
+      for (int64_t j = 0; j < (int64_t)new->size; j++)
         result->data[k + j] = new->data[j];
 
-      if (i < input->size)
+      if (i < (int64_t)input->size)
       {
-        k += new->size;
+        k += (int64_t)new->size;
         result->data[k] = input->data[i];
       }
 
@@ -1472,22 +1472,22 @@ static String* string_trim(String* input)
   if (!input->size)
     return input;
 
-  int start = 0;
-  int end = input->size - 1;
+  int64_t start = 0;
+  int64_t end = (int64_t)input->size - 1;
 
-  while (start < input->size && isspace(input->data[start]))
+  while (start < (int64_t)input->size && isspace(input->data[start]))
     start++;
 
   while (end >= start && isspace(input->data[end]))
     end--;
 
-  int size = end - start + 1;
+  int64_t size = end - start + 1;
 
   String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
   result->data[size] = '\0';
 
-  for (int i = start, j = 0; i <= end; i++, j++)
+  for (int64_t i = start, j = 0; i <= end; i++, j++)
     result->data[j] = input->data[i];
 
   return result;
@@ -1526,7 +1526,7 @@ static int string_starts_with(String* input, String* target)
   if (input->size < target->size)
     return false;
 
-  for (int i = 0; i < target->size; i++)
+  for (int64_t i = 0; i < (int64_t)target->size; i++)
   {
     if (input->data[i] != target->data[i])
       return false;
@@ -1569,7 +1569,7 @@ static int string_ends_with(String* input, String* target)
   if (input->size < target->size)
     return false;
 
-  for (int i = 0; i < target->size; i++)
+  for (int64_t i = 0; i < (int64_t)target->size; i++)
   {
     if (input->data[input->size - 1 - i] != target->data[target->size - 1 - i])
       return false;
@@ -1646,7 +1646,7 @@ static Array* string_split(String* input, String* delim)
 
     String** data = result->data;
 
-    for (int i = 0; i < input->size; i++)
+    for (int64_t i = 0; i < (int64_t)input->size; i++)
     {
       String* item = GC_malloc_atomic(sizeof(String) + 1 + 1);
       item->size = 1;
@@ -1670,14 +1670,14 @@ static Array* string_split(String* input, String* delim)
 
     String** data = result->data;
 
-    int current = 0;
-    int previous = 0;
+    int64_t current = 0;
+    int64_t previous = 0;
 
-    while (current <= input->size - delim->size)
+    while (current <= (int64_t)input->size - (int64_t)delim->size)
     {
       bool match = true;
 
-      for (int j = 0; j < delim->size; j++)
+      for (int64_t j = 0; j < (int64_t)delim->size; j++)
       {
         if (input->data[current + j] != delim->data[j])
         {
@@ -1761,14 +1761,14 @@ static String* string_join(Array* input, String* delim)
   String** data = (String**)input->data;
 
   int size = delim->size * (input->size - 1);
-  for (int i = 0; i < input->size; i++)
+  for (int64_t i = 0; i < (int64_t)input->size; i++)
     size += data[i]->size;
 
   String* result = GC_malloc_atomic(sizeof(String) + size + 1);
   result->size = size;
   result->data[size] = '\0';
 
-  for (int i = 0, k = 0; i < input->size; i++)
+  for (int64_t i = 0, k = 0; i < (int64_t)input->size; i++)
   {
     String* item = data[i];
     memcpy((char*)result->data + k, item->data, item->size);
@@ -1860,7 +1860,7 @@ static String* string_pad(String* input, int pad)
   for (int i = 0; i < pad; i++)
     result->data[i] = ' ';
 
-  for (int i = 0; i < input->size; i++)
+  for (int64_t i = 0; i < (int64_t)input->size; i++)
     result->data[pad + i] = input->data[i];
 
   return result;

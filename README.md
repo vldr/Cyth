@@ -243,6 +243,17 @@ _Example:_
 string myString = "hello world"
 ```
 
+> In C, `string` in Cyth has the following structure:
+> ```c
+> struct String
+> {
+>   unsigned int size;
+>   char data[];
+> };
+> ```
+>
+> The `data` field is null-terminated. The `size` field does not include the null-terminator.
+
 ### `any`
 Possible values: `null`, `string`, [Array](#array) or [Object](#object)   
 Default value: `null` 
@@ -271,6 +282,16 @@ myArray.push(3)
 
 string[][] myArray2D = [["I'm", "multidimensional"]]
 ```
+
+> In C, arrays in Cyth have the following structure:
+> ```c
+> struct Array
+> {
+>   unsigned int size;
+>   unsigned int capacity;
+>   void* data;
+> };
+> ```
 
 #### Object
 Possible values: `null` or a valid pointer (reference).  
@@ -499,7 +520,7 @@ Nested functions inside method functions are themselves method functions with an
 >
 
 ## Generics
-You can declare generic [functions](#functions-1) and [objects](#objects-1). Generics use duck typing and work similarly to [templates](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
+You can declare generic [functions](#functions-1) and [objects](#objects). Generics use duck typing and work similarly to [templates](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
 
 Additionally, generic types must always be explicitly provided. This may change in the future, but the current requirement exists for readability reasons; especially since, in many cases, you may not have access to an LSP when writing Cyth code.
 

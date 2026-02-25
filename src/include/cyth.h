@@ -12,14 +12,14 @@ extern "C"
   typedef struct _JIT Jit;
   typedef struct _STRING
   {
-    int size;
+    unsigned int size;
     char data[];
   } String;
 
   typedef struct _ARRAY
   {
-    int size;
-    int capacity;
+    unsigned int size;
+    unsigned int capacity;
     void* data;
   } Array;
 

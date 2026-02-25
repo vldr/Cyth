@@ -1268,8 +1268,8 @@ struct pattern {
 #define ARM_INSN_BOUND (MUL_BNO + 1)
 
 static const struct pattern patterns[] = {
-  /* cmp Wn, Wm; csel Rd, Rn, xzr */
-  {MIR_CCLEAR, "r r r r", "6b00001f:ff20001f rn2 rm3; 9a9f3000:fffffc00 rd0 rn1"},
+  /* cmp Xn, Xm; csel Rd, Rn, xzr */
+  {MIR_CCLEAR, "r r r r", "eb00001f:ff20001f rn2 rm3; 9a9f3000:fffffc00 rd0 rn1"},
 
   /* fsqrt Sd,Sn */
   {MIR_FSQRT, "r r", "1e21c000:fffffc00 vd0 vn1"},

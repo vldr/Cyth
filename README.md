@@ -564,20 +564,20 @@ First, you specify a module, and then you list the functions to import from that
 
 ```jai
 import "myModule"
-  int myExternalFunction(int a, int b)
+  int myFunction(int a, int b)
 ```
 
 In the C code, you then call `cyth_set_function` to link the C function to the Cyth import. When calling `cyth_set_function`, you must provide the module name, function name, and function signature in the format `moduleName.functionName.signature`. For example:
 
 ```cpp
-int my_external_function(int a, int b) {
+int my_function(int a, int b) {
   return a + b;
 }
 
-cyth_set_function(jit, "myModule.myExternalFunction.int(int, int)", (uintptr_t)my_external_function);
+cyth_set_function(jit, "myModule.myFunction.int(int, int)", (uintptr_t)my_function);
 ```
 
-In the above example, we are linking from the `myModule` module and the `myExternalFunction` function which accepts two `int` parameters and returns an `int`.
+In the above example, we are linking from the `myModule` module and the `myFunction` function which accepts two `int` parameters and returns an `int`.
 
 ## `if` statement
 

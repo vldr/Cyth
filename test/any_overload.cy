@@ -9,8 +9,8 @@ class Test
     void __set__(int p, any a)
         log((string)(Test)a)
 
-    void __set__(int p, int a)
-        log("3")
+    void __set__(int p, float a)
+        log("" + a)
 
 Test()[Test()]
 Test()[0] = Test()

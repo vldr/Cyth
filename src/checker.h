@@ -3,7 +3,6 @@
 
 #include "statement.h"
 
-ArrayVarStmt global_locals(void);
 void expand_function_data_type(DataType data_type, DataType* return_data_type,
                                ArrayDataType* parameter_types);
 bool equal_data_type(DataType left, DataType right);
@@ -20,5 +19,6 @@ void checker_init(ArrayStmt statements,
                                         int length));
 int checker_errors(void);
 void checker_validate(void);
+ArrayVarStmt checker_global_locals(void);
 
 #endif

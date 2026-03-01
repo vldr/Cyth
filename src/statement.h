@@ -61,7 +61,7 @@ typedef struct _FUNC_STMT
 
   Token name;
   Token name_raw;
-  const char* import;
+  const void* import;
 
   ArrayVarStmt variables;
   ArrayVarStmt parameters;
@@ -80,6 +80,7 @@ typedef struct _FUNC_TEMPLATE_STMT
   ArrayDataTypeToken parameters;
 
   Token name;
+  ArrayToken tokens;
 
   int offset;
   int count;
@@ -89,8 +90,6 @@ typedef struct _FUNC_TEMPLATE_STMT
   struct _WHILE_STMT* loop;
   struct _IF_STMT* cond;
   struct _ENVIRONMENT* environment;
-
-  const char* import;
 
   ArrayToken types;
   ArrayFuncStmt functions;
@@ -139,6 +138,7 @@ typedef struct _CLASS_TEMPLATE_STMT
 {
   Token keyword;
   Token name;
+  ArrayToken tokens;
 
   int offset;
   int count;

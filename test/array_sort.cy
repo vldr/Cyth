@@ -1,6 +1,3 @@
-import "env"
-    void log(int n) 
-
 int[] array
 array.push(55)
 array.push(47)

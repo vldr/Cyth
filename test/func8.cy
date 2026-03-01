@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 class QuickSort<T>
   void(QuickSort<T>, T[])[] sortFn = [sort]
 

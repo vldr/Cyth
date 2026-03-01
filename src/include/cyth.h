@@ -9,79 +9,112 @@
 extern "C"
 {
 #endif
-  typedef struct _JIT Jit;
-  typedef struct _STRING
+  typedef struct _CY_VM CyVM;
+  typedef struct _CY_STRING
   {
     int size;
     char data[];
-  } String;
+  } CyString;
 
-  typedef struct _ARRAY
+  typedef struct _CY_ARRAY
   {
     int size;
     int capacity;
     void* data;
-  } Array;
+  } CyArray;
 
-  // Create a new JIT instance.
-  //
-  // This will return NULL if a compilation error has occurred.
-  // This function can only be called on a single thread.
-  //
-  // [source] is the source code to be compiled.
+  // Creates a new VM instance.
+  CyVM* cyth_init(void);
+
+  // Sets the error callback function.
   //
   // [error_callback] will be called when a compilation error occurs.
-  // This can be NULL, in which case it will not be called.
+  // This can be NULL, in which case it will not be called (though errors will still exist).
+  void cyth_set_error_callback(CyVM* vm, void (*error_callback)(int start_line, int start_column,
+                                                                int end_line, int end_column,
+                                                                const char* message));
+
+  // Sets the panic callback function.
   //
   // [panic_callback] will be called when a runtime error occurs.
-  // This can be NULL, in which case it will not be called.
+  // This can be NULL, in which case it will not be called (though panics will still exist).
   //
-  // The callback will be called multiple times. The first call is a special case, where zero will
+  // This callback will be called multiple times. The first call is a special case, where zero will
   // be passed into the line and column, and the error reason will be in the function string.
+  //
   // Subsequent calls will be for each function line/column combination in the stack trace.
-  Jit* cyth_init(char* source,
-                 void (*error_callback)(int start_line, int start_column, int end_line,
-                                        int end_column, const char* message),
-                 void (*panic_callback)(const char* function, int line, int column));
+  void cyth_set_panic_callback(CyVM* vm,
+                               void (*panic_callback)(const char* function, int line, int column));
 
-  // Adds an external C function.
+  // Enable/disable logging.
   //
-  // You MUST call this after "cyth_init" but before "cyth_generate".
+  // [logging] is 1, logging is enabled. When 0, logging is disabled.
+  void cyth_set_logging(CyVM* vm, int logging);
+
+  // Loads a string to compile.
   //
-  // [name] must be in the format: <module>.<function name>.<signature>
+  // You MUST call this after "cyth_init" but before "cyth_compile".
   //
-  // For example, if I have the following Cyth code:
+  // [string] is the source code to be compiled.
   //
-  //    import "env"
-  //      void println(string data)
+  // This function will return 1 if the file was successfully loaded,
+  // or return 0, if an error has occurred (which will also call the error callback).
+  int cyth_load_string(CyVM* vm, char* string);
+
+  // Loads a file to compile.
+  //
+  // You MUST call this after "cyth_init" but before "cyth_compile".
+  //
+  // [filename] is the path to a file that contains source code to be compiled.
+  //
+  // This function will return 1 if the file was successfully loaded,
+  // or return 0, if an error has occurred (which will also call the error callback).
+  int cyth_load_file(CyVM* vm, const char* filename);
+
+  // Loads an external C function to compile.
+  //
+  // You MUST call this after "cyth_init" but before "cyth_compile".
+  //
+  // [signature] is the declaration of the function.
+  //
+  // For example, if I want to import and use the "print" function in Cyth:
+  //
+  //    print("Hello from Cyth!")
   //
   // The corresponding C code would look like:
   //
-  //    void println(String* string) {
+  //    void print(String* string) {
   //      printf("%s\n", string->data);
   //    }
   //
-  //    cyth_set_function(jit, "env.println.void(string)", (uintptr_t)println);
+  //    cyth_load_function(vm, "void print(string text)", (uintptr_t)print);
   //
-  // [func] must be the address to the corresponding external C function.
-  void cyth_set_function(Jit* jit, const char* name, uintptr_t func);
+  // [func] must be the address to the external C function.
+  //
+  // This function will return 1 if the function was successfully loaded,
+  // or return 0, if an error has occurred (which will also call the error callback).
+  int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func);
 
-  // Generates the assembly instructions for a given JIT instance.
-  // After this function, it is safe to run the generated code.
+  // Compiles the Cyth source code to machine instructions.
   //
-  // [logging] is 1, then generated IR instructions will be printed to stdout.
-  void cyth_generate(Jit* jit, int logging);
+  // After calling this function, you can safely run the generated code.
+  //
+  // This function will return 1 if the program was successfully compiled,
+  // or return 0, if an error has occurred (which will also call the error callback).
+  int cyth_compile(CyVM* vm);
 
-  // Runs the top-level scope of the program (which is the <start> function).
+  // Runs the top-level scope of the program (which is called the <start> function).
   //
-  // This can only be called on a single thread.
-  void cyth_run(Jit* jit);
+  // Note: calling Cyth code is not thread safe.
+  void cyth_run(CyVM* vm);
 
-  // Destroys a JIT instance.
+  // Destroys a VM instance.
   //
-  // This MUST be called after calling "cyth_init" and "cyth_generate" respectively.
-  // After this function, it is unsafe to run the generated code.
-  void cyth_destroy(Jit* jit);
+  // This MUST be called after calling "cyth_init" and "cyth_compile" respectively.
+  //
+  // After this function is called, it is UNSAFE to run the generated code as it
+  // will be deleted.
+  void cyth_destroy(CyVM* vm);
 
   // Allocates a block of memory and returns a pointer to that memory.
   //
@@ -118,15 +151,15 @@ extern "C"
   // The corresponding C code would look like:
   //
   //    typedef int (*Func)(int, int);
-  //    Func adder = (Func) cyth_get_function(jit, "adder.int(int, int)");
+  //    Func adder = (Func) cyth_get_function(vm, "adder.int(int, int)");
   //
-  //    cyth_try_catch(jit, {
+  //    cyth_try_catch(vm, {
   //      adder(10, 10);
   //    } else {
   //      printf("error!");
   //    })
   //
-  uintptr_t cyth_get_function(Jit* jit, const char* name);
+  uintptr_t cyth_get_function(CyVM* vm, const char* name);
 
   // Returns the address to the memory that contains a global variable (top-level scope).
   //
@@ -141,9 +174,9 @@ extern "C"
   //
   // The corresponding C code would look like:
   //
-  //    int* myVariable = (int*) cyth_get_variable(jit, "globalVariable.int");
+  //    int* myVariable = (int*) cyth_get_variable(vm, "globalVariable.int");
   //
-  uintptr_t cyth_get_variable(Jit* jit, const char* name);
+  uintptr_t cyth_get_variable(CyVM* vm, const char* name);
 
   // Executes a block of code and catches any runtime panics.
   //
@@ -158,25 +191,25 @@ extern "C"
   // You MUST never call "return" or "break" inside this macro, otherwise the program will get into
   // a corrupted state.
   //
-  //   jit_try_catch(jit, {
+  //   vm_try_catch(vm, {
   //     foo(1, 2);
   //   } else {
   //     printf("Runtime error!\n");
   //   });
   //
-#define cyth_try_catch(_jit, _block)                                                               \
+#define cyth_try_catch(_vm, _block)                                                                \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(Jit* jit, void* new_jmp);                                                  \
-    void cyth_pop_jmp(Jit* jit, void* old_jmp);                                                    \
+    void* cyth_push_jmp(CyVM * vm, void* new_jmp);                                                 \
+    void cyth_pop_jmp(CyVM * vm, void* old_jmp);                                                   \
                                                                                                    \
     jmp_buf _new;                                                                                  \
-    jmp_buf* _old = (jmp_buf*)cyth_push_jmp(_jit, (void*)&_new);                                   \
+    jmp_buf* _old = (jmp_buf*)cyth_push_jmp((_vm), (void*)&_new);                                  \
                                                                                                    \
     if (cyth_setjmp(_new) == 0)                                                                    \
       _block                                                                                       \
                                                                                                    \
-        cyth_pop_jmp(_jit, (void*)_old);                                                           \
+        cyth_pop_jmp((_vm), (void*)_old);                                                          \
   } while (0)
 
 // Declares a static Cyth string variable with the [name] and [value].
@@ -195,29 +228,20 @@ extern "C"
 #define cyth_longjmp siglongjmp
 #endif
 #endif
-  // Initializes a WASM code generation instance.
-  // This will return 0, if a compilation error has occurred. Otherwise, it will return 1.
-  //
-  // Note: You have to compile with -DWASM=1 to have access to the WASM backend.
-  //
-  // [source] is the source code to be compiled.
-  //
-  // [error_callback] will be called when a compilation error occurs.
-  // This can be NULL, in which case it will not be called.
-  //
-  // [result_callback] will be called after "cyth_wasm_generate" with the WASM binary data and
-  // sourcemap text data.
-  // This can be NULL, in which case it will not be called.
-  int cyth_wasm_init(char* source,
-                     void (*error_callback)(int start_line, int start_column, int end_line,
-                                            int end_column, const char* message),
-                     void (*result_callback)(size_t size, void* data, size_t source_map_size,
-                                             void* source_map));
 
-  // Generates WebAssembly instructions.
-  //
-  // [logging] is 1, then generated WAT instructions will be printed to stdout.
-  void cyth_wasm_generate(int logging);
+  void cyth_wasm_set_error_callback(void (*error_callback)(int start_line, int start_column,
+                                                           int end_line, int end_column,
+                                                           const char* message));
+
+  void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* data,
+                                                             size_t source_map_size,
+                                                             void* source_map));
+  void cyth_wasm_set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
+                                                         int def_column, int length));
+
+  int cyth_wasm_init(char* string);
+  int cyth_wasm_load_function(const char* signature, const char* module);
+  int cyth_wasm_compile(int compile, int logging);
 #ifdef __cplusplus
 }
 #endif

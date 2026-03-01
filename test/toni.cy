@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 int modpow(int a, int b, int n) 
     int x = 1
     int y = a

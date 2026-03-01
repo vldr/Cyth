@@ -1,5 +1,3 @@
-import "env"
-    void log(int n)
 
 log(0x000000ff)
 log(0xff000000)

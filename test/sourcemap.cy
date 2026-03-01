@@ -1,7 +1,3 @@
-import "env"
-  void log(int n)
-  void log(string n)
-
 int[][] decodeMappings(string mappings)
   int offset = 0
   int file = 0

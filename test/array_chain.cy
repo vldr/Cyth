@@ -1,6 +1,3 @@
-import "env"
-    void log(int n) 
-
 int[][][] a
 int[][] b
 int[] c

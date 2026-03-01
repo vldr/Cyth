@@ -1,11 +1,7 @@
 #include "main.h"
 #include "array.h"
-#include "checker.h"
 #include "include/cyth.h"
-#include "lexer.h"
 #include "memory.h"
-#include "parser.h"
-#include "statement.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -19,7 +15,6 @@ static struct
 {
   bool error;
   bool logging;
-  bool typecheck;
   bool wasm;
   bool io;
 
@@ -30,14 +25,8 @@ static struct
   int previous_line;
   int previous_column;
   int previous_count;
-
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
-  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
-  void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
 } cyth;
 
-#ifndef EMSCRIPTEN
 static void log_int(int n)
 {
   printf("%d\n", n);
@@ -53,7 +42,7 @@ static void log_char(char n)
   printf("%c\n", n);
 }
 
-static void log_string(String* n)
+static void log_string(CyString* n)
 {
   fwrite(n->data, 1, n->size, stdout);
   putchar('\n');
@@ -87,7 +76,6 @@ static void panic_callback(const char* function, int line, int column)
   cyth.previous_function = function;
   cyth.error = true;
 }
-#endif
 
 static void error_callback(int start_line, int start_column, int end_line, int end_column,
                            const char* message)
@@ -98,6 +86,7 @@ static void error_callback(int start_line, int start_column, int end_line, int e
   cyth.error = true;
 }
 
+#ifdef WASM
 static void result_callback(size_t size, void* data, size_t source_map_size, void* source_map)
 {
   (void)source_map_size;
@@ -136,86 +125,42 @@ clean_up:
   free(data);
   free(source_map);
 }
+#endif
 
-void set_logging(bool logging)
+void run(char* source)
 {
-  cyth.logging = logging;
-}
-
-void set_error_callback(void (*error_callback)(int start_line, int start_column, int end_line,
-                                               int end_column, const char* message))
-{
-  cyth.error_callback = error_callback;
-}
-
-void set_result_callback(void (*result_callback)(size_t size, void* data, size_t source_map_size,
-                                                 void* source_map))
-{
-  cyth.result_callback = result_callback;
-}
-
-void set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
-                                             int def_column, int length))
-{
-  cyth.link_callback = link_callback;
-}
-
-void run(char* source, bool codegen)
-{
-  if (codegen)
-  {
-#ifdef EMSCRIPTEN
-    if (cyth_wasm_init(source, cyth.error_callback, cyth.result_callback))
-      cyth_wasm_generate(cyth.logging);
-#else
 #ifdef WASM
-    if (cyth.wasm)
+  if (cyth.wasm)
+  {
+    cyth_wasm_set_error_callback(error_callback);
+    cyth_wasm_set_result_callback(result_callback);
+
+    if (cyth_wasm_init(source))
     {
-      if (cyth_wasm_init(source, cyth.error_callback, cyth.result_callback))
-        cyth_wasm_generate(cyth.logging);
+      cyth_wasm_load_function("void log(int n)", "env");
+      cyth_wasm_load_function("void log(bool n)", "env");
+      cyth_wasm_load_function("void log(float n)", "env");
+      cyth_wasm_load_function("void log(char n)", "env");
+      cyth_wasm_load_function("void log(string n)", "env");
+      cyth_wasm_compile(true, cyth.logging);
     }
-    else
-#endif
-    {
-      Jit* jit = cyth_init(source, error_callback, panic_callback);
-      if (jit)
-      {
-        cyth_set_function(jit, "env.log.void(int)", (uintptr_t)log_int);
-        cyth_set_function(jit, "env.log.void(bool)", (uintptr_t)log_int);
-        cyth_set_function(jit, "env.log.void(float)", (uintptr_t)log_float);
-        cyth_set_function(jit, "env.log.void(char)", (uintptr_t)log_char);
-        cyth_set_function(jit, "env.log.void(string)", (uintptr_t)log_string);
-        cyth_set_function(jit, "env.log<int>.void(int)", (uintptr_t)log_int);
-        cyth_set_function(jit, "env.log<bool>.void(bool)", (uintptr_t)log_int);
-        cyth_set_function(jit, "env.log<float>.void(float)", (uintptr_t)log_float);
-        cyth_set_function(jit, "env.log<char>.void(char)", (uintptr_t)log_char);
-        cyth_set_function(jit, "env.log<string>.void(string)", (uintptr_t)log_string);
-        cyth_generate(jit, cyth.logging);
-        cyth_run(jit);
-        cyth_destroy(jit);
-      }
-    }
-#endif
   }
   else
+#endif
   {
-    lexer_init(source, cyth.error_callback);
-    ArrayToken tokens = lexer_scan();
-
-    if (lexer_errors())
-      goto clean_up;
-
-    parser_init(tokens, cyth.error_callback);
-    ArrayStmt statements = parser_parse();
-
-    if (parser_errors())
-      goto clean_up;
-
-    checker_init(statements, cyth.error_callback, cyth.link_callback);
-    checker_validate();
-
-  clean_up:
-    memory_reset();
+    CyVM* vm = cyth_init();
+    cyth_set_error_callback(vm, error_callback);
+    cyth_set_panic_callback(vm, panic_callback);
+    cyth_set_logging(vm, cyth.logging);
+    cyth_load_function(vm, "void log(int n)", (uintptr_t)log_int);
+    cyth_load_function(vm, "void log(bool n)", (uintptr_t)log_int);
+    cyth_load_function(vm, "void log(float n)", (uintptr_t)log_float);
+    cyth_load_function(vm, "void log(char n)", (uintptr_t)log_char);
+    cyth_load_function(vm, "void log(string n)", (uintptr_t)log_string);
+    cyth_load_string(vm, source);
+    cyth_compile(vm);
+    cyth_run(vm);
+    cyth_destroy(vm);
   }
 }
 
@@ -254,7 +199,7 @@ static void run_file(void)
 
     array_add(&source, '\0');
 
-    run(source.elems, !cyth.typecheck);
+    run(source.elems);
   }
   else
   {
@@ -293,7 +238,7 @@ static void run_file(void)
     fclose(file);
     source[file_size] = '\0';
 
-    run(source, !cyth.typecheck);
+    run(source);
   }
 }
 
@@ -309,7 +254,6 @@ int main(int argc, char* argv[])
 
     printf("\n"
            "Available options are:\n"
-           "  -t Parse and type-check only.\n"
            "  -l Print IR.\n"
            "  -  Read from stdin and output to stdout (will ignore other options).\n");
 
@@ -331,10 +275,6 @@ int main(int argc, char* argv[])
     if (strcmp(argv[arg], "-l") == 0)
     {
       cyth.logging = true;
-    }
-    else if (strcmp(argv[arg], "-t") == 0)
-    {
-      cyth.typecheck = true;
     }
     else if (strcmp(argv[arg], "-") == 0)
     {
@@ -367,10 +307,6 @@ int main(int argc, char* argv[])
       }
     }
   }
-
-  set_error_callback(error_callback);
-  set_result_callback(result_callback);
-  set_logging(cyth.logging);
 
   run_file();
   memory_free();

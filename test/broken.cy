@@ -1,5 +1,5 @@
-import "env"
-    void print(string n)
+void print(string n)
+
 if 1
   class A
     int a = 7

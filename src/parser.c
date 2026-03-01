@@ -1008,7 +1008,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   stmt->func_template.loop = NULL;
   stmt->func_template.cond = NULL;
   stmt->func_template.environment = NULL;
-  stmt->func_template.import = NULL;
+  stmt->func_template.tokens = parser.tokens;
 
   array_init(&stmt->func_template.types);
   array_init(&stmt->func_template.parameters);
@@ -1095,6 +1095,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
   stmt->type = STMT_CLASS_TEMPLATE_DECL;
   stmt->class_template.keyword = keyword;
   stmt->class_template.name = name;
+  stmt->class_template.tokens = parser.tokens;
 
   array_init(&stmt->class_template.types);
   array_init(&stmt->class_template.classes);
@@ -1189,46 +1190,6 @@ static Stmt* class_declaration_statement(Token keyword, Token name)
       else
       {
         error(keyword, "Only functions and variables can appear inside 'class' declarations.");
-      }
-    }
-  }
-
-  return stmt;
-}
-
-static Stmt* import_declaration_statement(void)
-{
-  Stmt* stmt = STMT();
-  stmt->type = STMT_IMPORT_DECL;
-  stmt->import.keyword = advance();
-  array_init(&stmt->import.body);
-
-  Token import = consume(TOKEN_STRING, "Expected a string after import keyword.");
-  consume(TOKEN_NEWLINE, "Expected a newline.");
-
-  if (check(TOKEN_INDENT))
-  {
-    ArrayStmt body_statements;
-    array_init(&body_statements);
-    statements(&body_statements);
-
-    Stmt* body_statement;
-    array_foreach(&body_statements, body_statement)
-    {
-      if (body_statement->type == STMT_FUNCTION_DECL)
-      {
-        body_statement->func.import = import.lexeme;
-        array_add(&stmt->import.body, body_statement);
-      }
-      else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)
-      {
-        body_statement->func_template.import = import.lexeme;
-        array_add(&stmt->import.body, body_statement);
-      }
-      else
-      {
-        error(stmt->import.keyword,
-              "Only function signatures can appear inside 'import' declarations.");
       }
     }
   }
@@ -1611,9 +1572,6 @@ static void statement(ArrayStmt* stmts)
     case TOKEN_FOR:
       array_add(stmts, for_statement());
       break;
-    case TOKEN_IMPORT:
-      array_add(stmts, import_declaration_statement());
-      break;
     case TOKEN_INDENT:
       statements(stmts);
       break;
@@ -1692,16 +1650,35 @@ ArrayStmt parser_parse(void)
   return stmts;
 }
 
-Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token name)
+Stmt* parser_parse_class_declaration_statement(ClassTemplateStmt* template)
 {
-  seek(offset);
+  parser.tokens = template->tokens;
+  seek(template->offset);
 
-  return class_declaration_statement(keyword, name);
+  return class_declaration_statement(template->keyword, template->name);
 }
 
-Stmt* parser_parse_function_declaration_statement(int offset, DataTypeToken type, Token name)
+Stmt* parser_parse_function_declaration_statement(FuncTemplateStmt* template)
 {
-  seek(offset);
+  parser.tokens = template->tokens;
+  seek(template->offset);
 
-  return function_declaration_statement(type, name);
+  return function_declaration_statement(template->type, template->name);
+}
+
+Stmt* parser_parse_import_function_declaration_statement(const void* import)
+{
+  ArrayStmt stmts;
+  array_init(&stmts);
+  statement(&stmts);
+
+  if (stmts.size != 1)
+    return NULL;
+
+  Stmt* statement = stmts.elems[0];
+  if (statement->type != STMT_FUNCTION_DECL)
+    return NULL;
+
+  statement->func.import = import;
+  return statement;
 }

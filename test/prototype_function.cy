@@ -1,6 +1,3 @@
-import "env"
-    void log(string n)
-
 class Apple
     int x = 2
 

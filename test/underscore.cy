@@ -1,7 +1,3 @@
-import "env"
-    void log(float x)
-    void log(int n)
-
 log(0x00_00_1)
 log(0x0_1_0)
 

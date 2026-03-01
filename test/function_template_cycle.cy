@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 int fibonacci<T>(int n)
   if n == 0
     return n

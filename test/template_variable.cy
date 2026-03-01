@@ -1,7 +1,3 @@
-
-import "env"
-    void log(int hello)
-
 class Node<T>
     T node
 

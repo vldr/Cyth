@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 log("A: " + (int[]) [1,2,3])
 log((string) (int[]) [1,2,3])
 

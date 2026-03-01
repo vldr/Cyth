@@ -1,6 +1,3 @@
-import "env"
-  void log(string n)
-
 Cellular cellular = Cellular(50, 50, 500, 500)
 cellular.addCell(5, 4)
 cellular.addCell(6, 4)

@@ -1,8 +1,8 @@
-import "env"
-    void log(float n)
-    void log(int n)
-    void log(bool n)
-    void log(string n)
+
+
+
+
+
 
 class A
     int a

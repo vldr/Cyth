@@ -1,7 +1,3 @@
-import "env"
-    void log(bool n)
-    void log(int n)
-
 string a = "hello"
 string b = "world"
 string c = a + b

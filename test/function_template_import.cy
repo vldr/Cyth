@@ -1,11 +1,8 @@
-import "env"
-    void log<T>(T n)
-
-log<int>(10)
-log<float>(3.625)
-log<bool>(true)
-log<int>('a')
-log<string>("hello")
+log(10)
+log(3.625)
+log(true)
+log((int)'a')
+log("hello")
 
 # 10
 # 3.625

@@ -1,6 +1,3 @@
-import "env"
-    void log<T>(T n)
-
 string stringTrim(string s)
     if not s
         return s
@@ -59,86 +56,86 @@ int parseInt(string n, int base)
 
     return value
 
-log<int>(parseInt("-", 10))
+log(parseInt("-", 10))
 # 0
 
-log<int>(parseInt("+", 10))
+log(parseInt("+", 10))
 # 0
 
-log<int>(parseInt("", 10))
+log(parseInt("", 10))
 # 0
 
-log<int>(parseInt("abcdef", 10))
+log(parseInt("abcdef", 10))
 # 0
 
-log<int>(parseInt("abc10", 10))
+log(parseInt("abc10", 10))
 # 0
 
-log<int>(parseInt("10abc", 10))
+log(parseInt("10abc", 10))
 # 10
 
-log<int>(parseInt("-10abc", 10))
+log(parseInt("-10abc", 10))
 # -10
 
-log<int>(parseInt("10.10", 10))
+log(parseInt("10.10", 10))
 # 10
 
-log<int>(parseInt("-10.10", 10))
+log(parseInt("-10.10", 10))
 # -10
 
-log<int>(parseInt("+10.10", 10))
+log(parseInt("+10.10", 10))
 # 10
 
-log<int>(parseInt("--10.10", 10))
+log(parseInt("--10.10", 10))
 # 0
 
-log<int>(parseInt("++10.10", 10))
+log(parseInt("++10.10", 10))
 # 0
 
-log<int>(parseInt("0", 10))
+log(parseInt("0", 10))
 # 0
 
-log<int>(parseInt("2147483647", 10))
+log(parseInt("2147483647", 10))
 # 2147483647
 
-log<int>(parseInt("-2147483648", 10))
+log(parseInt("-2147483648", 10))
 # -2147483648
 
-log<int>(parseInt("-2147483650", 10))
+log(parseInt("-2147483650", 10))
 # 2147483646
 
-log<int>(parseInt("-2147483649", 10))
+log(parseInt("-2147483649", 10))
 # 2147483647
 
-log<int>(parseInt("2147483650", 10))
+log(parseInt("2147483650", 10))
 # -2147483646
 
-log<int>(parseInt("2147483649", 10))
+log(parseInt("2147483649", 10))
 # -2147483647
 
-log<int>(parseInt("011", 2))
+log(parseInt("011", 2))
 # 3
 
-log<int>(parseInt("010", 2))
+log(parseInt("010", 2))
 # 2
 
-log<int>(parseInt("000", 2))
+log(parseInt("000", 2))
 # 0
 
-log<int>(parseInt("FF", 16))
+log(parseInt("FF", 16))
 # 255
 
-log<int>(parseInt("ff", 16))
+log(parseInt("ff", 16))
 # 255
 
-log<int>(parseInt("F", 16))
+log(parseInt("F", 16))
 # 15
 
-log<int>(parseInt("f", 16))
+log(parseInt("f", 16))
 # 15
 
-log<int>(parseInt("g", 17))
+log(parseInt("g", 17))
 # 16
 
-log<int>(parseInt("ffffffff", 16))
+log(parseInt("ffffffff", 16))
 # -1

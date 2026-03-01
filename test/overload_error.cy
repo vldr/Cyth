@@ -1,5 +1,5 @@
-import "env"
-    void log(string n)
+
+
 
 void test(int a, int b)
     log(a + " " + b)

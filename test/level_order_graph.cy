@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 class Tree
     Tree left
     Tree right

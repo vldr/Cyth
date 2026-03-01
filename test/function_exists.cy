@@ -1,5 +1,5 @@
-import "env"
-    void log(int n)
+
+
 
 class A
     int __init__

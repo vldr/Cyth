@@ -1,7 +1,3 @@
-import "env"
-    void log(int n)
-    void log(string n)
-
 void __init__()
     log("__init__")
 

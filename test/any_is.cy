@@ -1,8 +1,3 @@
-import "env"
-    void log(int n)
-    void log(string n)
-    void log(bool n)
-
 class Apple
     int field = 33
 

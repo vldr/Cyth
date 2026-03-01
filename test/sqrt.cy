@@ -1,7 +1,3 @@
-import "env"
-    void log(float n)
-    void log(int n)
-
 int sqrt(int x)
     int s
     int b = 32768

@@ -1,6 +1,3 @@
-import "env"
-  void log(string n)
-  void log(int n)
 
 string bits(int n)
   string buffer

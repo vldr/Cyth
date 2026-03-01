@@ -1,7 +1,4 @@
-import "env"
-  void log(string n)
-  void log(int n)
-  
+
 class Node
   int value
   Node next

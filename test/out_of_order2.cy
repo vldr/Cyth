@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 log(applesauce.length)
 # 0
 

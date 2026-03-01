@@ -1,6 +1,6 @@
-import "env"
-    void log(float x)
-    void log(int n)
+
+
+
 
 log(0x)
 log(0x_)

@@ -1,5 +1,5 @@
-import "env"
-    void log(int n)
+
+
 
 class A
     int outer = 10

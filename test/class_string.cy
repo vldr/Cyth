@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 class Test
     int num = 10
     string a

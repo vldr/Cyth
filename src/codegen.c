@@ -70,22 +70,24 @@ static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_bui
 
 static struct
 {
-  BinaryenModuleRef module;
-  BinaryenType class;
   ArrayStmt statements;
 
+  BinaryenModuleRef module;
+  BinaryenType class;
   ArrayBinaryenType global_local_types;
   MapStringBinaryenHeapType heap_types;
   BinaryenHeapType string_heap_type;
   BinaryenType string_type;
   MapSInt string_constants;
   ArrayDebugInfo debug_info;
-
   const char* function;
   int strings;
   int loop;
 
+  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
+                         const char* message);
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
+  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
 } codegen;
 
 static const char* get_function_member(DataType data_type, const char* name)
@@ -4582,7 +4584,10 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
     ArrayTypeBuilderSubtype subtypes;
     array_init(&subtypes);
 
-    generate_function_heap_binaryen_type(NULL, &subtypes, statement->function_data_type);
+    BinaryenHeapType heap_type =
+      generate_function_heap_binaryen_type(NULL, &subtypes, statement->function_data_type);
+
+    BinaryenFunctionSetType(BinaryenGetFunction(codegen.module, name), heap_type);
   }
   else
   {
@@ -4926,13 +4931,10 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-int cyth_wasm_init(char* source,
-                   void (*error_callback)(int start_line, int start_column, int end_line,
-                                          int end_column, const char* message),
-                   void (*result_callback)(size_t size, void* data, size_t source_map_size,
-                                           void* source_map))
+int cyth_wasm_init(char* string)
 {
-  lexer_init(source, error_callback);
+  array_init(&codegen.statements);
+  lexer_init(string, codegen.error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -4941,7 +4943,7 @@ int cyth_wasm_init(char* source,
     return false;
   }
 
-  parser_init(tokens, error_callback);
+  parser_init(tokens, codegen.error_callback);
   ArrayStmt statements = parser_parse();
 
   if (parser_errors())
@@ -4950,22 +4952,48 @@ int cyth_wasm_init(char* source,
     return false;
   }
 
-  checker_init(statements, error_callback, NULL);
-  checker_validate();
+  codegen.statements = statements;
+  return true;
+}
 
-  if (checker_errors())
+int cyth_wasm_load_function(const char* signature, const char* module)
+{
+  lexer_init((char*)signature, codegen.error_callback);
+  ArrayToken tokens = lexer_scan();
+
+  if (lexer_errors())
   {
     memory_reset();
     return false;
   }
 
-  codegen.module = BinaryenModuleCreate();
-  codegen.class = BinaryenTypeNone();
-  codegen.statements = statements;
+  parser_init(tokens, codegen.error_callback);
+  Stmt* statement = parser_parse_import_function_declaration_statement(module);
+
+  if (parser_errors() || statement == NULL)
+  {
+    memory_reset();
+    return false;
+  }
+
+  array_add(&codegen.statements, statement);
+  return true;
+}
+
+int cyth_wasm_compile(int compile, int logging)
+{
+  checker_init(codegen.statements, codegen.error_callback, codegen.link_callback);
+  checker_validate();
+
+  bool result = !checker_errors();
+  if (!compile || !result)
+    goto clean_up;
+
   codegen.loop = 0;
   codegen.strings = 0;
   codegen.function = "<start>";
-  codegen.result_callback = result_callback;
+  codegen.module = BinaryenModuleCreate();
+  codegen.class = BinaryenTypeNone();
 
   array_init(&codegen.debug_info);
   array_init(&codegen.global_local_types);
@@ -4978,15 +5006,10 @@ int cyth_wasm_init(char* source,
   map_init_sint(&codegen.string_constants, 0, 0);
   map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
 
-  return true;
-}
-
-void cyth_wasm_generate(int logging)
-{
   BinaryenExpressionRef body = generate_statements(&codegen.statements);
 
   VarStmt* statement;
-  ArrayVarStmt statements = global_locals();
+  ArrayVarStmt statements = checker_global_locals();
   array_foreach(&statements, statement)
   {
     BinaryenType type = data_type_to_binaryen_type(statement->data_type);
@@ -5008,7 +5031,8 @@ void cyth_wasm_generate(int logging)
                                      info.token.start_column);
   }
 
-  if (BinaryenModuleValidate(codegen.module))
+  result = BinaryenModuleValidate(codegen.module);
+  if (result)
   {
     BinaryenModuleOptimize(codegen.module);
 
@@ -5026,5 +5050,28 @@ void cyth_wasm_generate(int logging)
     BinaryenModulePrint(codegen.module);
 
   BinaryenModuleDispose(codegen.module);
+
+clean_up:
   memory_reset();
+  return result;
+}
+
+void cyth_wasm_set_error_callback(void (*error_callback)(int start_line, int start_column,
+                                                         int end_line, int end_column,
+                                                         const char* message))
+{
+  codegen.error_callback = error_callback;
+}
+
+void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* data,
+                                                           size_t source_map_size,
+                                                           void* source_map))
+{
+  codegen.result_callback = result_callback;
+}
+
+void cyth_wasm_set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
+                                                       int def_column, int length))
+{
+  codegen.link_callback = link_callback;
 }

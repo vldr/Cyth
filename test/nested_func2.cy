@@ -1,5 +1,3 @@
-import "env"
-  void log(int n)
 
 class QuickSort<T>
   void sort(T[] array)

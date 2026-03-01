@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 int functor(int a, int b)
     log("functor " + a + " " + b)
     return a+b

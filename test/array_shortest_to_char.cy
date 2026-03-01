@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 int[] shortestToChar(string s, char c)
     int[] list
 

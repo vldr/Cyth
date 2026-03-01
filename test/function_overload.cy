@@ -1,7 +1,3 @@
-import "env"
-    void log(int n)
-    void log(string n)
-
 class A
     void __init__()
         log("A.__init__")

@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 int[] a = [3, 5, 8, 1, 20, 1]
 float[] b = [3.0, 5.0, 8.0, 1.0, 20.0, 1.0]
 

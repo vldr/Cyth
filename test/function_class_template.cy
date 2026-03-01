@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 class A<T>
     T func<T>()
         return 10

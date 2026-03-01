@@ -1,7 +1,3 @@
-import "env"
-    void log(int n)
-    void log(string n)
-
 int[] a
 
 a = [1,2,3]

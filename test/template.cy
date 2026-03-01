@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 class Hashmap<K, V>
     K[] keys
     V[] values

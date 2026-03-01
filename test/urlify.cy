@@ -1,7 +1,3 @@
-import "env"
-  void log(string n)
-  void log(int n)
-
 string urlify(string input)
   char[] buffer
 

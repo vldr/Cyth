@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 Vector a
 a = Vector(0, 0, 0)
 # int

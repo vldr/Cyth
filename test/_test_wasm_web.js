@@ -12,7 +12,7 @@ let errors = [];
 let logs = [];
 let bytecode;
 
-cyth._set_result_callback(
+cyth._cyth_wasm_set_result_callback(
   cyth.addFunction(
     (size, data, sourceMapSize, sourceMap) =>
       (bytecode = cyth.HEAPU8.subarray(data, data + size)),
@@ -20,7 +20,7 @@ cyth._set_result_callback(
   )
 );
 
-cyth._set_error_callback(
+cyth._cyth_wasm_set_error_callback(
   cyth.addFunction(
     (startLineNumber, startColumn, endLineNumber, endColumn, message) =>
       errors.push({
@@ -37,6 +37,7 @@ cyth._set_error_callback(
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8");
 
+let checkPointer;
 let lastEncodedText;
 
 function encodeText(text) {
@@ -45,8 +46,13 @@ function encodeText(text) {
   cyth.HEAPU8.set(data, offset);
   cyth.HEAPU8[offset + data.byteLength] = 0;
 
-  if (lastEncodedText) assert.strictEqual(offset, lastEncodedText);
-  lastEncodedText = offset;
+  if (checkPointer) {
+    if (lastEncodedText)
+      assert.strictEqual(offset, lastEncodedText);
+
+    lastEncodedText = offset;
+    checkPointer = false;
+  }
 
   return offset;
 }
@@ -56,6 +62,8 @@ const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) :
 
 for (const filename of scripts) {
   await test(filename + " (wasm)", async () => {
+    checkPointer = true;
+
     const fullPath = path.join(import.meta.dirname, filename);
     const text = await fs.readFile(fullPath, "utf-8");
     const expectedLogs = text
@@ -91,7 +99,14 @@ for (const filename of scripts) {
     errors.length = 0;
     logs.length = 0;
 
-    cyth._run(encodeText(text), true);
+    if (cyth._cyth_wasm_init(encodeText(text))) {
+      cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
+      cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
+      cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
+      cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
+      cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+      cyth._cyth_wasm_compile(true, false);
+    }
 
     if (errors.length === 0) {
       function log(output) {
@@ -114,12 +129,6 @@ for (const filename of scripts) {
 
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
-          "log<bool>.void(bool)": log,
-          "log<int>.void(int)": log,
-          "log<float>.void(float)": log,
-          "log<string>.void(string)": log,
-          "log<char>.void(char)": log,
-
           "log.void()": log,
           "log.void(int)": log,
           "log.void(float)": log,

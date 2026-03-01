@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 void not_overload()
 
 any a = (any)null
@@ -54,7 +50,7 @@ log((string)"".toArray)
 log(test<string>())
 log((string)not_overload)
 
-# void(string), void(int)
+# void(int), void(bool), void(float), void(char), void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)
@@ -67,7 +63,7 @@ log("" + test)
 log("" + "".toArray)
 log("" + not_overload)
 
-# void(string), void(int)
+# void(int), void(bool), void(float), void(char), void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)

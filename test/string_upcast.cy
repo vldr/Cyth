@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 log("" + 123.625)
 log("" + 21487.625)
 log("" + 4294967296.625)

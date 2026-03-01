@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 class A<Q>
     void test<T, B>(T a, B b)
         log("0")

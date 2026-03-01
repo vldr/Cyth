@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 class Test2<T>
     T a
 

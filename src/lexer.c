@@ -435,9 +435,6 @@ static void literal(void)
       KEYWORD_GROUP('f')
       KEYWORD("if", TOKEN_IF)
 
-      KEYWORD_GROUP('m')
-      KEYWORD("import", TOKEN_IMPORT)
-
       KEYWORD_GROUP('n')
       switch (lexer.start[2])
       {
@@ -921,7 +918,6 @@ void lexer_print(void)
       "TOKEN_WHILE",
       "TOKEN_CONTINUE",
       "TOKEN_BREAK",
-      "TOKEN_IMPORT",
       "TOKEN_NAN",
       "TOKEN_INFINITY",
 

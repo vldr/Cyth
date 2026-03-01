@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 int helloworld = 22
 
 class A

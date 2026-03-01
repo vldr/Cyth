@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 bool generateDiff(int[] nums, int[][] queries, int k)
     int[] diff
 

@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 Raytracer raytracer = Raytracer(10, 10)
 raytracer.draw()
 

@@ -1,5 +1,3 @@
-import "env"
-    void log(string n)
 
 class Node
     string value

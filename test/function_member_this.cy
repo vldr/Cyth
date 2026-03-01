@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 class A
   B b = B()
 

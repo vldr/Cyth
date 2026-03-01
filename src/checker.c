@@ -341,7 +341,7 @@ static inline int align(int value, int alignment)
   return ((value + alignment - 1) / alignment) * alignment;
 }
 
-ArrayVarStmt global_locals(void)
+ArrayVarStmt checker_global_locals(void)
 {
   return checker.global_locals;
 }
@@ -835,9 +835,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
 
   template.class_template->count++;
 
-  Stmt* statement = parser_parse_class_declaration_statement(template.class_template->offset,
-                                                             template.class_template->keyword,
-                                                             template.class_template->name);
+  Stmt* statement = parser_parse_class_declaration_statement(template.class_template);
 
   ClassStmt* class_statement = &statement->class;
   class_statement->name.lexeme = name;
@@ -937,9 +935,8 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     *template_data_types[i] = template_data_type;
   }
 
-  Stmt* statement = parser_parse_function_declaration_statement(
-    template.function_template.function->offset, template.function_template.function->type,
-    template.function_template.function->name);
+  Stmt* statement =
+    parser_parse_function_declaration_statement(template.function_template.function);
 
   FuncStmt* function_statement = &statement->func;
   function_statement->name.lexeme = name;
@@ -948,7 +945,6 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   function_statement->name.end_line = function_type.token.end_line;
   function_statement->name.start_column = function_type.token.start_column;
   function_statement->name.end_column = function_type.token.end_column;
-  function_statement->import = template.function_template.function->import;
 
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
@@ -2792,7 +2788,8 @@ static DataType check_call_expression(CallExpr* expression)
       }
     }
 
-    link(expression->callee_token, function->name_raw, function->name_raw.length);
+    if (!function->import)
+      link(expression->callee_token, function->name_raw, function->name_raw.length);
 
     expression->function = function;
     expression->return_data_type = function->data_type;

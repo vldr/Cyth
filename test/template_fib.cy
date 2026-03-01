@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 for int i = 0; i <= 12; i = i + 1
     T fibonacci<T>(T n)
         if n == 0

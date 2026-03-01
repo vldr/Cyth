@@ -10,7 +10,8 @@ void parser_init(ArrayToken tokens,
 int parser_errors(void);
 ArrayStmt parser_parse(void);
 
-Stmt* parser_parse_class_declaration_statement(int offset, Token keyword, Token name);
-Stmt* parser_parse_function_declaration_statement(int offset, DataTypeToken type, Token name);
+Stmt* parser_parse_class_declaration_statement(ClassTemplateStmt* template);
+Stmt* parser_parse_function_declaration_statement(FuncTemplateStmt* template);
+Stmt* parser_parse_import_function_declaration_statement(const void* import);
 
 #endif

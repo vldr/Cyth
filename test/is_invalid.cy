@@ -1,5 +1,5 @@
-import "env"
-    void log(bool n)
+
+
 
 class A
     int field

@@ -1,6 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
 
 string[] a = ["hello", "world", "how are you"]
 for string a in a

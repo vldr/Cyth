@@ -1,7 +1,3 @@
-import "env"
-  void log(string n)
-  void log(int n)
-
 class A
   int __set__(int index, int value)
     log("set " + index + " = " + value)

@@ -1,7 +1,3 @@
-import "env"
-  void log(string a)
-  void log(int n)
-  
 class Vector
   int x
   int y

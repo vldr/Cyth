@@ -1,6 +1,3 @@
-import "env"
-  void log(string n)
-
 Object2<float> obj = Object<int>().inner
 Object2<float> outer = Object2<float>()
 Object<float> super = Object<float>()

@@ -1,6 +1,3 @@
-import "env"
-    void log(bool n) 
-
 class Hashmap
     char[] keys
     char[] values

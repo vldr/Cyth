@@ -1,7 +1,3 @@
-import "env"
-  void log(string n)
-  void log(int n)
-
 void(string)[] a
 
 void hello(string n)

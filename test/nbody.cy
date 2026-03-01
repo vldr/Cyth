@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 int N = 50
 float PI = 3.141592653589793
 float SOLAR_MASS = 4 * PI * PI

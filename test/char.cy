@@ -1,7 +1,3 @@
-import "env"
-    void log(string c)
-    void log(int n)
-
 char hello = 'a'
 if hello == 'a'
     log("1")

@@ -1,5 +1,5 @@
-import "env"
-    void log(string n)
+
+
 
 class A<Q>
     void test<T, B>(T a, B b)

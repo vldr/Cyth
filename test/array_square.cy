@@ -1,6 +1,3 @@
-import "env"
-  void log(int n)
-
 int maxSquare(int[][] data)
   int m = data.length
   int n = data[0].length

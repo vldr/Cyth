@@ -1,6 +1,3 @@
-import "env"
-  void log(bool n)
-
 class QuickSort<T>
   bool(QuickSort<T>, T, T) comparator
 

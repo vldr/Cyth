@@ -1,7 +1,3 @@
-import "env"
-    void log(string n)
-    void log(int n)
-
 log("Empty" + "".trim())
 log("Contains " + "".contains(""))
 log("Contains " + "abc".contains(""))

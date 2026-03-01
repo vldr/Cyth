@@ -1,5 +1,9 @@
-# Cyth
-A tiny, embeddable and statically typed programming language inspired by C and Python, targeting WebAssembly, x86-64, and ARM64.
+<p align="center">
+    <img src='logo.svg?raw=true' height="140px">
+</p>
+
+---
+A fast and simple, embeddable programming language that targets WebAssembly, x86-64, and ARM64.
 
 - [Try it out](#try-it-out)
 - [Motivation](#motivation)
@@ -18,14 +22,11 @@ You can try out Cyth in the web playground:
 [https://cyth.vldr.org](https://cyth.vldr.org)
 
 ## Motivation
-Suppose we want to call a native C function from Cyth; for example, to print the 12th fibonacci number.
+Suppose we want to call a native C function from Cyth; for example, to `print` the 12th fibonacci number.
 
-In Cyth, you just import the `print` function and call it:
+In Cyth, you just use the `print` function:
 
 ```jai
-import "std"
-  void print(string text)
-
 int fibonacci(int n)
   if n <= 1
     return n
@@ -41,19 +42,17 @@ On the C side, we initialize the Cyth runtime, provide our implementation of `pr
 #include <stdio.h>
 #include <cyth.h>
 
-void print(String *string) {
-  printf("%s\n", string->data);
+void print(CyString* text) {
+  printf("%s\n", text->data);
 }
 
 int main(int argc, char *argv[]) {
-  Jit* jit = cyth_init(argv[1], NULL, NULL);
-  if (!jit)
-    return -1;
-
-  cyth_set_function(jit, "std.print.void(string)", (uintptr_t)print);
-  cyth_generate(jit, 0);
-  cyth_run(jit);
-  cyth_destroy(jit);
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void print(string text)", (uintptr_t)print);
+  cyth_load_file(vm, argv[1]);
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
 
   return 0;
 }
@@ -186,7 +185,6 @@ make
   - [Functions](#functions-1)
   - [Objects](#objects)
 - [Overloading](#overloading)
-- [`import` statement](#import-statement)
 - [`if` statement](#if-statement)
 - [`while` loop](#while-loop)
 - [`for` loop](#for-loop)
@@ -321,7 +319,7 @@ class Vector
 > ```c
 > typedef float (*LengthFunc)(Vector*);
 >
-> LengthFunc length = (LengthFunc) cyth_get_function(jit, "Vector.length.float()");
+> LengthFunc length = (LengthFunc) cyth_get_function(vm, "Vector.length.float()");
 > 
 > Vector* vector = (Vector*) cyth_alloc(true, sizeof(Vector));
 > vector->x = 1;
@@ -329,7 +327,7 @@ class Vector
 > vector->z = 3;
 >
 > float len = 0.0f;
-> cyth_try_catch(jit, { 
+> cyth_try_catch(vm, { 
 >   len = length(vector);
 > });
 > ```
@@ -424,7 +422,7 @@ You can declare variables in the top-level scope of your program which will make
 >
 > For example, to get `myVariable` from C, you would write:
 > ```c
-> int* myVariable = (int*) cyth_get_variable(jit, "myVariable.int");
+> int* myVariable = (int*) cyth_get_variable(vm, "myVariable.int");
 > ```
 > The address returned from `cyth_get_variable` will be `NULL` if it was not found, or the signature is incorrect.
 >
@@ -485,10 +483,10 @@ Nested functions inside method functions are themselves method functions with an
 > For example, to get `myFunction` from C, you would write:
 > ```c
 > typedef int (*Func)(int, int);
-> Func my_function = (Func) cyth_get_function(jit, "myFunction.int(int, int)");
+> Func my_function = (Func) cyth_get_function(vm, "myFunction.int(int, int)");
 >
 > int sum = 0;
-> cyth_try_catch(jit, { 
+> cyth_try_catch(vm, { 
 >   sum = my_function(10, 20); 
 > });
 > ```
@@ -555,29 +553,6 @@ T myFunction<T>(T a, T b, T c)
 myFunction<int>(10, 20, 30)
 myFunction<float>(10, 20)
 ```
-
-## `import` statement
-
-The `import` statement allows you to specify external C functions that you can call from Cyth, effectively enabling a foreign function interface (FFI).
-
-First, you specify a module, and then you list the functions to import from that module (these are listed as any other function but without a body). For example:
-
-```jai
-import "myModule"
-  int myFunction(int a, int b)
-```
-
-In the C code, you then call `cyth_set_function` to link the C function to the Cyth import. When calling `cyth_set_function`, you must provide the module name, function name, and function signature in the format `moduleName.functionName.signature`. For example:
-
-```cpp
-int my_function(int a, int b) {
-  return a + b;
-}
-
-cyth_set_function(jit, "myModule.myFunction.int(int, int)", (uintptr_t)my_function);
-```
-
-In the above example, we are linking from the `myModule` module and the `myFunction` function which accepts two `int` parameters and returns an `int`.
 
 ## `if` statement
 

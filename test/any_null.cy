@@ -1,6 +1,3 @@
-import "env"
-    void log(bool n)
-
 class A
 
 A a = null
@@ -12,7 +9,7 @@ log(p == null)
 log(p != null)
 
 a = A()
-p = log
+p = (void(bool))log
 
 log(a == null)
 log(a != null)

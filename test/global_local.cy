@@ -1,6 +1,3 @@
-import "env"
-    void log(int n)
-
 int i = 10
 log(i)
 

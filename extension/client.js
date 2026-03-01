@@ -16,7 +16,7 @@ async function activate(context) {
   let documents = new Map();
   let uri;
 
-  cyth._set_error_callback(
+  cyth._cyth_wasm_set_error_callback(
     cyth.addFunction(
       (startLineNumber, startColumn, endLineNumber, endColumn, message) => {
         const start = new vscode.Position(startLineNumber - 1, startColumn - 1);
@@ -29,14 +29,13 @@ async function activate(context) {
         );
 
         error.source = "cyth";
- 
         documents.get(uri).errors.push(error);
       },
       "viiiii"
     )
   );
 
-  cyth._set_link_callback(
+  cyth._cyth_wasm_set_link_callback(
     cyth.addFunction(
       (refLineNumber, refColumn, defLineNumber, defColumn, length) => {
         documents.get(uri).links.push({
@@ -68,16 +67,14 @@ async function activate(context) {
     if (document.languageId !== "cyth")
       return;
 
-    if (!documents.get(document.uri))
-    {
-      documents.set(document.uri, { 
-        errors: [], 
-        links: [], 
+    if (!documents.get(document.uri)) {
+      documents.set(document.uri, {
+        errors: [],
+        links: [],
         linkSorted: false,
       });
     }
-    else 
-    {
+    else {
       documents.get(document.uri).errors.length = 0;
       documents.get(document.uri).links.length = 0;
       documents.get(document.uri).linkSorted = false;
@@ -86,9 +83,16 @@ async function activate(context) {
     uri = document.uri;
 
     try {
-      cyth._run(encodeText(document.getText()), false);
+      if (cyth._cyth_wasm_init(encodeText(document.getText()))) {
+        cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
+        cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
+        cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
+        cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
+        cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+        cyth._cyth_wasm_compile(false, false);
+      }
     } catch (err) {
-      console.error("Analyzer crashed:", err);
+      vscode.window.showErrorMessage(`Cyth crashed: ${err}`);
       return;
     }
 

@@ -4948,33 +4948,34 @@ int cyth_load_string(CyVM* vm, char* string)
 int cyth_load_file(CyVM* vm, const char* filename)
 {
   bool result = false;
-
   FILE* file = fopen(filename, "rb");
   if (!file)
     goto clean_up;
 
   if (fseek(file, 0, SEEK_END) != 0)
-    goto clean_up;
+    goto clean_up_file;
 
   long size = ftell(file);
   if (size < 0)
-    goto clean_up;
+    goto clean_up_file;
 
   rewind(file);
 
   char* string = memory_alloc(size + 1);
   if (!string)
-    goto clean_up;
+    goto clean_up_file;
 
   size_t read_size = fread(string, 1, size, file);
   if (read_size != (size_t)size)
-    goto clean_up;
+    goto clean_up_file;
 
   string[size] = '\0';
   result = cyth_load_string(vm, string);
 
-clean_up:
+clean_up_file:
   fclose(file);
+
+clean_up:
   return result;
 }
 

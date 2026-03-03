@@ -9703,8 +9703,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   gen_ctx_t *gen_ctx_ptr = gen_ctx_loc (ctx), gen_ctx = *gen_ctx_ptr;
 
   if (gen_ctx == NULL) {
-    fprintf (stderr, "Calling MIR_gen_finish before MIR_gen_init -- good bye\n");
-    exit (1);
+    return;
   }
   finish_data_flow (gen_ctx);
   finish_ssa (gen_ctx);

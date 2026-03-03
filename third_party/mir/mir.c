@@ -746,6 +746,7 @@ MIR_context_t _MIR_init (MIR_alloc_t alloc, MIR_code_alloc_t code_alloc) {
   ctx->string_ctx = NULL;
   ctx->alias_ctx = NULL;
   ctx->reg_ctx = NULL;
+  ctx->gen_ctx = NULL;
   ctx->simplify_ctx = NULL;
   ctx->machine_code_ctx = NULL;
   ctx->io_ctx = NULL;
@@ -888,6 +889,12 @@ static void remove_all_modules (MIR_context_t ctx) {
 }
 
 void MIR_finish (MIR_context_t ctx) {
+  if (curr_func != NULL)
+    MIR_finish_func(ctx);
+
+  if (curr_module != NULL)
+    MIR_finish_module(ctx);
+
   interp_finish (ctx);
   remove_all_modules (ctx);
   HTAB_DESTROY (MIR_item_t, module_item_tab);

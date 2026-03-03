@@ -5231,15 +5231,15 @@ static LONG WINAPI vector_handler(EXCEPTION_POINTERS* ExceptionInfo)
   {
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-    panic(sig_vm, "Division by zero", pc, fp);
+    panic(panic_vm, "Division by zero", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_STACK_OVERFLOW:
-    panic(sig_vm, "Stack overflow", pc, fp);
+    panic(panic_vm, "Stack overflow", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   case EXCEPTION_ACCESS_VIOLATION:
-    panic(sig_vm, "Invalid memory or null pointer access", pc, fp);
+    panic(panic_vm, "Invalid memory or null pointer access", pc, fp);
     return EXCEPTION_CONTINUE_EXECUTION;
 
   default:

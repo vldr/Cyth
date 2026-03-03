@@ -74,7 +74,7 @@ static int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, 
 }
 
 static int default_mem_unmap (void *addr, size_t len, void *user_data CODE_ALLOC_UNUSED) {
-  return VirtualFree (addr, len, MEM_RELEASE) ? 0 : -1;
+  return VirtualFree (addr, 0, MEM_RELEASE) ? 0 : -1;
 }
 
 static void *default_mem_map (size_t len, void *user_data CODE_ALLOC_UNUSED) {

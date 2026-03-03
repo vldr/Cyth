@@ -1679,6 +1679,11 @@ Stmt* parser_parse_import_function_declaration_statement(const void* import)
   if (statement->type != STMT_FUNCTION_DECL)
     return NULL;
 
-  statement->func.import = import;
+  FuncStmt* function = &statement->func;
+  if (function->body.size)
+    return NULL;
+
+  function->import = import;
+
   return statement;
 }

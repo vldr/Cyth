@@ -1713,7 +1713,8 @@ static void init_function_declaration(FuncStmt* statement)
 
             if (equal)
             {
-              error_overload_conflict(statement->name, name);
+              error_overload_conflict(
+                statement->import && !function->import ? function->name : statement->name, name);
               return;
             }
           }

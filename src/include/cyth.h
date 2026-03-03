@@ -83,7 +83,7 @@ extern "C"
   //
   // The corresponding C code would look like:
   //
-  //    void print(String* string) {
+  //    void print(CyString* string) {
   //      printf("%s\n", string->data);
   //    }
   //
@@ -200,8 +200,8 @@ extern "C"
 #define cyth_try_catch(_vm, _block)                                                                \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(CyVM * vm, void* new_jmp);                                                 \
-    void cyth_pop_jmp(CyVM * vm, void* old_jmp);                                                   \
+    void* cyth_push_jmp(CyVM* vm, void* new_jmp);                                                  \
+    void cyth_pop_jmp(CyVM* vm, void* old_jmp);                                                    \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp((_vm), (void*)&_new);                                  \

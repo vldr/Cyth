@@ -5,25 +5,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _DEBUG
-const char* __asan_default_options(void)
-{
-  return "detect_leaks=0";
-}
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) && !defined(__SANITIZE_ADDRESS__)
+#define __SANITIZE_ADDRESS__
+#endif
+#endif
 
-void* memory_alloc(size_t size_bytes)
-{
-  return malloc(size_bytes);
-}
+#if defined(__SANITIZE_ADDRESS__)
+void __asan_poison_memory_region(void const volatile* addr, size_t size);
+void __asan_unpoison_memory_region(void const volatile* addr, size_t size);
 
-void memory_reset(void)
-{
-}
-
-void memory_free(void)
-{
-}
+#define ASAN_POISON_MEMORY_REGION(addr, size) __asan_poison_memory_region((addr), (size))
+#define ASAN_UNPOISON_MEMORY_REGION(addr, size) __asan_unpoison_memory_region((addr), (size))
+#define ASAN_REDZONE_BYTES() (4 * sizeof(long double))
 #else
+#define ASAN_POISON_MEMORY_REGION(addr, size) ((void)(addr), (void)(size))
+#define ASAN_UNPOISON_MEMORY_REGION(addr, size) ((void)(addr), (void)(size))
+#define ASAN_REDZONE_BYTES() (0)
+#endif
 
 #include <stdint.h>
 #define DEFAULT_BUCKET_SIZE 16384
@@ -49,6 +48,7 @@ static Bucket* new_bucket(size_t capacity)
   bucket->count = 0;
   bucket->capacity = capacity;
 
+  ASAN_POISON_MEMORY_REGION(bucket->data, sizeof(long double) * bucket->capacity);
   return bucket;
 }
 
@@ -59,7 +59,7 @@ static void free_bucket(Bucket* bucket)
 
 void* memory_alloc(size_t size_bytes)
 {
-  size_t size = (size_bytes + sizeof(long double) - 1) / sizeof(long double);
+  size_t size = (size_bytes + ASAN_REDZONE_BYTES() + sizeof(long double) - 1) / sizeof(long double);
 
   if (memory.end == NULL)
   {
@@ -89,6 +89,7 @@ void* memory_alloc(size_t size_bytes)
   void* result = &memory.end->data[memory.end->count];
   memory.end->count += size;
 
+  ASAN_UNPOISON_MEMORY_REGION(result, sizeof(long double) * size - ASAN_REDZONE_BYTES());
   return result;
 }
 
@@ -97,6 +98,8 @@ void memory_reset(void)
   for (Bucket* bucket = memory.begin; bucket != NULL; bucket = bucket->next)
   {
     bucket->count = 0;
+
+    ASAN_POISON_MEMORY_REGION(bucket->data, sizeof(long double) * bucket->capacity);
   }
 
   memory.end = memory.begin;
@@ -116,7 +119,6 @@ void memory_free(void)
   memory.begin = NULL;
   memory.end = NULL;
 }
-#endif
 
 void* memory_realloc(void* old_pointer, size_t old_size, size_t new_size)
 {

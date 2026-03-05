@@ -89,7 +89,7 @@ void* memory_alloc(size_t size_bytes)
   void* result = &memory.end->data[memory.end->count];
   memory.end->count += size;
 
-  ASAN_UNPOISON_MEMORY_REGION(result, sizeof(long double) * size - ASAN_REDZONE_BYTES());
+  ASAN_UNPOISON_MEMORY_REGION(result, size_bytes);
   return result;
 }
 

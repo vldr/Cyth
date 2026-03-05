@@ -225,8 +225,9 @@ static void run_file(void)
     rewind(file);
 
     char* source = memory_alloc(file_size + 1);
-    size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
+    source[file_size] = '\0';
 
+    size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
     if (file_size != bytes_read)
     {
       fprintf(stderr, "error: could not read file: %s\n", cyth.input_path);
@@ -236,8 +237,6 @@ static void run_file(void)
     }
 
     fclose(file);
-    source[file_size] = '\0';
-
     run(source);
   }
 }

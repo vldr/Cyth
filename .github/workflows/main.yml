@@ -113,7 +113,7 @@ jobs:
   build-linux-arm64:
     name: Linux (ARM64)
     concurrency: ci-arm64-${{ github.ref }}
-    runs-on: ubuntu-22.04-arm
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Check out code
         uses: actions/checkout@v2

@@ -228,11 +228,6 @@ static void error_unexpected_class(Token token)
   error(token, "A class declaration is not allowed here.");
 }
 
-static void error_unexpected_import(Token token)
-{
-  error(token, "An import declaration is not allowed here.");
-}
-
 static void error_unexpected_continue(Token token)
 {
   error(token, "A continue statement can only appear inside a loop.");
@@ -566,9 +561,9 @@ const char* data_type_to_string(DataType data_type)
 
     return string.elems;
   }
-  default:
-    UNREACHABLE("Unexpected data type to string");
   }
+
+  UNREACHABLE("Unexpected data type to string");
 }
 
 void expand_function_data_type(DataType data_type, DataType* return_data_type,
@@ -1974,20 +1969,6 @@ static void init_class_declaration_body(ClassStmt* statement)
 
   checker.class = previous_class;
   checker.environment = previous_environment;
-}
-
-static void init_import_declaration(ImportStmt* statement)
-{
-  Stmt* body_statement;
-  array_foreach(&statement->body, body_statement)
-  {
-    checker.error = false;
-
-    if (body_statement->type == STMT_FUNCTION_DECL)
-      init_function_declaration(&body_statement->func);
-    else if (body_statement->type == STMT_FUNCTION_TEMPLATE_DECL)
-      init_function_template_declaration(&body_statement->func_template);
-  }
 }
 
 static DataType check_cast_expression(CastExpr* expression)
@@ -3713,10 +3694,9 @@ static DataType check_expression(Expr* expression)
     return check_is_expression(&expression->is);
   case EXPR_IF:
     return check_if_expression(&expression->cond);
-
-  default:
-    UNREACHABLE("Unhandled expression");
   }
+
+  UNREACHABLE("Unhandled expression");
 }
 
 static void check_expression_statement(ExprStmt* statement)
@@ -4100,21 +4080,6 @@ static void check_class_template_declaration(ClassTemplateStmt* statement)
   }
 }
 
-static void check_import_declaration(ImportStmt* statement)
-{
-  if (checker.function || checker.loop || checker.class || checker.cond)
-  {
-    error_unexpected_import(statement->keyword);
-    return;
-  }
-
-  Stmt* body_statement;
-  array_foreach(&statement->body, body_statement)
-  {
-    check_statement(body_statement, true);
-  }
-}
-
 static void check_statement(Stmt* statement, bool synchronize)
 {
   if (synchronize)
@@ -4124,47 +4089,42 @@ static void check_statement(Stmt* statement, bool synchronize)
   {
   case STMT_EXPR:
     check_expression_statement(&statement->expr);
-    break;
+    return;
   case STMT_IF:
     check_if_statement(&statement->cond);
-    break;
+    return;
   case STMT_WHILE:
     check_while_statement(&statement->loop);
-    break;
+    return;
   case STMT_RETURN:
     check_return_statement(&statement->ret);
-    break;
+    return;
   case STMT_CONTINUE:
     check_continue_statement(&statement->cont);
-    break;
+    return;
   case STMT_BREAK:
     check_break_statement(&statement->brk);
-    break;
+    return;
   case STMT_FUNCTION_DECL:
     check_function_declaration(&statement->func);
-    break;
+    return;
   case STMT_VARIABLE_DECL:
     check_variable_declaration(&statement->var);
-    break;
+    return;
   case STMT_CLASS_DECL:
     check_class_declaration(&statement->class);
-    break;
-  case STMT_IMPORT_DECL:
-    check_import_declaration(&statement->import);
-    break;
-
+    return;
   case STMT_FUNCTION_TEMPLATE_DECL:
     if (checker.function || checker.loop || checker.cond)
       init_function_template_declaration(&statement->func_template);
 
-    break;
+    return;
 
   case STMT_CLASS_TEMPLATE_DECL:
-    break;
-
-  default:
-    UNREACHABLE("Unhandled statement");
+    return;
   }
+
+  UNREACHABLE("Unhandled statement");
 }
 
 static bool analyze_statement(Stmt* statement)
@@ -4185,14 +4145,12 @@ static bool analyze_statement(Stmt* statement)
   case STMT_FUNCTION_DECL:
   case STMT_VARIABLE_DECL:
   case STMT_CLASS_DECL:
-  case STMT_IMPORT_DECL:
   case STMT_CLASS_TEMPLATE_DECL:
   case STMT_FUNCTION_TEMPLATE_DECL:
     return false;
-
-  default:
-    UNREACHABLE("Unexpected statement to analyze");
   }
+
+  UNREACHABLE("Unexpected statement to analyze");
 }
 
 static bool analyze_statements(ArrayStmt statements)
@@ -4273,9 +4231,6 @@ void checker_validate(void)
       break;
     case STMT_CLASS_DECL:
       init_class_declaration_body(&statement->class);
-      break;
-    case STMT_IMPORT_DECL:
-      init_import_declaration(&statement->import);
       break;
     case STMT_VARIABLE_DECL:
       init_variable_declaration(&statement->var);

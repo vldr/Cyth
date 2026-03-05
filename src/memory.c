@@ -15,7 +15,13 @@
 void __asan_poison_memory_region(void const volatile* addr, size_t size);
 void __asan_unpoison_memory_region(void const volatile* addr, size_t size);
 
-#define ASAN_POISON_MEMORY_REGION(addr, size) __asan_poison_memory_region((addr), (size))
+#define ASAN_POISON_MEMORY_REGION(addr, size)                                                      \
+  do                                                                                               \
+  {                                                                                                \
+    __asan_unpoison_memory_region((addr), (size));                                                 \
+    memset((addr), 0xAB, (size));                                                                  \
+    __asan_poison_memory_region((addr), (size));                                                   \
+  } while (0)
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) __asan_unpoison_memory_region((addr), (size))
 #define ASAN_REDZONE_BYTES() (4 * sizeof(long double))
 #else

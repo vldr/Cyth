@@ -4617,15 +4617,6 @@ static void generate_class_template_declaration(CyVM* vm, ClassTemplateStmt* sta
   }
 }
 
-static void generate_import_declaration(CyVM* vm, ImportStmt* statement)
-{
-  Stmt* body_statement;
-  array_foreach(&statement->body, body_statement)
-  {
-    generate_statement(vm, body_statement);
-  }
-}
-
 static void generate_statement(CyVM* vm, Stmt* statement)
 {
   switch (statement->type)
@@ -4653,9 +4644,6 @@ static void generate_statement(CyVM* vm, Stmt* statement)
     return;
   case STMT_FUNCTION_DECL:
     generate_function_declaration(vm, &statement->func);
-    return;
-  case STMT_IMPORT_DECL:
-    generate_import_declaration(vm, &statement->import);
     return;
   case STMT_CLASS_DECL:
     generate_class_declaration(vm, &statement->class);
@@ -4821,15 +4809,6 @@ static void init_class_declaration(CyVM* vm, ClassStmt* statement)
   } while (index < initializer_functions.size);
 }
 
-static void init_import_declaration(CyVM* vm, ImportStmt* statement)
-{
-  Stmt* body_statement;
-  array_foreach(&statement->body, body_statement)
-  {
-    init_statement(vm, body_statement);
-  }
-}
-
 static void init_class_template_declaration(CyVM* vm, ClassTemplateStmt* statement)
 {
   ClassStmt* class_declaration;
@@ -4880,9 +4859,6 @@ static void init_statement(CyVM* vm, Stmt* statement)
     return;
   case STMT_FUNCTION_DECL:
     init_function_declaration(vm, &statement->func);
-    return;
-  case STMT_IMPORT_DECL:
-    init_import_declaration(vm, &statement->import);
     return;
   case STMT_CLASS_DECL:
     init_class_declaration(vm, &statement->class);

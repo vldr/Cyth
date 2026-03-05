@@ -146,12 +146,6 @@ typedef struct _CLASS_TEMPLATE_STMT
   ArrayClassStmt classes;
 } ClassTemplateStmt;
 
-typedef struct _IMPORT_STMT
-{
-  Token keyword;
-  ArrayStmt body;
-} ImportStmt;
-
 struct _STMT
 {
   enum
@@ -167,7 +161,6 @@ struct _STMT
     STMT_VARIABLE_DECL,
     STMT_CLASS_DECL,
     STMT_CLASS_TEMPLATE_DECL,
-    STMT_IMPORT_DECL,
   } type;
 
   union {
@@ -182,7 +175,6 @@ struct _STMT
     ContinueStmt cont;
     ClassStmt class;
     ClassTemplateStmt class_template;
-    ImportStmt import;
   };
 };
 

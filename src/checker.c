@@ -25,6 +25,7 @@ static struct
 
   FuncStmt* function;
   ClassStmt* class;
+  ClassTemplateStmt* class_template;
   IfStmt* cond;
   TokenLink* template;
   WhileStmt* loop;
@@ -46,6 +47,7 @@ static void check_function_declaration(FuncStmt* statement);
 
 static void init_class_declaration(ClassStmt* statement);
 static void init_class_declaration_body(ClassStmt* statement);
+static void check_class_declaration(ClassStmt* statement);
 
 static bool analyze_statement(Stmt* statement);
 static bool analyze_statements(ArrayStmt statements);
@@ -880,6 +882,9 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   }
 
   init_class_declaration_body(class_statement);
+
+  if (checker.class_template)
+    check_class_declaration(class_statement);
 
   template.class_template->count--;
 
@@ -4068,6 +4073,8 @@ static void check_class_declaration(ClassStmt* statement)
 
 static void check_class_template_declaration(ClassTemplateStmt* statement)
 {
+  checker.class_template = statement;
+
   ClassStmt* class_statement;
   array_foreach(&statement->classes, class_statement)
   {
@@ -4078,6 +4085,8 @@ static void check_class_template_declaration(ClassTemplateStmt* statement)
 
     checker.template = checker.template->previous;
   }
+
+  checker.class_template = NULL;
 }
 
 static void check_statement(Stmt* statement, bool synchronize)
@@ -4174,6 +4183,7 @@ void checker_init(ArrayStmt statements,
   checker.function = NULL;
   checker.template = NULL;
   checker.class = NULL;
+  checker.class_template = NULL;
   checker.loop = NULL;
   checker.cond = NULL;
   checker.assignment = NULL;

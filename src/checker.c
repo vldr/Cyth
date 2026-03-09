@@ -2733,6 +2733,7 @@ static DataType check_call_expression(CallExpr* expression)
       {
         error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
                             argument_data_type);
+        checker.error = false;
       }
     }
 
@@ -2772,6 +2773,7 @@ static DataType check_call_expression(CallExpr* expression)
       {
         error_type_mismatch(expression->argument_tokens.elems[i], parameter_data_type,
                             argument_data_type);
+        checker.error = false;
       }
     }
 
@@ -2834,6 +2836,7 @@ static DataType check_call_expression(CallExpr* expression)
           argument_token = expression->argument_tokens.elems[i];
 
         error_type_mismatch(argument_token, parameter_data_type, argument_data_type);
+        checker.error = false;
       }
     }
 
@@ -2897,6 +2900,7 @@ static DataType check_call_expression(CallExpr* expression)
         {
           error_type_mismatch(expression->argument_tokens.elems[i - 1], parameter_data_type,
                               argument_data_type);
+          checker.error = false;
         }
       }
 

@@ -68,8 +68,8 @@ Precompiled binaries are available in [Releases](https://github.com/vldr/Cyth/re
 
 ## Examples
 
-- [Raylib](https://github.com/vldr/CythRay)  
-Raylib bindings for the Cyth programming language.
+- [GFX](https://github.com/vldr/CythGFX)  
+A graphical example program.
 
 - [CGI](https://github.com/vldr/CythCGI)  
 A server-side scripting environment for the Cyth programming language, written in Rust.

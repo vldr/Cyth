@@ -1745,10 +1745,6 @@ static void init_function_declaration(FuncStmt* statement)
 static void init_class_template_declaration(ClassTemplateStmt* statement)
 {
   const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
 
   MapSInt type_set;
   map_init_sint(&type_set, 0, 0);
@@ -1775,7 +1771,10 @@ static void init_class_template_declaration(ClassTemplateStmt* statement)
   variable->data_type = DATA_TYPE(TYPE_PROTOTYPE_TEMPLATE);
   variable->data_type.class_template = statement;
 
-  environment_set_variable(checker.environment, name, variable);
+  if (environment_check_variable(checker.environment, name))
+    error_name_already_exists(statement->name, name);
+  else
+    environment_set_variable(checker.environment, name, variable);
 }
 
 static void init_function_template_declaration(FuncTemplateStmt* statement)
@@ -1851,10 +1850,6 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
 static void init_class_declaration(ClassStmt* statement)
 {
   const char* name = statement->name.lexeme;
-  if (environment_check_variable(checker.environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
 
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
@@ -1869,7 +1864,10 @@ static void init_class_declaration(ClassStmt* statement)
   variable->data_type = DATA_TYPE(TYPE_PROTOTYPE);
   variable->data_type.class = statement;
 
-  environment_set_variable(checker.environment, name, variable);
+  if (environment_check_variable(checker.environment, name))
+    error_name_already_exists(statement->name, name);
+  else
+    environment_set_variable(checker.environment, name, variable);
 }
 
 static void init_variable_declaration(VarStmt* statement)
@@ -1902,11 +1900,6 @@ static void init_variable_declaration(VarStmt* statement)
     }
   }
 
-  if (environment_check_variable(environment, name))
-  {
-    error_name_already_exists(statement->name, name);
-  }
-
   if (statement->type.type == DATA_TYPE_TOKEN_NONE)
   {
     statement->data_type = statement->initializer_data_type;
@@ -1926,7 +1919,10 @@ static void init_variable_declaration(VarStmt* statement)
     array_add(&checker.function->variables, statement);
   }
 
-  environment_set_variable(environment, name, statement);
+  if (environment_check_variable(environment, name))
+    error_name_already_exists(statement->name, name);
+  else
+    environment_set_variable(environment, name, statement);
 }
 
 static void init_class_declaration_body(ClassStmt* statement)
@@ -3596,6 +3592,8 @@ static DataType check_index_expression(IndexExpr* expression)
                                              value_data_type);
         return DATA_TYPE(TYPE_VOID);
       }
+
+      link(checker.assignment->op, function->name, checker.assignment->op.length);
     }
 
     expression->function = function;

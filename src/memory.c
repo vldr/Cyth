@@ -39,7 +39,6 @@ void __asan_unpoison_memory_region(void const volatile* addr, size_t size);
 #define ASAN_REDZONE_BYTES() (0)
 #endif
 
-#include <stdint.h>
 #define DEFAULT_BUCKET_SIZE 16384
 
 typedef struct _BUCKET

@@ -191,7 +191,7 @@ extern "C"
   // You MUST never call "return" or "break" inside this macro, otherwise the program will get into
   // a corrupted state.
   //
-  //   vm_try_catch(vm, {
+  //   cyth_try_catch(vm, {
   //     foo(1, 2);
   //   } else {
   //     printf("Runtime error!\n");

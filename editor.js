@@ -457,6 +457,59 @@ class EditorTabs {
 }
 
 class Editor {
+  constructor() {
+    monaco.languages.register({ id: "cyth" });
+    monaco.editor.defineTheme("cyth", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "keyword", foreground: "f7a8ff" },
+        { token: "types", foreground: "00c4ff" },
+        { token: "identifier", foreground: "9cdcfe" },
+        { token: "number", foreground: "adfd84" },
+        { token: "function", foreground: "fde3a1" },
+        { token: "comment", foreground: "00af1b" },
+        { token: "operator", foreground: "c0c0c0" },
+        { token: "class", foreground: "92ffc7" },
+        { token: "default", foreground: "909090" },
+        { token: "string.escape", foreground: "f9c684" },
+      ],
+      colors: {
+        "editor.background": "#000000",
+        "editorLineNumber.foreground": "#858585",
+        "scrollbar.shadow": "#00000000",
+      },
+    });
+
+    this.errors = [];
+    this.links = [];
+    this.linkSorted = false;
+    this.encoder = new TextEncoder();
+    this.model = monaco.editor.createModel("", "cyth");
+    this.editorDeltaDecorationsList = [];
+    this.editorElement = document.getElementById("editor");
+    this.editor = monaco.editor.create(this.editorElement, {
+      theme: "cyth",
+      lineNumbers: "on",
+      model: this.model,
+      automaticLayout: true,
+      scrollBeyondLastLine: true,
+      minimap: { enabled: false },
+      fixedOverflowWidgets: true,
+      accessibilitySupport: "off",
+      tabSize: 2,
+    });
+
+    this.editorTabs = new EditorTabs(this);
+    this.editorTabs.load();
+
+    this.editor.layout();
+    this.editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
+      () => { }
+    );
+  }
+
   init(blobUrl) {
     Module._cyth_wasm_set_error_callback(
       Module.addFunction(this.onError.bind(this), "viiiii")
@@ -466,7 +519,6 @@ class Editor {
       Module.addFunction(this.onLink.bind(this), "viiiii")
     );
 
-    monaco.languages.register({ id: "cyth" });
     monaco.languages.setLanguageConfiguration("cyth", {
       comments: { lineComment: "#" },
       brackets: [
@@ -647,28 +699,6 @@ class Editor {
       },
     });
 
-    monaco.editor.defineTheme("cyth", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [
-        { token: "keyword", foreground: "f7a8ff" },
-        { token: "types", foreground: "00c4ff" },
-        { token: "identifier", foreground: "9cdcfe" },
-        { token: "number", foreground: "adfd84" },
-        { token: "function", foreground: "fde3a1" },
-        { token: "comment", foreground: "00af1b" },
-        { token: "operator", foreground: "c0c0c0" },
-        { token: "class", foreground: "92ffc7" },
-        { token: "default", foreground: "909090" },
-        { token: "string.escape", foreground: "f9c684" },
-      ],
-      colors: {
-        "editor.background": "#000000",
-        "editorLineNumber.foreground": "#858585",
-        "scrollbar.shadow": "#00000000",
-      },
-    });
-
     monaco.languages.registerDefinitionProvider("cyth", {
       provideDefinition: (model, position) => {
         if (!this.linkSorted) {
@@ -720,37 +750,10 @@ class Editor {
       }
     });
 
-    this.errors = [];
-    this.links = [];
-    this.linkSorted = false;
-    this.encoder = new TextEncoder();
-    this.model = monaco.editor.createModel("", "cyth");
-    this.editorDeltaDecorationsList = [];
-    this.editorElement = document.getElementById("editor");
-    this.editor = monaco.editor.create(this.editorElement, {
-      theme: "cyth",
-      lineNumbers: "on",
-      model: this.model,
-      automaticLayout: true,
-      scrollBeyondLastLine: true,
-      minimap: { enabled: false },
-      fixedOverflowWidgets: true,
-      accessibilitySupport: "off",
-      tabSize: 2,
-    });
-
     this.blobUrl = blobUrl;
-    this.editorTabs = new EditorTabs(this);
     this.editorConsole = new EditorConsole(this.model, this.editorTabs, this);
-
-    this.editor.layout();
-    this.editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-      () => { }
-    );
     this.editor.onDidChangeModelContent(() => this.onInput());
-
-    this.editorTabs.load();
+    this.onInput();
   }
 
   encodeText(text) {

@@ -109,6 +109,7 @@ typedef struct _TOKEN
   int end_column;
   int length;
   const char* lexeme;
+  const char* filename;
 } Token;
 
 typedef struct _DATA_TYPE_TOKEN
@@ -139,8 +140,9 @@ typedef struct _DATA_TYPE_TOKEN
   };
 } DataTypeToken;
 
-void lexer_init(char* source, void (*error_callback)(int start_line, int start_column, int end_line,
-                                                     int end_column, const char* message));
+void lexer_init(const char* filename, char* source,
+                void (*error_callback)(const char* filename, int start_line, int start_column,
+                                       int end_line, int end_column, const char* message));
 int lexer_errors(void);
 void lexer_print(void);
 ArrayToken lexer_scan(void);

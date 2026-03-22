@@ -71,8 +71,8 @@ struct _CY_VM
   Function string_char_cast;
 
   int logging;
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
+  void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
+                         int end_column, const char* message);
   void (*panic_callback)(const char* function, int line, int column);
 };
 
@@ -199,11 +199,11 @@ static void panic_callback(const char* function, int line, int column)
   previous_column = column;
 }
 
-static void error_callback(int start_line, int start_column, int end_line, int end_column,
-                           const char* message)
+static void error_callback(const char* filename, int start_line, int start_column, int end_line,
+                           int end_column, const char* message)
 {
-  fprintf(stderr, "%d:%d-%d:%d: error: %s\n", start_line, start_column, end_line, end_column,
-          message);
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", filename ? filename : "", filename ? ":" : "",
+          start_line, start_column, end_line, end_column, message);
 }
 
 static int string_equals(CyString* left, CyString* right)
@@ -836,7 +836,7 @@ static Function* generate_array_pop_function(CyVM* vm, DataType data_type)
 
       MIR_append_insn(vm->ctx, vm->function, panic_label);
 
-      generate_panic(vm, "Out of bounds access", (Token){ 0 });
+      generate_panic(vm, "Out of bounds access", TOKEN_EMPTY());
 
       MIR_append_insn(vm->ctx, vm->function, finish_label);
     }
@@ -1131,7 +1131,7 @@ static Function* generate_array_reserve_function(CyVM* vm, DataType data_type)
 
       MIR_append_insn(vm->ctx, vm->function, panic_label);
 
-      generate_panic(vm, "Invalid reservation amount", (Token){ 0 });
+      generate_panic(vm, "Invalid reservation amount", TOKEN_EMPTY());
 
       MIR_append_insn(vm->ctx, vm->function, continue_label);
     }
@@ -5060,9 +5060,9 @@ void cyth_destroy(CyVM* vm)
   free(vm);
 }
 
-void cyth_set_error_callback(CyVM* vm,
-                             void (*error_callback)(int start_line, int start_column, int end_line,
-                                                    int end_column, const char* message))
+void cyth_set_error_callback(CyVM* vm, void (*error_callback)(const char* filename, int start_line,
+                                                              int start_column, int end_line,
+                                                              int end_column, const char* message))
 {
   vm->error_callback = error_callback;
 }
@@ -5080,7 +5080,7 @@ void cyth_set_logging(CyVM* vm, int logging)
 
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
 {
-  lexer_init((char*)signature, vm->error_callback);
+  lexer_init(signature, (char*)signature, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5096,9 +5096,9 @@ int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
   return true;
 }
 
-int cyth_load_string(CyVM* vm, char* string)
+int cyth_load_string(CyVM* vm, const char* filename, char* string)
 {
-  lexer_init(string, vm->error_callback);
+  lexer_init(filename, string, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5144,7 +5144,7 @@ int cyth_load_file(CyVM* vm, const char* filename)
     goto clean_up_file;
 
   string[size] = '\0';
-  result = cyth_load_string(vm, string);
+  result = cyth_load_string(vm, filename, string);
 
 clean_up_file:
   fclose(file);

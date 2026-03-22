@@ -30,9 +30,10 @@ extern "C"
   //
   // [error_callback] will be called when a compilation error occurs.
   // This can be NULL, in which case it will not be called (though errors will still exist).
-  void cyth_set_error_callback(CyVM* vm, void (*error_callback)(int start_line, int start_column,
-                                                                int end_line, int end_column,
-                                                                const char* message));
+  void cyth_set_error_callback(CyVM* vm,
+                               void (*error_callback)(const char* filename, int start_line,
+                                                      int start_column, int end_line,
+                                                      int end_column, const char* message));
 
   // Sets the panic callback function.
   //
@@ -59,7 +60,7 @@ extern "C"
   //
   // This function will return 1 if the file was successfully loaded,
   // or return 0, if an error has occurred (which will also call the error callback).
-  int cyth_load_string(CyVM* vm, char* string);
+  int cyth_load_string(CyVM* vm, const char* filename, char* string);
 
   // Loads a file to compile.
   //
@@ -228,20 +229,18 @@ extern "C"
 #define cyth_longjmp siglongjmp
 #endif
 #endif
-
-  void cyth_wasm_set_error_callback(void (*error_callback)(int start_line, int start_column,
-                                                           int end_line, int end_column,
-                                                           const char* message));
+  int cyth_wasm_init(const char* filename, char* string);
+  int cyth_wasm_load_function(const char* signature, const char* module);
+  int cyth_wasm_compile(int compile, int logging);
+  void cyth_wasm_set_error_callback(void (*error_callback)(const char* filename, int start_line,
+                                                           int start_column, int end_line,
+                                                           int end_column, const char* message));
 
   void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* data,
                                                              size_t source_map_size,
                                                              void* source_map));
   void cyth_wasm_set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
                                                          int def_column, int length));
-
-  int cyth_wasm_init(char* string);
-  int cyth_wasm_load_function(const char* signature, const char* module);
-  int cyth_wasm_compile(int compile, int logging);
 #ifdef __cplusplus
 }
 #endif

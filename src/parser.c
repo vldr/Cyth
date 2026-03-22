@@ -15,8 +15,8 @@ static struct
 
   bool error;
   int errors;
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
+  void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
+                         int end_column, const char* message);
 } parser;
 
 static void statements(ArrayStmt* stmts);
@@ -29,8 +29,8 @@ static void error(Token token, const char* message)
 {
   if (!parser.error)
     if (parser.error_callback)
-      parser.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
-                            message);
+      parser.error_callback(token.filename, token.start_line, token.start_column, token.end_line,
+                            token.end_column, message);
 
   parser.error = true;
   parser.errors++;
@@ -214,6 +214,7 @@ static Token combine_tokens(Token start_token, Token end_token)
     end_token.end_column,
     0,
     "",
+    start_token.filename,
   };
 }
 
@@ -648,15 +649,7 @@ static Expr* call(void)
       is->type = EXPR_IS;
       is->is.is_data_type_token = consume_data_type("Expected a type after 'is' keyword.");
       is->is.expr = expr;
-      is->is.expr_token = (Token){
-        TOKEN_IDENTIFIER,
-        start_token.start_line,
-        start_token.start_column,
-        end_token.end_line,
-        end_token.end_column,
-        0,
-        "",
-      };
+      is->is.expr_token = combine_tokens(start_token, end_token);
 
       expr = is;
     }
@@ -1613,8 +1606,8 @@ static void statements(ArrayStmt* stmts)
 }
 
 void parser_init(ArrayToken tokens,
-                 void (*error_callback)(int start_line, int start_column, int end_line,
-                                        int end_column, const char* message))
+                 void (*error_callback)(const char* filename, int start_line, int start_column,
+                                        int end_line, int end_column, const char* message))
 {
   parser.tokens = tokens;
   parser.classes = 0;

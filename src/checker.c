@@ -34,8 +34,8 @@ static struct
   bool error;
   int errors;
 
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
+  void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
+                         int end_column, const char* message);
   void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
 } checker;
 
@@ -75,8 +75,8 @@ static void error(Token token, const char* message)
 
   if (!checker.error)
     if (checker.error_callback)
-      checker.error_callback(token.start_line, token.start_column, token.end_line, token.end_column,
-                             message);
+      checker.error_callback(token.filename, token.start_line, token.start_column, token.end_line,
+                             token.end_column, message);
 
   checker.error = true;
   checker.errors++;
@@ -1944,7 +1944,7 @@ static void init_class_declaration_body(ClassStmt* statement)
     const char* function_name = function_statement->name.lexeme;
 
     function_statement->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
-    function_statement->name.length = strlen(statement->name.lexeme);
+    function_statement->name.length = strlen(function_statement->name.lexeme);
   }
 
   FuncTemplateStmt* function_template;
@@ -1956,7 +1956,7 @@ static void init_class_declaration_body(ClassStmt* statement)
     const char* function_name = function_template->name.lexeme;
 
     function_template->name.lexeme = memory_sprintf("%s.%s", class_name, function_name);
-    function_template->name.length = strlen(statement->name.lexeme);
+    function_template->name.length = strlen(function_template->name.lexeme);
   }
 
   int count = 0;
@@ -2695,7 +2695,11 @@ static DataType check_call_expression(CallExpr* expression)
     {
       argument = EXPR();
       argument->type = EXPR_VAR;
-      argument->var.name = (Token){ .lexeme = "this", .length = sizeof("this") - 1 };
+      argument->var.name = (Token){
+        .length = sizeof("this") - 1,
+        .lexeme = "this",
+        .filename = function->name.filename,
+      };
       argument->var.variable = array_at(&function->parameters, 0);
       argument->var.template_types = NULL;
       argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
@@ -4177,8 +4181,8 @@ static bool analyze_statements(ArrayStmt statements)
 }
 
 void checker_init(ArrayStmt statements,
-                  void (*error_callback)(int start_line, int start_column, int end_line,
-                                         int end_column, const char* message),
+                  void (*error_callback)(const char* filename, int start_line, int start_column,
+                                         int end_line, int end_column, const char* message),
                   void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column,
                                         int length))
 {

@@ -46,7 +46,7 @@ void print(CyString* text) {
   printf("%s\n", text->data);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   CyVM* vm = cyth_init();
   cyth_load_function(vm, "void print(string text)", (uintptr_t)print);
   cyth_load_file(vm, argv[1]);

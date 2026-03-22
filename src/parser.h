@@ -5,8 +5,8 @@
 #include "statement.h"
 
 void parser_init(ArrayToken tokens,
-                 void (*error_callback)(int start_line, int start_column, int end_line,
-                                        int end_column, const char* message));
+                 void (*error_callback)(const char* file, int start_line, int start_column,
+                                        int end_line, int end_column, const char* message));
 int parser_errors(void);
 ArrayStmt parser_parse(void);
 

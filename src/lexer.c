@@ -24,6 +24,7 @@
 
 static struct
 {
+  const char* filename;
   int start_line;
   int start_column;
   int current_line;
@@ -36,8 +37,8 @@ static struct
 
   bool error;
   int errors;
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
+  void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
+                         int end_column, const char* message);
 
   enum
   {
@@ -49,14 +50,14 @@ static struct
   ArrayToken tokens;
 } lexer;
 
-static void error(int start_line, int start_column, int end_line, int end_column,
-                  const char* message)
+static void error(const char* filename, int start_line, int start_column, int end_line,
+                  int end_column, const char* message)
 {
   lexer.error = true;
   lexer.errors++;
 
   if (lexer.error_callback)
-    lexer.error_callback(start_line, start_column, end_line, end_column, message);
+    lexer.error_callback(filename, start_line, start_column, end_line, end_column, message);
 }
 
 static void add_custom_token_offset(TokenKind type, int start_line, int start_column, int end_line,
@@ -69,6 +70,7 @@ static void add_custom_token_offset(TokenKind type, int start_line, int start_co
   token.end_line = end_line;
   token.end_column = end_column;
   token.length = length;
+  token.filename = lexer.filename;
   token.lexeme = memory_strldup(lexeme, length);
 
   array_add(&lexer.tokens, token);
@@ -164,8 +166,8 @@ static void text(TokenKind token_type, char terminator)
 
     if (peek() == '\0')
     {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Missing terminating character.");
+      error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+            lexer.current_column, "Missing terminating character.");
       return;
     }
 
@@ -208,8 +210,8 @@ static void text(TokenKind token_type, char terminator)
         int first = hex_char_to_int(peek());
         if (first == -1)
         {
-          error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-                "Expected hexadecimal digit after '\\x'.");
+          error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+                lexer.current_column, "Expected hexadecimal digit after '\\x'.");
           return;
         }
 
@@ -229,8 +231,8 @@ static void text(TokenKind token_type, char terminator)
 
         break;
       default:
-        error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-              "Invalid escape character.");
+        error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+              lexer.current_column, "Invalid escape character.");
         return;
       }
 
@@ -297,8 +299,8 @@ static void hex(void)
 
   if (invalid || underscore || length == 0)
   {
-    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Invalid hexadecimal literal.");
+    error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+          lexer.current_column, "Invalid hexadecimal literal.");
   }
 
   add_custom_token(TOKEN_HEX_INTEGER, lexeme, length);
@@ -353,8 +355,8 @@ static void number(void)
 
   if (invalid || underscore)
   {
-    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Invalid numeric literal.");
+    error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+          lexer.current_column, "Invalid numeric literal.");
   }
 
   add_custom_token(period ? TOKEN_FLOAT : TOKEN_INTEGER, lexeme, length);
@@ -509,8 +511,8 @@ static void scan_token(void)
     lexer.multi_line--;
     if (lexer.multi_line < 0)
     {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unexpected ')' character.");
+      error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+            lexer.current_column, "Unexpected ')' character.");
     }
 
     add_token(TOKEN_RIGHT_PAREN);
@@ -524,8 +526,8 @@ static void scan_token(void)
     lexer.multi_line--;
     if (lexer.multi_line < 0)
     {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unexpected '}' character.");
+      error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+            lexer.current_column, "Unexpected '}' character.");
     }
 
     add_token(TOKEN_RIGHT_BRACE);
@@ -539,8 +541,8 @@ static void scan_token(void)
     lexer.multi_line--;
     if (lexer.multi_line < 0)
     {
-      error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-            "Unexpected ']' character.");
+      error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+            lexer.current_column, "Unexpected ']' character.");
     }
 
     add_token(TOKEN_RIGHT_BRACKET);
@@ -677,8 +679,8 @@ static void scan_token(void)
       break;
     }
 
-    error(lexer.start_line, lexer.start_column, lexer.current_line, lexer.current_column,
-          "Unexpected character.");
+    error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+          lexer.current_column, "Unexpected character.");
     break;
   }
 }
@@ -732,14 +734,14 @@ static void scan_indentation(void)
   if (lexer.indentation_type == INDENTATION_SPACE)
   {
     if (indentation_type == INDENTATION_TAB)
-      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
-            lexer.current_column, "Using tabs here but expected spaces.");
+      error(lexer.filename, lexer.current_line, lexer.current_column - indentation,
+            lexer.current_line, lexer.current_column, "Using tabs here but expected spaces.");
   }
   else if (lexer.indentation_type == INDENTATION_TAB)
   {
     if (indentation_type == INDENTATION_SPACE)
-      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
-            lexer.current_column, "Using spaces here but expected tabs.");
+      error(lexer.filename, lexer.current_line, lexer.current_column - indentation,
+            lexer.current_line, lexer.current_column, "Using spaces here but expected tabs.");
   }
   else if (indentation_type)
   {
@@ -761,8 +763,8 @@ static void scan_indentation(void)
 
     if (indentation != array_last(&lexer.indentation))
     {
-      error(lexer.current_line, lexer.current_column - indentation, lexer.current_line,
-            lexer.current_column,
+      error(lexer.filename, lexer.current_line, lexer.current_column - indentation,
+            lexer.current_line, lexer.current_column,
             memory_sprintf("Unexpected indentation, expected %d %s%s but got %d %s%s.",
                            array_last(&lexer.indentation),
                            lexer.indentation_type == INDENTATION_SPACE ? "space" : "tab",
@@ -773,10 +775,11 @@ static void scan_indentation(void)
   }
 }
 
-void lexer_init(char* source, void (*error_callback)(int start_line, int start_column, int end_line,
-                                                     int end_column, const char* message))
+void lexer_init(const char* filename, char* source,
+                void (*error_callback)(const char* filename, int start_line, int start_column,
+                                       int end_line, int end_column, const char* message))
 {
-
+  lexer.filename = filename;
   lexer.start = source;
   lexer.current = source;
   lexer.start_line = 1;

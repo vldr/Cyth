@@ -22,15 +22,16 @@ cyth._cyth_wasm_set_result_callback(
 
 cyth._cyth_wasm_set_error_callback(
   cyth.addFunction(
-    (startLineNumber, startColumn, endLineNumber, endColumn, message) =>
+    (filename, startLineNumber, startColumn, endLineNumber, endColumn, message) =>
       errors.push({
+        filename: cyth.UTF8ToString(filename),
         startLineNumber,
         startColumn,
         endLineNumber,
         endColumn,
         message: cyth.UTF8ToString(message),
       }),
-    "viiiii"
+    "viiiiii"
   )
 );
 
@@ -88,6 +89,7 @@ for (const filename of scripts) {
         const matches = line.match(/^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/);
 
         return {
+          filename,
           startLineNumber: parseInt(matches[1]),
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
@@ -99,7 +101,7 @@ for (const filename of scripts) {
     errors.length = 0;
     logs.length = 0;
 
-    if (cyth._cyth_wasm_init(encodeText(text))) {
+    if (cyth._cyth_wasm_init(encodeText(filename), encodeText(text))) {
       cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
       cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
       cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));

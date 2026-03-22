@@ -84,8 +84,8 @@ static struct
   int strings;
   int loop;
 
-  void (*error_callback)(int start_line, int start_column, int end_line, int end_column,
-                         const char* message);
+  void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
+                         int end_column, const char* message);
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
   void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
 } codegen;
@@ -4918,10 +4918,10 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-int cyth_wasm_init(char* string)
+int cyth_wasm_init(char* filename, char* source)
 {
   array_init(&codegen.statements);
-  lexer_init(string, codegen.error_callback);
+  lexer_init(filename, source, codegen.error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -4945,7 +4945,7 @@ int cyth_wasm_init(char* string)
 
 int cyth_wasm_load_function(const char* signature, const char* module)
 {
-  lexer_init((char*)signature, codegen.error_callback);
+  lexer_init(signature, (char*)signature, codegen.error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5043,9 +5043,9 @@ clean_up:
   return result;
 }
 
-void cyth_wasm_set_error_callback(void (*error_callback)(int start_line, int start_column,
-                                                         int end_line, int end_column,
-                                                         const char* message))
+void cyth_wasm_set_error_callback(void (*error_callback)(const char* filename, int start_line,
+                                                         int start_column, int end_line,
+                                                         int end_column, const char* message))
 {
   codegen.error_callback = error_callback;
 }

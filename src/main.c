@@ -77,11 +77,11 @@ static void panic_callback(const char* function, int line, int column)
   cyth.error = true;
 }
 
-static void error_callback(int start_line, int start_column, int end_line, int end_column,
-                           const char* message)
+static void error_callback(const char* filename, int start_line, int start_column, int end_line,
+                           int end_column, const char* message)
 {
-  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", cyth.io ? "" : cyth.input_path,
-          cyth.io ? "" : ":", start_line, start_column, end_line, end_column, message);
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", filename ? filename : "", filename ? ":" : "",
+          start_line, start_column, end_line, end_column, message);
 
   cyth.error = true;
 }
@@ -135,7 +135,7 @@ void run(char* source)
     cyth_wasm_set_error_callback(error_callback);
     cyth_wasm_set_result_callback(result_callback);
 
-    if (cyth_wasm_init(source))
+    if (cyth_wasm_init(cyth.input_path, source))
     {
       cyth_wasm_load_function("void log(int n)", "env");
       cyth_wasm_load_function("void log(bool n)", "env");
@@ -157,7 +157,7 @@ void run(char* source)
     cyth_load_function(vm, "void log(float n)", (uintptr_t)log_float);
     cyth_load_function(vm, "void log(char n)", (uintptr_t)log_char);
     cyth_load_function(vm, "void log(string n)", (uintptr_t)log_string);
-    cyth_load_string(vm, source);
+    cyth_load_string(vm, cyth.input_path, source);
     cyth_compile(vm);
     cyth_run(vm);
     cyth_destroy(vm);

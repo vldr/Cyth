@@ -512,7 +512,7 @@ class Editor {
 
   init(blobUrl) {
     Module._cyth_wasm_set_error_callback(
-      Module.addFunction(this.onError.bind(this), "viiiii")
+      Module.addFunction(this.onError.bind(this), "viiiiii")
     );
 
     Module._cyth_wasm_set_link_callback(
@@ -769,7 +769,7 @@ class Editor {
     const text = this.encodeText(this.editor.getValue());
     const module = this.encodeText("env");
 
-    if (Module._cyth_wasm_init(text)) {
+    if (Module._cyth_wasm_init(0, text)) {
       Module._cyth_wasm_load_function(this.encodeText("void log(int n)"), module);
       Module._cyth_wasm_load_function(this.encodeText("void log(bool n)"), module);
       Module._cyth_wasm_load_function(this.encodeText("void log(float n)"), module);
@@ -818,7 +818,7 @@ class Editor {
     });
   }
 
-  onError(startLineNumber, startColumn, endLineNumber, endColumn, message) {
+  onError(filename, startLineNumber, startColumn, endLineNumber, endColumn, message) {
     this.errors.push({
       startLineNumber,
       startColumn,

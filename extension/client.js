@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const path = require("path");
 
 let cythReadyResolve;
 const cythReady = new Promise((resolve) => {
@@ -18,7 +19,7 @@ async function activate(context) {
 
   cyth._cyth_wasm_set_error_callback(
     cyth.addFunction(
-      (startLineNumber, startColumn, endLineNumber, endColumn, message) => {
+      (filename, startLineNumber, startColumn, endLineNumber, endColumn, message) => {
         const start = new vscode.Position(startLineNumber - 1, startColumn - 1);
         const end = new vscode.Position(endLineNumber - 1, endColumn - 1);
 
@@ -28,10 +29,10 @@ async function activate(context) {
           vscode.DiagnosticSeverity.Error
         );
 
-        error.source = "cyth";
+        error.source = cyth.UTF8ToString(filename);
         documents.get(uri).errors.push(error);
       },
-      "viiiii"
+      "viiiiii"
     )
   );
 
@@ -83,12 +84,13 @@ async function activate(context) {
     uri = document.uri;
 
     try {
-      if (cyth._cyth_wasm_init(encodeText(document.getText()))) {
-        cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
-        cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
-        cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
-        cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
-        cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+      const env = encodeText("env");
+      if (cyth._cyth_wasm_init(encodeText(path.basename(document.fileName)), encodeText(document.getText()))) {
+        cyth._cyth_wasm_load_function(encodeText("void log(int n)"), env);
+        cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), env);
+        cyth._cyth_wasm_load_function(encodeText("void log(float n)"), env);
+        cyth._cyth_wasm_load_function(encodeText("void log(char n)"), env);
+        cyth._cyth_wasm_load_function(encodeText("void log(string n)"), env);
         cyth._cyth_wasm_compile(false, false);
       }
     } catch (err) {

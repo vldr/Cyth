@@ -176,11 +176,6 @@ onmessage = (event) => {
       module = new WebAssembly.Module(data.bytecode);
       instance = new WebAssembly.Instance(module, {
         env: {
-          "log<bool>.void(bool)": log,
-          "log<int>.void(int)": log,
-          "log<float>.void(float)": log,
-          "log<string>.void(string)": log,
-          "log<char>.void(char)": log,
           "log.void()": log,
           "log.void(int)": log,
           "log.void(float)": log,

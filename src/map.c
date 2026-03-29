@@ -331,7 +331,7 @@ static uint32_t map_hash_64(uint64_t a)
   return ((uint32_t)a) ^ (uint32_t)(a >> 32u);
 }
 
-uint32_t murmurhash(const char* key)
+uint32_t map_hash_str(const char* key)
 {
   const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
   const size_t len = strlen(key);
@@ -388,8 +388,69 @@ uint32_t murmurhash(const char* key)
   return (uint32_t)h;
 }
 
+uint32_t map_hash_strbuf(Strbuf* strbuf)
+{
+  const char* key = strbuf->data;
+  const size_t len = strbuf->length;
+
+  const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
+  const unsigned char* p = (const unsigned char*)key;
+  const unsigned char* end = p + (len & ~(uint64_t)0x7);
+  uint64_t h = (len * m);
+
+  while (p != end)
+  {
+    uint64_t k;
+    memcpy(&k, p, sizeof(k));
+
+    k *= m;
+    k ^= k >> 47u;
+    k *= m;
+
+    h ^= k;
+    h *= m;
+    p += 8;
+  }
+
+  switch (len & 7u)
+  {
+  case 7:
+    h ^= (uint64_t)p[6] << 48ul;
+    // fall through
+  case 6:
+    h ^= (uint64_t)p[5] << 40ul;
+    // fall through
+  case 5:
+    h ^= (uint64_t)p[4] << 32ul;
+    // fall through
+  case 4:
+    h ^= (uint64_t)p[3] << 24ul;
+    // fall through
+  case 3:
+    h ^= (uint64_t)p[2] << 16ul;
+    // fall through
+  case 2:
+    h ^= (uint64_t)p[1] << 8ul;
+    // fall through
+  case 1:
+    h ^= (uint64_t)p[0];
+    h *= m;
+    // fall through
+  default:
+    break;
+  }
+
+  h ^= h >> 47u;
+  h *= m;
+  h ^= h >> 47u;
+
+  return (uint32_t)h;
+}
+
 #define map_eq(a, b) ((a) == (b))
 #define map_streq(a, b) (!strcmp(a, b))
+#define map_strbufeq(a, b)                                                                         \
+  ((a)->length == (b)->length && !memcmp((a)->data, (b)->data, (a)->length))
 
 // clang-format off
 
@@ -404,17 +465,19 @@ map_def_scalar(64, uint64_t, uint64_t, map_eq, map_hash_64)
 map_def_scalar(64v, uint64_t, void *, map_eq, map_hash_64)
 map_def_scalar(64s, uint64_t, const char *, map_eq, map_hash_64)
 
-map_def_strkey(str, const char *, const char *, map_streq, murmurhash)
-map_def_strkey(sv, const char *, void *, map_streq, murmurhash)
-map_def_strkey(s64, const char *, uint64_t, map_streq, murmurhash)
-map_def_strkey(sll, const char *, long long, map_streq, murmurhash)
-map_def_strkey(sint, const char *, int, map_streq, murmurhash)
+map_def_strkey(str, const char *, const char *, map_streq, map_hash_str)
+map_def_strkey(sv, const char *, void *, map_streq, map_hash_str)
+map_def_strkey(s64, const char *, uint64_t, map_streq, map_hash_str)
+map_def_strkey(sll, const char *, long long, map_streq, map_hash_str)
+map_def_strkey(sint, const char *, int, map_streq, map_hash_str)
+map_def_strkey(strbuf_int, Strbuf*, int, map_strbufeq, map_hash_strbuf)
 
-map_def_strkey(stmt, const char *, struct _STMT*, map_streq, murmurhash)
-map_def_strkey(var_stmt, const char *, struct _VAR_STMT*, map_streq, murmurhash)
-map_def_strkey(expr, const char *, struct _EXPR*, map_streq, murmurhash)
-map_def_strkey(string_binaryen_heap_type, const char *, uintptr_t, map_streq, murmurhash)
-map_def_strkey(mir_item, const char *, struct MIR_item *, map_streq, murmurhash)
-map_def_strkey(function, const char *, struct _FUNCTION *, map_streq, murmurhash)
+map_def_strkey(stmt, const char *, struct _STMT*, map_streq, map_hash_str)
+map_def_strkey(var_stmt, const char *, struct _VAR_STMT*, map_streq, map_hash_str)
+map_def_strkey(expr, const char *, struct _EXPR*, map_streq, map_hash_str)
+map_def_strkey(string_binaryen_heap_type, const char *, uintptr_t, map_streq, map_hash_str)
+map_def_strkey(function, const char *, struct _FUNCTION *, map_streq, map_hash_str)
+map_def_strkey(mir_item, const char *, struct MIR_item *, map_streq, map_hash_str)
+map_def_strkey(strbuf_mir_item, Strbuf*, struct MIR_item *, map_strbufeq, map_hash_strbuf)
 
   // clang-format on

@@ -54,7 +54,7 @@ struct _CY_VM
 
   ArrayStmt statements;
   MapS64 typeids;
-  MapMIR_item string_constants;
+  MapStrbufMIR_item string_constants;
   MapMIR_item items;
   MapFunction functions;
 
@@ -478,27 +478,32 @@ static void generate_realloc_expression(CyVM* vm, MIR_op_t dest, MIR_op_t ptr, M
 static void generate_string_literal_expression(CyVM* vm, MIR_op_t dest, const char* literal,
                                                int length)
 {
-  MIR_item_t item = map_get_mir_item(&vm->string_constants, literal);
-  if (!item)
-  {
-    if (length == -1)
-      length = strlen(literal);
+  if (length == -1)
+    length = strlen(literal);
 
+  Strbuf key = { .data = literal, .length = length };
+  MIR_item_t value = map_get_strbuf_mir_item(&vm->string_constants, &key);
+
+  if (!value)
+  {
     uintptr_t size = sizeof(CyString) + length + 1;
     CyString* string = memory_alloc(size);
     string->size = length;
     string->data[length] = '\0';
     memcpy(string->data, literal, length);
 
-    const char* name = memory_sprintf("string.%d", map_size_mir_item(&vm->string_constants));
-    item = MIR_new_data(vm->ctx, name, MIR_T_U8, size, string);
+    const char* name = memory_sprintf("string.%d", map_size_strbuf_mir_item(&vm->string_constants));
+    value = MIR_new_data(vm->ctx, name, MIR_T_U8, size, string);
 
-    map_put_mir_item(&vm->string_constants, literal, item);
+    Strbuf* key = ALLOC(Strbuf);
+    key->data = literal;
+    key->length = length;
+    map_put_strbuf_mir_item(&vm->string_constants, key, value);
   }
 
   MIR_append_insn(vm->ctx, vm->function,
                   MIR_new_insn(vm->ctx, data_type_to_mov_type(DATA_TYPE(TYPE_STRING)), dest,
-                               MIR_new_ref_op(vm->ctx, item)));
+                               MIR_new_ref_op(vm->ctx, value)));
 }
 
 static void generate_panic(CyVM* vm, const char* what, Token token)
@@ -4975,7 +4980,7 @@ CyVM* cyth_init(void)
   vm->string_char_cast.func = MIR_new_import(vm->ctx, "string.char_cast");
 
   map_init_function(&vm->functions, 0, 0);
-  map_init_mir_item(&vm->string_constants, 0, 0);
+  map_init_strbuf_mir_item(&vm->string_constants, 0, 0);
   map_init_mir_item(&vm->items, 0, 0);
   map_init_s64(&vm->typeids, 0, 0);
 

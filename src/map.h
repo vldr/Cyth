@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef struct
+{
+  const char* data;
+  int length;
+} Strbuf;
+
 #define map_dec_strkey(typename, name, K, V)                                                       \
   struct map_item_##name                                                                           \
   {                                                                                                \
@@ -83,13 +89,15 @@ map_dec_strkey(Sv, sv, const char *, void *)
 map_dec_strkey(S64, s64, const char *, uint64_t)
 map_dec_strkey(Sll, sll, const char *, long long)
 map_dec_strkey(SInt, sint, const char *, int)
+map_dec_strkey(StrbufInt, strbuf_int, Strbuf*, int)
 
 map_dec_strkey(Stmt, stmt, const char*, struct _STMT*)
 map_dec_strkey(VarStmt, var_stmt, const char*, struct _VAR_STMT*)
 map_dec_strkey(Expr, expr, const char*, struct _EXPR*)
 map_dec_strkey(StringBinaryenHeapType, string_binaryen_heap_type, const char*, uintptr_t)
-map_dec_strkey(MIR_item, mir_item, const char*, struct MIR_item *)
 map_dec_strkey(Function, function, const char*, struct _FUNCTION *)
+map_dec_strkey(MIR_item, mir_item, const char*, struct MIR_item *)
+map_dec_strkey(StrbufMIR_item, strbuf_mir_item, Strbuf*, struct MIR_item *)
 
 // clang-format on
 

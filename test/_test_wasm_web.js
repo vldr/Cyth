@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "assert";
 import path from "path";
 import fs from "fs/promises";
-import cyth from "../editor/cyth.js";
+import cyth from "../src/editor/cyth.js";
 
 Error.stackTraceLimit = Infinity;
 
@@ -73,6 +73,7 @@ for (const filename of scripts) {
       .map((line) =>
         line
           .substring(line.indexOf("#") + 1)
+          .replaceAll("\r", "")
           .replaceAll("\\0", "\0")
           .replaceAll("\\t", "\t")
           .replaceAll("\\b", "\b")
@@ -94,7 +95,7 @@ for (const filename of scripts) {
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
-          message: matches[5].replaceAll("\\n", "\n")
+          message: matches[5].replaceAll("\\n", "\n").replaceAll("\r", "")
         }
       });
 

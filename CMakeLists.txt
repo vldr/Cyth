@@ -26,14 +26,14 @@ if (EMSCRIPTEN)
     )
 
     add_custom_target(serve
-        COMMAND npx http-server -c-1 editor/
+        COMMAND npx http-server -c-1 src/editor/
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS cyth
     )
 
     add_custom_target(package
         COMMAND npx @vscode/vsce package --allow-missing-repository
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/editor/extension
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/extension
         DEPENDS cyth
     )
 else()
@@ -117,17 +117,17 @@ if (EMSCRIPTEN)
     add_custom_command(TARGET cyth POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE_DIR:cyth>/cyth.js
-                ${CMAKE_SOURCE_DIR}/editor/cyth.js
+                ${CMAKE_SOURCE_DIR}/src/editor/cyth.js
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE_DIR:cyth>/cyth.wasm
-                ${CMAKE_SOURCE_DIR}/editor/cyth.wasm
+                ${CMAKE_SOURCE_DIR}/src/editor/cyth.wasm
 
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE_DIR:cyth>/cyth.js
-                ${CMAKE_SOURCE_DIR}/editor/extension/cyth.js
+                ${CMAKE_SOURCE_DIR}/src/extension/cyth.js
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE_DIR:cyth>/cyth.wasm
-                ${CMAKE_SOURCE_DIR}/editor/extension/cyth.wasm
+                ${CMAKE_SOURCE_DIR}/src/extension/cyth.wasm
     )
 endif()
 

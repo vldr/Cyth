@@ -245,7 +245,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: editor/extension/cyth-0.0.1.vsix
+          file: src/extension/cyth-0.0.1.vsix
           asset_name: cyth-vscode-extension.vsix
           tag: build-${{ github.sha }}
           overwrite: true
@@ -253,7 +253,7 @@ jobs:
       - name: Publish (Web)
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: editor
+          folder: src/editor
 
   build-macos:
     name: MacOS

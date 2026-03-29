@@ -56,11 +56,14 @@ extern "C"
   //
   // You MUST call this after "cyth_init" but before "cyth_compile".
   //
+  // [filename] is the name to be associated with the provided source code
+  // (will appear in the error callback).
+  //
   // [string] is the source code to be compiled.
   //
   // This function will return 1 if the file was successfully loaded,
   // or return 0, if an error has occurred (which will also call the error callback).
-  int cyth_load_string(CyVM* vm, const char* filename, char* string);
+  int cyth_load_string(CyVM* vm, const char* filename, const char* string);
 
   // Loads a file to compile.
   //
@@ -113,8 +116,7 @@ extern "C"
   //
   // This MUST be called after calling "cyth_init" and "cyth_compile" respectively.
   //
-  // After this function is called, it is UNSAFE to run the generated code as it
-  // will be deleted.
+  // After this function is called, it is UNSAFE to run generated code as it will be deleted.
   void cyth_destroy(CyVM* vm);
 
   // Allocates a block of memory and returns a pointer to that memory.
@@ -142,7 +144,7 @@ extern "C"
   // You MUST call "cyth_run" before calling functions obtained from this function, otherwise global
   // variables will be uninitialized.
   //
-  // [name] must be in the format: <function name>.<signature>
+  // [name] must be in the format: <function name>.<type name>
   //
   // For example, if I have the following Cyth code:
   //
@@ -162,12 +164,12 @@ extern "C"
   //
   uintptr_t cyth_get_function(CyVM* vm, const char* name);
 
-  // Returns the address to the memory that contains a global variable (top-level scope).
+  // Returns the address to memory that contains a global variable (top-level scope).
   //
   // You MUST call "cyth_run" before accessing global variables, otherwise
   // they will be uninitialized.
   //
-  // [name] must be in the format: <variable name>.<signature>
+  // [name] must be in the format: <variable name>.<type name>
   //
   // For example, if I have the following Cyth code:
   //
@@ -182,15 +184,17 @@ extern "C"
   // Executes a block of code and catches any runtime panics.
   //
   // This macro installs a temporary exception handler using setjmp/longjmp and signals (VEH on
-  // Windows). If a runtime error (panic) occurs while executing the block, control flow will
-  // jump to the "else" clause instead of terminating the program. The "else" clause is optional.
-  // This can be used recursively.
+  // Windows).
+  //
+  // If a runtime error (panic) occurs while executing the block, control flow will jump to the
+  // "else" clause instead of terminating the program. Providing the "else" clause is optional. This
+  // can be used recursively.
   //
   // You MUST use this whenever calling generated code, otherwise the program will crash or get into
   // a corrupted state.
   //
   // You MUST never call "return" or "break" inside this macro, otherwise the program will get into
-  // a corrupted state.
+  // a corrupted state (since clean up code will be skipped).
   //
   //   cyth_try_catch(vm, {
   //     foo(1, 2);
@@ -201,8 +205,8 @@ extern "C"
 #define cyth_try_catch(_vm, _block)                                                                \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(CyVM* vm, void* new_jmp);                                                  \
-    void cyth_pop_jmp(CyVM* vm, void* old_jmp);                                                    \
+    void* cyth_push_jmp(CyVM * vm, void* new_jmp);                                                 \
+    void cyth_pop_jmp(CyVM * vm, void* old_jmp);                                                   \
                                                                                                    \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp((_vm), (void*)&_new);                                  \
@@ -229,13 +233,12 @@ extern "C"
 #define cyth_longjmp siglongjmp
 #endif
 #endif
-  int cyth_wasm_init(const char* filename, char* string);
+  int cyth_wasm_init(const char* filename, const char* string);
   int cyth_wasm_load_function(const char* signature, const char* module);
   int cyth_wasm_compile(int compile, int logging);
   void cyth_wasm_set_error_callback(void (*error_callback)(const char* filename, int start_line,
                                                            int start_column, int end_line,
                                                            int end_column, const char* message));
-
   void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* data,
                                                              size_t source_map_size,
                                                              void* source_map));

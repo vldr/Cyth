@@ -4918,7 +4918,7 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-int cyth_wasm_init(char* filename, char* source)
+int cyth_wasm_init(char* filename, const char* source)
 {
   array_init(&codegen.statements);
   lexer_init(filename, source, codegen.error_callback);

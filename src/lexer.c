@@ -32,8 +32,8 @@ static struct
 
   int multi_line;
 
-  char* start;
-  char* current;
+  const char* start;
+  const char* current;
 
   bool error;
   int errors;
@@ -70,8 +70,8 @@ static void add_custom_token_offset(TokenKind type, int start_line, int start_co
   token.end_line = end_line;
   token.end_column = end_column;
   token.length = length;
+  token.lexeme = lexeme;
   token.filename = lexer.filename;
-  token.lexeme = memory_strldup(lexeme, length);
 
   array_add(&lexer.tokens, token);
 }
@@ -79,7 +79,7 @@ static void add_custom_token_offset(TokenKind type, int start_line, int start_co
 static void add_custom_token(TokenKind type, const char* lexeme, int length)
 {
   add_custom_token_offset(type, lexer.start_line, lexer.start_column, lexer.current_line,
-                          lexer.current_column, lexeme, length);
+                          lexer.current_column, memory_strldup(lexeme, length), length);
 }
 
 static void add_token(TokenKind type)
@@ -153,29 +153,63 @@ static bool match(char c)
 static void text(TokenKind token_type, char terminator)
 {
   bool escaping = false;
-  int shifts = 0;
 
   while (true)
   {
-    if (peek() == '\n')
-    {
-      advance();
-      newline();
-      continue;
-    }
-
-    if (peek() == '\0')
+    const char c = peek();
+    if (c == '\0')
     {
       error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
             lexer.current_column, "Missing terminating character.");
       return;
     }
 
+    if (c == '\n')
+    {
+      advance();
+      newline();
+
+      escaping = false;
+      continue;
+    }
+
     if (escaping)
     {
-      char character;
+      escaping = false;
+    }
+    else
+    {
+      if (c == '\\')
+      {
+        escaping = true;
+      }
 
-      switch (peek())
+      if (c == terminator)
+      {
+        break;
+      }
+    }
+
+    advance();
+  }
+
+  advance();
+
+  const char* input = lexer.start + 1;
+  const int length = (int)(lexer.current - lexer.start - 2);
+
+  char* output = memory_alloc(length + 1);
+  int position = 0;
+
+  escaping = false;
+
+  for (int i = 0; i < length; i++)
+  {
+    char character = input[i];
+
+    if (escaping)
+    {
+      switch (character)
       {
       case 'n':
         character = '\n';
@@ -205,60 +239,59 @@ static void text(TokenKind token_type, char terminator)
         character = '\0';
         break;
       case 'x':
-        advance();
-
-        int first = hex_char_to_int(peek());
-        if (first == -1)
+        if (i + 1 >= length)
         {
           error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
-                lexer.current_column, "Expected hexadecimal digit after '\\x'.");
+                lexer.current_column, "Expected a hexadecimal digit after '\\x'.");
           return;
         }
 
-        int second = hex_char_to_int(peek_next());
-        if (second == -1)
+        int first = hex_char_to_int(input[i + 1]);
+        if (first == -1)
+        {
+          error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
+                lexer.current_column, "Expected a hexadecimal digit after '\\x'.");
+          return;
+        }
+
+        i++;
+
+        if (i + 1 >= length)
         {
           character = (char)first;
-          shifts += 1;
         }
         else
         {
-          advance();
-
-          character = (char)(first << 4 | second);
-          shifts += 2;
+          int second = hex_char_to_int(input[i + 1]);
+          if (second == -1)
+          {
+            character = (char)first;
+          }
+          else
+          {
+            character = (char)(first << 4 | second);
+            i++;
+          }
         }
 
         break;
-      default:
-        error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
-              lexer.current_column, "Invalid escape character.");
-        return;
       }
 
-      shifts++;
       escaping = false;
-
-      *(lexer.current - shifts) = character;
     }
-    else if (peek() == '\\')
+    else if (character == '\\')
     {
       escaping = true;
-    }
-    else if (peek() == terminator)
-    {
-      break;
-    }
-    else if (shifts)
-    {
-      *(lexer.current - shifts) = peek();
+      continue;
     }
 
-    advance();
+    output[position++] = character;
   }
 
-  advance();
-  add_custom_token(token_type, lexer.start + 1, (int)(lexer.current - lexer.start - shifts - 2));
+  output[position] = '\0';
+
+  add_custom_token_offset(token_type, lexer.start_line, lexer.start_column, lexer.current_line,
+                          lexer.current_column, output, position);
 }
 
 static void hex(void)
@@ -775,7 +808,7 @@ static void scan_indentation(void)
   }
 }
 
-void lexer_init(const char* filename, char* source,
+void lexer_init(const char* filename, const char* source,
                 void (*error_callback)(const char* filename, int start_line, int start_column,
                                        int end_line, int end_column, const char* message))
 {

@@ -1,36 +1,9 @@
-int[] array
-array.push(55)
-array.push(47)
-array.push(12)
-array.push(47)
-array.push(35)
-array.push(15)
-array.push(20)
-array.push(42)
-array.push(30)
-array.push(58)
-array.push(15)
-array.push(13)
-array.push(19)
-array.push(18)
-array.push(44)
-array.push(11)
-array.push(7)
-array.push(56)
-array.push(17)
-array.push(25)
-array.push(14)
-array.push(48)
-array.push(4)
-array.push(5)
-array.push(7)
-array.push(36)
-array.push(1)
-array.push(49)
-array.push(25)
-array.push(26)
-array.push(30)
-array.push(9)
+int[] array = [
+    55, 47, 12, 47, 35, 15, 20, 42,
+    30, 58, 15, 13, 19, 18, 44, 11, 
+    7, 56, 17, 25, 14, 48, 4, 5, 7, 
+    36, 1, 49, 25, 26, 30, 9
+]
 
 void swap(int i, int j) 
     int temp = array[i]
@@ -46,11 +19,9 @@ int partition(int l, int h)
             i += 1
             swap(i, j)
          
-     
     swap(i + 1, h)
 
     return i + 1
- 
 
 void qsort(int l, int h) 
     int[] stack
@@ -59,8 +30,7 @@ void qsort(int l, int h)
 
     int top = 2
   
-    while (top > 0) 
-     
+    while top
         h = stack.pop()
         l = stack.pop()
 
@@ -69,15 +39,12 @@ void qsort(int l, int h)
         int p = partition(l, h) 
 
         if p > 0 and p - 1 > l
-         
             stack.push(l)
             stack.push(p - 1)
 
             top = top + 2
          
-  
-        if (p + 1 < h) 
-         
+        if p + 1 < h
             stack.push(p + 1)
             stack.push(h)
 

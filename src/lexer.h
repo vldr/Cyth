@@ -140,7 +140,7 @@ typedef struct _DATA_TYPE_TOKEN
   };
 } DataTypeToken;
 
-void lexer_init(const char* filename, char* source,
+void lexer_init(const char* filename, const char* source,
                 void (*error_callback)(const char* filename, int start_line, int start_column,
                                        int end_line, int end_column, const char* message));
 int lexer_errors(void);

@@ -5080,7 +5080,7 @@ void cyth_set_logging(CyVM* vm, int logging)
 
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
 {
-  lexer_init(signature, (char*)signature, vm->error_callback);
+  lexer_init(signature, signature, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5096,7 +5096,7 @@ int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
   return true;
 }
 
-int cyth_load_string(CyVM* vm, const char* filename, char* string)
+int cyth_load_string(CyVM* vm, const char* filename, const char* string)
 {
   lexer_init(filename, string, vm->error_callback);
   ArrayToken tokens = lexer_scan();

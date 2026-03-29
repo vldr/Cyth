@@ -1,7 +1,9 @@
-log("hello\
-world")
+for string a in ("hello\
+world".split("\n"))
+    log(a.trim())
 
-# hello\nworld
+# hello
+# world
 
 log("\g")
 # g

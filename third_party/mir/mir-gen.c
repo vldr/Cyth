@@ -8762,9 +8762,8 @@ static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_
   });
 
   /* copy debug info during combine */
-  if (bb_insn->insn && bb_insn->insn->line == 0 && bb_insn->insn->column == 0) {
-    bb_insn->insn->line = def_insn->line;
-    bb_insn->insn->column = def_insn->column;
+  if (bb_insn->insn && bb_insn->insn->location.line == 0 && bb_insn->insn->location.column == 0) {
+    bb_insn->insn->location = def_insn->location;
   }
 
   remove_bb_insn_dead_var (gen_ctx, bb_insn, var);

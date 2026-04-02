@@ -831,7 +831,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }
-  alloca_p = FALSE;
+  alloca_p = TRUE;
   leaf_p = TRUE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_item_t proto_item, func_import_item;

@@ -100,17 +100,33 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
     if (item->item_type != MIR_func_item)
       continue;
 
+    const uintptr_t base = (uintptr_t)item->u.func->machine_code;
+    if (pc < base && pc >= base + item->u.func->length)
+      continue;
+
     uintptr_t offset = 0;
 
     for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
          insn = DLIST_NEXT(MIR_insn_t, insn))
     {
-      uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
+      const uintptr_t ptr = base + offset;
       if (pc >= ptr && pc < ptr + insn->size)
       {
-        if (insn->line && insn->column)
+        if (insn->location.name && insn->location.line && insn->location.column)
+        {
           if (vm->panic_callback)
-            vm->panic_callback(item->u.func->name, insn->line, insn->column);
+            vm->panic_callback(insn->location.name, insn->location.line, insn->location.column);
+
+          MIR_location_t* location = MIR_get_location(vm->ctx, insn->location.next);
+          while (location)
+          {
+            if (location->name && location->line && location->column)
+              if (vm->panic_callback)
+                vm->panic_callback(location->name, location->line, location->column);
+
+            location = MIR_get_location(vm->ctx, location->next);
+          }
+        }
       }
 
       offset += insn->size;
@@ -138,6 +154,10 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
       if (item->item_type != MIR_func_item)
         continue;
 
+      const uintptr_t base = (uintptr_t)item->u.func->machine_code;
+      if (pc < base && pc >= base + item->u.func->length)
+        continue;
+
       uintptr_t offset = 0;
 
       for (MIR_insn_t insn = DLIST_HEAD(MIR_insn_t, item->u.func->insns); insn != NULL;
@@ -145,12 +165,24 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
       {
         offset += insn->size;
 
-        uintptr_t ptr = (uintptr_t)item->u.func->machine_code + offset;
+        const uintptr_t ptr = base + offset;
         if (pc >= ptr && pc < ptr + insn->size)
         {
-          if (insn->line && insn->column)
+          if (insn->location.name && insn->location.line && insn->location.column)
+          {
             if (vm->panic_callback)
-              vm->panic_callback(item->u.func->name, insn->line, insn->column);
+              vm->panic_callback(insn->location.name, insn->location.line, insn->location.column);
+
+            MIR_location_t* location = MIR_get_location(vm->ctx, insn->location.next);
+            while (location)
+            {
+              if (location->name && location->line && location->column)
+                if (vm->panic_callback)
+                  vm->panic_callback(location->name, location->line, location->column);
+
+              location = MIR_get_location(vm->ctx, location->next);
+            }
+          }
         }
       }
     }
@@ -444,10 +476,11 @@ static FuncStmt* get_function_member(DataType data_type, const char* name)
   return function;
 }
 
-static MIR_insn_t generate_debug_info(Token token, MIR_insn_t insn)
+static MIR_insn_t generate_debug_info(CyVM* vm, Token token, MIR_insn_t insn)
 {
-  insn->line = token.start_line;
-  insn->column = token.start_column;
+  insn->location.line = token.start_line;
+  insn->location.column = token.start_column;
+  insn->location.name = vm->function->u.func->name;
 
   return insn;
 }
@@ -508,14 +541,15 @@ static void generate_string_literal_expression(CyVM* vm, MIR_op_t dest, const ch
 
 static void generate_panic(CyVM* vm, const char* what, Token token)
 {
-  MIR_append_insn(vm->ctx, vm->function,
-                  generate_debug_info(
-                    token, MIR_new_call_insn(vm->ctx, 6, MIR_new_ref_op(vm->ctx, vm->panic.proto),
-                                             MIR_new_ref_op(vm->ctx, vm->panic.func),
-                                             MIR_new_int_op(vm->ctx, (uint64_t)vm),
-                                             MIR_new_int_op(vm->ctx, (uint64_t)what),
-                                             MIR_new_int_op(vm->ctx, (uint64_t)0),
-                                             MIR_new_int_op(vm->ctx, (uint64_t)0))));
+  MIR_append_insn(
+    vm->ctx, vm->function,
+    generate_debug_info(vm, token,
+                        MIR_new_call_insn(vm->ctx, 6, MIR_new_ref_op(vm->ctx, vm->panic.proto),
+                                          MIR_new_ref_op(vm->ctx, vm->panic.func),
+                                          MIR_new_int_op(vm->ctx, (uint64_t)vm),
+                                          MIR_new_int_op(vm->ctx, (uint64_t)what),
+                                          MIR_new_int_op(vm->ctx, (uint64_t)0),
+                                          MIR_new_int_op(vm->ctx, (uint64_t)0))));
 }
 
 static MIR_op_t generate_array_length_op(CyVM* vm, MIR_reg_t ptr)
@@ -2699,11 +2733,11 @@ static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* exp
     UNREACHABLE("Unhandled binary operation");
   }
 
-  MIR_append_insn(
-    vm->ctx, vm->function,
-    generate_debug_info(expression->op, MIR_new_insn(vm->ctx, op, MIR_new_reg_op(vm->ctx, dest),
-                                                     MIR_new_reg_op(vm->ctx, left),
-                                                     MIR_new_reg_op(vm->ctx, right))));
+  MIR_append_insn(vm->ctx, vm->function,
+                  generate_debug_info(vm, expression->op,
+                                      MIR_new_insn(vm->ctx, op, MIR_new_reg_op(vm->ctx, dest),
+                                                   MIR_new_reg_op(vm->ctx, left),
+                                                   MIR_new_reg_op(vm->ctx, right))));
 }
 
 static void generate_unary_expression(CyVM* vm, MIR_reg_t dest, UnaryExpr* expression)
@@ -3784,7 +3818,7 @@ static void generate_variable_expression(CyVM* vm, MIR_reg_t dest, VarExpr* expr
     MIR_reg_t ptr = MIR_reg(vm->ctx, "this.0", vm->function->u.func);
     MIR_append_insn(
       vm->ctx, vm->function,
-      generate_debug_info(expression->name,
+      generate_debug_info(vm, expression->name,
                           MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                        MIR_new_reg_op(vm->ctx, dest),
                                        generate_object_field_op(vm, expression->variable, ptr))));
@@ -3854,7 +3888,7 @@ static void generate_assignment_expression(CyVM* vm, MIR_reg_t dest, AssignExpr*
 
       MIR_append_insn(
         vm->ctx, vm->function,
-        generate_debug_info(expression->op,
+        generate_debug_info(vm, expression->op,
                             MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                          generate_object_field_op(vm, expression->variable, ptr),
                                          MIR_new_reg_op(vm->ctx, value))));
@@ -3915,7 +3949,7 @@ static void generate_assignment_expression(CyVM* vm, MIR_reg_t dest, AssignExpr*
 
       MIR_append_insn(
         vm->ctx, vm->function,
-        generate_debug_info(expression->op,
+        generate_debug_info(vm, expression->op,
                             MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
                                          generate_array_data_op(vm, ptr))));
 
@@ -4004,7 +4038,7 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
 
   MIR_append_insn(
     vm->ctx, vm->function,
-    generate_debug_info(expression->callee_token,
+    generate_debug_info(vm, expression->callee_token,
                         MIR_new_insn_arr(vm->ctx, MIR_CALL, arguments.size, arguments.elems)));
 }
 
@@ -4061,7 +4095,7 @@ static void generate_access_expression(CyVM* vm, MIR_reg_t dest, AccessExpr* exp
   {
     MIR_append_insn(
       vm->ctx, vm->function,
-      generate_debug_info(expression->name,
+      generate_debug_info(vm, expression->name,
                           MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                        MIR_new_reg_op(vm->ctx, dest),
                                        generate_object_field_op(vm, expression->variable, ptr))));
@@ -4101,7 +4135,7 @@ static void generate_index_expression(CyVM* vm, MIR_reg_t dest, IndexExpr* expre
 
     MIR_append_insn(
       vm->ctx, vm->function,
-      generate_debug_info(expression->index_token,
+      generate_debug_info(vm, expression->index_token,
                           MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                        MIR_new_reg_op(vm->ctx, dest),
                                        generate_string_at_op(vm, ptr, index))));
@@ -4117,7 +4151,7 @@ static void generate_index_expression(CyVM* vm, MIR_reg_t dest, IndexExpr* expre
 
     MIR_append_insn(
       vm->ctx, vm->function,
-      generate_debug_info(expression->index_token,
+      generate_debug_info(vm, expression->index_token,
                           MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
                                        generate_array_data_op(vm, ptr))));
 
@@ -4126,7 +4160,7 @@ static void generate_index_expression(CyVM* vm, MIR_reg_t dest, IndexExpr* expre
     MIR_append_insn(
       vm->ctx, vm->function,
       generate_debug_info(
-        expression->index_token,
+        vm, expression->index_token,
         MIR_new_insn(vm->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_reg_op(vm->ctx, dest),
                      MIR_new_mem_op(vm->ctx, data_type_to_sized_mir_type(element_data_type), 0,
@@ -4572,7 +4606,7 @@ static void generate_class_declaration(CyVM* vm, ClassStmt* statement)
 
         MIR_append_insn(
           vm->ctx, vm->function,
-          generate_debug_info(variable->name,
+          generate_debug_info(vm, variable->name,
                               MIR_new_insn(vm->ctx, data_type_to_mov_type(variable->data_type),
                                            generate_object_field_op(vm, variable, ptr),
                                            MIR_new_reg_op(vm->ctx, initializer))));
@@ -4598,7 +4632,7 @@ static void generate_class_declaration(CyVM* vm, ClassStmt* statement)
 
       MIR_append_insn(vm->ctx, vm->function,
                       generate_debug_info(
-                        initializer_function->name,
+                        vm, initializer_function->name,
                         MIR_new_insn_arr(vm->ctx, MIR_INLINE, arguments.size, arguments.elems)));
     }
 

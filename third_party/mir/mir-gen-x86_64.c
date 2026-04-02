@@ -407,8 +407,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
 
         /* copy debug info during call */
         if (prev_call_insn) {
-          new_insn->line = prev_call_insn->line;
-          new_insn->column = prev_call_insn->column;
+          new_insn->location = prev_call_insn->location;
         }
       } else {
         assert (arg_op.mode == MIR_OP_VAR_MEM);

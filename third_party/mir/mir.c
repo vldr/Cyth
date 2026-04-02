@@ -15,6 +15,7 @@ DEF_VARR (size_t);
 DEF_VARR (char);
 DEF_VARR (uint8_t);
 DEF_VARR (MIR_proto_t);
+DEF_VARR (MIR_location_t);
 
 struct gen_ctx;
 struct c2mir_ctx;
@@ -2220,9 +2221,8 @@ static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t c
 #endif
   insn->code = code;
   insn->data = NULL;
-  insn->line = 0;
-  insn->column = 0;
   insn->size = 0;
+  insn->location = (MIR_location_t) {0};
 
   return insn;
 }
@@ -3036,8 +3036,8 @@ void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t fu
   }
   if (insn->code == MIR_UNSPEC)
     fprintf (f, " # %s", VARR_GET (MIR_proto_t, unspec_protos, insn->ops[0].u.u)->name);
-  else if (insn->line && insn->column)
-    fprintf (f, " # %d:%d", insn->line, insn->column);
+  else if (insn->location.line && insn->location.column)
+    fprintf (f, " # %d:%d", insn->location.line, insn->location.column);
   if (newline_p) fprintf (f, "\n");
 }
 
@@ -3237,6 +3237,7 @@ struct simplify_ctx {
   VARR (MIR_reg_t) * inline_reg_map;
   VARR (MIR_insn_t) * anchors;
   VARR (size_t) * alloca_sizes;
+  VARR (MIR_location_t) * locations;
   size_t new_label_num, inlined_calls, inline_insns_before, inline_insns_after;
 };
 
@@ -3247,10 +3248,19 @@ struct simplify_ctx {
 #define inline_reg_map ctx->simplify_ctx->inline_reg_map
 #define anchors ctx->simplify_ctx->anchors
 #define alloca_sizes ctx->simplify_ctx->alloca_sizes
+#define locations ctx->simplify_ctx->locations
 #define new_label_num ctx->simplify_ctx->new_label_num
 #define inlined_calls ctx->simplify_ctx->inlined_calls
 #define inline_insns_before ctx->simplify_ctx->inline_insns_before
 #define inline_insns_after ctx->simplify_ctx->inline_insns_after
+
+MIR_location_t* MIR_get_location(MIR_context_t ctx, int index)
+{
+  if (index >= 1 && index <= locations->els_num)
+    return &locations->varr[index - 1];
+  else
+    return NULL;
+}
 
 static htab_hash_t val_hash (val_t v, void *arg) {
   MIR_context_t ctx = arg;
@@ -3280,6 +3290,7 @@ static void simplify_init (MIR_context_t ctx) {
   VARR_CREATE (MIR_reg_t, inline_reg_map, ctx->alloc, 256);
   VARR_CREATE (MIR_insn_t, anchors, ctx->alloc, 32);
   VARR_CREATE (size_t, alloca_sizes, ctx->alloc, 32);
+  VARR_CREATE (MIR_location_t, locations, ctx->alloc, 32);
   inlined_calls = inline_insns_before = inline_insns_after = 0;
 }
 
@@ -3296,6 +3307,7 @@ static void simplify_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_insn_t, labels);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   VARR_DESTROY (MIR_insn_t, cold_insns);
+  VARR_DESTROY (MIR_location_t, locations);
   HTAB_DESTROY (val_t, val_tab);
   MIR_free (ctx->alloc, ctx->simplify_ctx);
   ctx->simplify_ctx = NULL;
@@ -4154,6 +4166,10 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     VARR_TRUNC (MIR_insn_t, labels, 0);
     VARR_TRUNC (uint8_t, temp_data, 0);
     stop_insn = NULL;
+    
+    VARR_PUSH(MIR_location_t, locations, call->location);
+    int next_location = VARR_LENGTH(MIR_location_t, locations);
+
     if (!non_top_alloca_p) { /* store cold code when we have no BSTART/BEND */
       for (insn = DLIST_TAIL (MIR_insn_t, called_func->insns); insn != NULL;
            insn = DLIST_PREV (MIR_insn_t, insn)) {
@@ -4162,9 +4178,11 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         new_insn = MIR_copy_insn (ctx, insn);
 
         /* copy debug info during inlining */
-        if (call && new_insn->line == 0 && new_insn->column == 0) {
-          new_insn->line = call->line;
-          new_insn->column = call->column;
+        if (call) {
+          if (new_insn->location.line == 0 && new_insn->location.column == 0) 
+            new_insn->location = call->location;
+          else
+            new_insn->location.next = next_location;
         }
 
         change_inline_insn_regs (ctx, new_insn);
@@ -4181,9 +4199,11 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       new_insn = MIR_copy_insn (ctx, insn);
 
       /* copy debug info during inlining */
-      if (call && new_insn->line == 0 && new_insn->column == 0) {
-        new_insn->line = call->line;
-        new_insn->column = call->column;
+      if (call) {
+        if (new_insn->location.line == 0 && new_insn->location.column == 0) 
+          new_insn->location = call->location;
+        else
+          new_insn->location.next = next_location;
       }
 
       /* va insns are possible here as va_list can be passed as arg */

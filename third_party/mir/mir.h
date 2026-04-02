@@ -284,10 +284,17 @@ typedef struct MIR_insn *MIR_insn_t;
 /* Definition of link of double list of insns */
 DEF_DLIST_LINK (MIR_insn_t)
 
+typedef struct MIR_location {
+  int line;
+  int column;
+  int next;
+  const char* name;
+} MIR_location_t;
+
 struct MIR_insn {
   void *data; /* Aux data */
   size_t size;
-  int line, column;
+  MIR_location_t location;
   DLIST_LINK (MIR_insn_t) insn_link;
   MIR_insn_code_t code : 32;
   unsigned int nops : 32; /* number of operands */
@@ -547,6 +554,7 @@ extern MIR_error_func_t MIR_get_error_func (MIR_context_t ctx);
 extern void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func);
 
 extern MIR_alloc_t MIR_get_alloc (MIR_context_t ctx);
+extern MIR_location_t* MIR_get_location(MIR_context_t ctx, int index);
 
 extern int MIR_get_func_redef_permission_p (MIR_context_t ctx);
 extern void MIR_set_func_redef_permission (MIR_context_t ctx, int flag_p);

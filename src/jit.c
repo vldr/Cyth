@@ -77,8 +77,8 @@ struct _CY_VM
 };
 
 static void generate_default_initialization(CyVM* vm, MIR_reg_t dest, DataType data_type);
-static void generate_string_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth,
-                                 MIR_reg_t list, DataType data_type);
+static void generate_string_cast(CyVM* vm, Token token, MIR_reg_t dest, MIR_reg_t expr,
+                                 MIR_reg_t depth, MIR_reg_t list, DataType data_type);
 static void generate_expression(CyVM* vm, MIR_reg_t dest, Expr* expression);
 static void generate_statement(CyVM* vm, Stmt* statement);
 static void generate_statements(CyVM* vm, ArrayStmt* statements);
@@ -2341,7 +2341,7 @@ static void generate_binary_expression_function_call(CyVM* vm, MIR_reg_t dest,
                           MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, left),
                           MIR_new_reg_op(vm->ctx, right));
 
-  MIR_append_insn(vm->ctx, vm->function, insn);
+  MIR_append_insn(vm->ctx, vm->function, generate_debug_info(vm, expression->op, insn));
 }
 
 static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* expression)
@@ -2814,7 +2814,7 @@ static void generate_unary_expression(CyVM* vm, MIR_reg_t dest, UnaryExpr* expre
   }
 }
 
-static Function* generate_string_array_cast_function(CyVM* vm, DataType data_type)
+static Function* generate_string_array_cast_function(CyVM* vm, Token token, DataType data_type)
 {
   const char* name = memory_sprintf("string.array_cast.%s", data_type_to_string(data_type));
 
@@ -2929,7 +2929,7 @@ static Function* generate_string_array_cast_function(CyVM* vm, DataType data_typ
                                         MIR_new_reg_op(vm->ctx, tmp), MIR_new_reg_op(vm->ctx, tmp),
                                         MIR_new_reg_op(vm->ctx, depth)));
 
-      generate_string_cast(vm, tmp, expr, depth, list, element_data_type);
+      generate_string_cast(vm, token, tmp, expr, depth, list, element_data_type);
 
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_call_insn(
@@ -3021,7 +3021,7 @@ static Function* generate_string_array_cast_function(CyVM* vm, DataType data_typ
   return function;
 }
 
-static Function* generate_string_object_cast_function(CyVM* vm, DataType data_type)
+static Function* generate_string_object_cast_function(CyVM* vm, Token token, DataType data_type)
 {
   const char* name = memory_sprintf("string.object_cast.%s", data_type_to_string(data_type));
 
@@ -3295,7 +3295,7 @@ static Function* generate_string_object_cast_function(CyVM* vm, DataType data_ty
                                         MIR_new_reg_op(vm->ctx, depth)));
 
       generate_string_literal_expression(vm, MIR_new_reg_op(vm->ctx, tmp2), "", -1);
-      generate_string_cast(vm, tmp2, expr, depth, list, variable->data_type);
+      generate_string_cast(vm, token, tmp2, expr, depth, list, variable->data_type);
 
       if (_i + 1 == class->variables.size)
         generate_string_literal_expression(vm, MIR_new_reg_op(vm->ctx, tmp3),
@@ -3345,8 +3345,8 @@ static Function* generate_string_object_cast_function(CyVM* vm, DataType data_ty
   return function;
 }
 
-static void generate_string_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, MIR_reg_t depth,
-                                 MIR_reg_t list, DataType data_type)
+static void generate_string_cast(CyVM* vm, Token token, MIR_reg_t dest, MIR_reg_t expr,
+                                 MIR_reg_t depth, MIR_reg_t list, DataType data_type)
 {
   switch (data_type.type)
   {
@@ -3385,7 +3385,7 @@ static void generate_string_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, MIR_r
                                  MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
     return;
   case TYPE_ARRAY: {
-    Function* function = generate_string_array_cast_function(vm, data_type);
+    Function* function = generate_string_array_cast_function(vm, token, data_type);
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_call_insn(vm->ctx, 7, MIR_new_ref_op(vm->ctx, function->proto),
                                       MIR_new_ref_op(vm->ctx, function->func),
@@ -3401,11 +3401,13 @@ static void generate_string_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, MIR_r
       Function* string_concat = generate_string_concat_function(vm, 2);
       MIR_reg_t tmp = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
 
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, function->proto),
-                                        MIR_new_ref_op(vm->ctx, function->item),
-                                        MIR_new_reg_op(vm->ctx, tmp),
-                                        MIR_new_reg_op(vm->ctx, expr)));
+      MIR_append_insn(
+        vm->ctx, vm->function,
+        generate_debug_info(vm, token,
+                            MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, function->proto),
+                                              MIR_new_ref_op(vm->ctx, function->item),
+                                              MIR_new_reg_op(vm->ctx, tmp),
+                                              MIR_new_reg_op(vm->ctx, expr))));
 
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_call_insn(
@@ -3416,7 +3418,7 @@ static void generate_string_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, MIR_r
     }
     else
     {
-      Function* function = generate_string_object_cast_function(vm, data_type);
+      Function* function = generate_string_object_cast_function(vm, token, data_type);
       MIR_append_insn(
         vm->ctx, vm->function,
         MIR_new_call_insn(vm->ctx, 7, MIR_new_ref_op(vm->ctx, function->proto),
@@ -3517,7 +3519,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
         generate_default_initialization(vm, dest, DATA_TYPE(TYPE_STRING));
       }
 
-      generate_string_cast(vm, dest, expr, depth, list, expression->from_data_type);
+      generate_string_cast(vm, expression->type.token, dest, expr, depth, list,
+                           expression->from_data_type);
       return;
     }
     case TYPE_ANY: {
@@ -3926,17 +3929,21 @@ static void generate_assignment_expression(CyVM* vm, MIR_reg_t dest, AssignExpr*
       if (expression->function->data_type.type == TYPE_VOID)
         MIR_append_insn(
           vm->ctx, vm->function,
-          MIR_new_call_insn(vm->ctx, 5, MIR_new_ref_op(vm->ctx, expression->function->proto),
-                            MIR_new_ref_op(vm->ctx, expression->function->item),
-                            MIR_new_reg_op(vm->ctx, ptr), MIR_new_reg_op(vm->ctx, index),
-                            MIR_new_reg_op(vm->ctx, value)));
+          generate_debug_info(
+            vm, expression->op,
+            MIR_new_call_insn(vm->ctx, 5, MIR_new_ref_op(vm->ctx, expression->function->proto),
+                              MIR_new_ref_op(vm->ctx, expression->function->item),
+                              MIR_new_reg_op(vm->ctx, ptr), MIR_new_reg_op(vm->ctx, index),
+                              MIR_new_reg_op(vm->ctx, value))));
       else
         MIR_append_insn(
           vm->ctx, vm->function,
-          MIR_new_call_insn(vm->ctx, 6, MIR_new_ref_op(vm->ctx, expression->function->proto),
-                            MIR_new_ref_op(vm->ctx, expression->function->item),
-                            MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, ptr),
-                            MIR_new_reg_op(vm->ctx, index), MIR_new_reg_op(vm->ctx, value)));
+          generate_debug_info(
+            vm, expression->op,
+            MIR_new_call_insn(vm->ctx, 6, MIR_new_ref_op(vm->ctx, expression->function->proto),
+                              MIR_new_ref_op(vm->ctx, expression->function->item),
+                              MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, ptr),
+                              MIR_new_reg_op(vm->ctx, index), MIR_new_reg_op(vm->ctx, value))));
     }
     else
     {
@@ -4172,16 +4179,20 @@ static void generate_index_expression(CyVM* vm, MIR_reg_t dest, IndexExpr* expre
     if (expression->function->data_type.type == TYPE_VOID)
       MIR_append_insn(
         vm->ctx, vm->function,
-        MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, expression->function->proto),
-                          MIR_new_ref_op(vm->ctx, expression->function->item),
-                          MIR_new_reg_op(vm->ctx, ptr), MIR_new_reg_op(vm->ctx, index)));
+        generate_debug_info(
+          vm, expression->index_token,
+          MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, expression->function->proto),
+                            MIR_new_ref_op(vm->ctx, expression->function->item),
+                            MIR_new_reg_op(vm->ctx, ptr), MIR_new_reg_op(vm->ctx, index))));
     else
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_call_insn(vm->ctx, 5,
-                                        MIR_new_ref_op(vm->ctx, expression->function->proto),
-                                        MIR_new_ref_op(vm->ctx, expression->function->item),
-                                        MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, ptr),
-                                        MIR_new_reg_op(vm->ctx, index)));
+      MIR_append_insn(
+        vm->ctx, vm->function,
+        generate_debug_info(
+          vm, expression->index_token,
+          MIR_new_call_insn(vm->ctx, 5, MIR_new_ref_op(vm->ctx, expression->function->proto),
+                            MIR_new_ref_op(vm->ctx, expression->function->item),
+                            MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, ptr),
+                            MIR_new_reg_op(vm->ctx, index))));
 
     return;
   }

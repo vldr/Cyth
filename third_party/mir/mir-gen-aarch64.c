@@ -1061,25 +1061,34 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   }
   frame_size += 16; /* lr/fp */
   treg_op2 = _MIR_new_var_op (ctx, R10_HARD_REG);
-  if (frame_size < (1 << 12)) {
-    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
+
+  if (frame_size <= 512 && frame_size % 8 == 0 && !save_prev_stack_p && !func->jret_p) {
+    gen_add_insn_before (gen_ctx, anchor, MIR_new_insn (gen_ctx->ctx, MIR_STP, 
+      sp_reg_op, 
+      fp_reg_op, 
+      _MIR_new_var_op (ctx, LINK_HARD_REG), 
+      MIR_new_int_op (ctx, -frame_size)));
   } else {
-    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, frame_size));
-    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = frame_size */
-    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, treg_op2);
+    if (frame_size < (1 << 12)) {
+      new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
+    } else {
+      new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, frame_size));
+      gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = frame_size */
+      new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, treg_op2);
+    }
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = sp - (frame_size|t) */
+    if (save_prev_stack_p)
+      gen_mov (gen_ctx, anchor, MIR_MOV,
+              _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, SP_HARD_REG, MIR_NON_VAR, 1),
+              treg_op); /* mem[sp + 16] = treg */
+    if (!func->jret_p)
+      gen_mov (gen_ctx, anchor, MIR_MOV,
+              _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
+              _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = lr */
+    gen_mov (gen_ctx, anchor, MIR_MOV,
+            _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_VAR, 1),
+            _MIR_new_var_op (ctx, FP_HARD_REG));             /* mem[sp] = fp */
   }
-  gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = sp - (frame_size|t) */
-  if (save_prev_stack_p)
-    gen_mov (gen_ctx, anchor, MIR_MOV,
-             _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, SP_HARD_REG, MIR_NON_VAR, 1),
-             treg_op); /* mem[sp + 16] = treg */
-  if (!func->jret_p)
-    gen_mov (gen_ctx, anchor, MIR_MOV,
-             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
-             _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = lr */
-  gen_mov (gen_ctx, anchor, MIR_MOV,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_VAR, 1),
-           _MIR_new_var_op (ctx, FP_HARD_REG));             /* mem[sp] = fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op); /* fp = sp */
 #if !defined(__APPLE__)
   if (func->vararg_p) {  // ??? saving only regs corresponding to ...
@@ -1163,21 +1172,31 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         offset += 16;
       }
     }
-  /* Restore lr, sp, fp */
-  if (!func->jret_p)
-    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
-             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
-  gen_mov (gen_ctx, anchor, MIR_MOV, treg_op2, fp_reg_op); /* r10 = fp */
-  gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, FP_HARD_REG, MIR_NON_VAR, 1));
-  if (frame_size < (1 << 12)) {
-    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, MIR_new_int_op (ctx, frame_size));
+
+  if (frame_size <= 504 && frame_size % 8 == 0 && !func->jret_p) {
+    gen_mov (gen_ctx, anchor, MIR_MOV, sp_reg_op, fp_reg_op); /* fp = sp */
+    gen_add_insn_before (gen_ctx, anchor, MIR_new_insn (gen_ctx->ctx, MIR_LDP, 
+      sp_reg_op, 
+      fp_reg_op, 
+      _MIR_new_var_op (ctx, LINK_HARD_REG), 
+      MIR_new_int_op (ctx, frame_size))); /* */
   } else {
-    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, frame_size));
-    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t(r9) = frame_size */
-    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, treg_op);
+    /* Restore lr, sp, fp */
+    if (!func->jret_p)
+      gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
+              _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
+    gen_mov (gen_ctx, anchor, MIR_MOV, treg_op2, fp_reg_op); /* r10 = fp */
+    gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op,
+            _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, FP_HARD_REG, MIR_NON_VAR, 1));
+    if (frame_size < (1 << 12)) {
+      new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, MIR_new_int_op (ctx, frame_size));
+    } else {
+      new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, frame_size));
+      gen_add_insn_before (gen_ctx, anchor, new_insn); /* t(r9) = frame_size */
+      new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, treg_op);
+    }
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = r10 + (frame_size|t) */
   }
-  gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = r10 + (frame_size|t) */
 }
 
 struct pattern {
@@ -1273,6 +1292,9 @@ static const struct pattern patterns[] = {
 
   /* fsqrt Sd,Sn */
   {MIR_FSQRT, "r r", "1e21c000:fffffc00 vd0 vn1"},
+  
+  {MIR_STP, "r r r Iq", "a9800000:ffc00000 rn0 rd1 ra2 Iq"}, /* stp Xd, Xa, [Xn, #Iq]! */
+  {MIR_LDP, "r r r Iq", "a8c00000:ffc00000 rn0 rd1 ra2 Iq"}, /* ldp Xd, Xa, [Xn, #Iq]! */
 
   {MIR_MOV, "r h31", "91000000:fffffc00 rd0 hn1f"}, /* mov Rd,SP */
   {MIR_MOV, "h31 r", "91000000:fffffc00 hd1f rn1"}, /* mov SP,Rn */
@@ -2038,6 +2060,11 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       ch = *++p;
       if (ch == 'u') {
         if (arithm_roundup_const (op.u.u, &imm) < 0) return FALSE;
+      } else if (ch == 'q') {
+        if (op.u.i % 8 != 0) return FALSE;
+        if (op.u.i < -512) return FALSE;
+        if (op.u.i > 504) return FALSE;
+        return TRUE;
       } else {
         p--;
         if (arithm_const (op.u.u, &imm) < 0) return FALSE;
@@ -2177,7 +2204,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     char ch, ch2, start_ch, d;
     uint32_t opcode = 0, opcode_mask = 0xffffffff;
     int rd = -1, rn = -1, rm = -1, ra = -1, disp = -1, scale = -1;
-    int immr = -1, imms = -1, imm16 = -1, imm16_shift = -1, imm12 = -1, imm12_shift = -1;
+    int immr = -1, imms = -1, imm16 = -1, imm16_shift = -1, imm12 = -1, imm12_shift = -1, imm7 = 0xCAFEBABE;
     MIR_op_t op;
     int label_ref_num = -1, switch_table_addr_p = FALSE;
 
@@ -2211,7 +2238,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (ch2 == 'd' || ch2 == 'n' || ch2 == 'm'
                     || (ch2 == 'a'
                         && (insn->code == MIR_MOD || insn->code == MIR_MODS
-                            || insn->code == MIR_UMOD || insn->code == MIR_UMODS)));
+                            || insn->code == MIR_UMOD || insn->code == MIR_UMODS
+                            || insn->code == MIR_STP || insn->code == MIR_LDP)));
         ch = *++p;
         if (start_ch == 'h') {
           reg = read_hex (&p);
@@ -2320,6 +2348,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           op = insn->ops[1];
           gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           imm12_shift = arithm_roundup_const (op.u.u, &imm12);
+        } else if (ch == 'q') { /* Iq */
+          op = insn->ops[3];
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
+          gen_assert (op.u.i >= -512 && op.u.i <= 504 && op.u.i % 8 == 0);
+          imm7 = op.u.i / 8;
         } else if (hex_value (ch) >= 0) {
           immr = read_hex (&p);
         } else { /* I */
@@ -2420,6 +2453,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       gen_assert (imm12_shift < (1 << 2));
       opcode |= imm12_shift << 22;
       opcode_mask = check_and_set_mask (opcode_mask, 0x3 << 22);
+    }
+    if (imm7 != 0xCAFEBABE) {
+      gen_assert (imm7 >= -64 && imm7 <= 63);
+      opcode |= ((imm7 & 0x7f) << 15);
+      opcode_mask = check_and_set_mask (opcode_mask, 0x7f << 15);
     }
     if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
     [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);

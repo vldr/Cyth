@@ -340,6 +340,8 @@ static const struct insn_desc insn_descs[] = {
   {MIR_PHI, "phi", {MIR_OP_BOUND}},
   {MIR_CCLEAR, "cclear", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT,MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FSQRT, "fsqrt", {MIR_OP_FLOAT | OUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
+  {MIR_STP, "stp", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_LDP, "ldp", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
 

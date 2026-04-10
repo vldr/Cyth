@@ -7,9 +7,11 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="cyth.wasm" as="fetch" type="text/javascript" crossorigin="anonymous" />
   <link rel="preload" href="worker.js" as="fetch" type="text/javascript" crossorigin="anonymous" />
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap"
-    rel="stylesheet">
+  <link rel="preload"
+    href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
 
   <style>
     @font-face {
@@ -346,7 +348,7 @@
     </div>
   </div>
 
-  <script type="text/javascript" src="monaco.js" fetchpriority="high"></script>
+  <script type="text/javascript" src="monaco.js"></script>
   <script type="text/javascript" src="editor.js" defer></script>
   <script type="text/javascript" src="cyth.js" defer></script>
 </body>

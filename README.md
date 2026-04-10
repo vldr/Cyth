@@ -14,6 +14,7 @@ A fast and simple, embeddable programming language that targets WebAssembly, x86
   - [MacOS](#macos)
   - [Windows](#windows)
   - [Web](#web)
+- [Contributing](#contributing)
 - [Overview](#overview)
 
 ## Try it out
@@ -165,6 +166,10 @@ emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
 cd embuild
 make
 ```
+
+## Contributing
+
+If you would like to contribute to the project or simply provide feedback and ask questions, please email [cyth@vldr.org](mailto:cyth@vldr.org)
 
 ## Overview
 

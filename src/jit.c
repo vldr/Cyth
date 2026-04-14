@@ -196,7 +196,7 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
     exit(-1);
   }
 
-  cyth_longjmp(*vm->jmp, 1);
+  cyth_longjmp()(*vm->jmp, 1);
 }
 
 static void panic_callback(const char* function, int line, int column)
@@ -5333,6 +5333,136 @@ static void signal_handler(int sig, siginfo_t* si, void* ctx)
   }
 }
 #endif
+
+CySetJMP cyth_setjmp(void)
+{
+#ifdef _WIN32
+#ifdef _M_ARM64
+  static unsigned char buffer[] = {
+    0x13, 0x50, 0x00, 0xa9, //      stp x19, x20, [x0,#0]
+    0x15, 0x58, 0x01, 0xa9, //      stp x21, x22, [x0,#16]
+    0x17, 0x60, 0x02, 0xa9, //      stp x23, x24, [x0,#32]
+    0x19, 0x68, 0x03, 0xa9, //      stp x25, x26, [x0,#48]
+    0x1b, 0x70, 0x04, 0xa9, //      stp x27, x28, [x0,#64]
+    0x1d, 0x78, 0x05, 0xa9, //      stp x29, x30, [x0,#80]
+    0xe2, 0x03, 0x00, 0x91, //      mov x2, sp
+    0x02, 0x34, 0x00, 0xf9, //      str x2, [x0,#104]
+    0x08, 0x24, 0x07, 0x6d, //      stp  d8,  d9, [x0,#112]
+    0x0a, 0x2c, 0x08, 0x6d, //      stp d10, d11, [x0,#128]
+    0x0c, 0x34, 0x09, 0x6d, //      stp d12, d13, [x0,#144]
+    0x0e, 0x3c, 0x0a, 0x6d, //      stp d14, d15, [x0,#160]
+    0x00, 0x00, 0x80, 0xd2, //      mov x0, #0
+    0xc0, 0x03, 0x5f, 0xd6, //      ret
+  };
+#else
+  static unsigned char buffer[] = {
+    0x48, 0x89, 0x11,                                     // mov         qword ptr [rcx],rdx
+    0x48, 0x89, 0x59, 0x08,                               // mov         qword ptr [rcx+8],rbx
+    0x4C, 0x8D, 0x44, 0x24, 0x08,                         // lea         r8,[rsp+8]
+    0x4C, 0x89, 0x41, 0x10,                               // mov         qword ptr [rcx+10h],r8
+    0x48, 0x89, 0x69, 0x18,                               // mov         qword ptr [rcx+18h],rbp
+    0x48, 0x89, 0x71, 0x20,                               // mov         qword ptr [rcx+20h],rsi
+    0x48, 0x89, 0x79, 0x28,                               // mov         qword ptr [rcx+28h],rdi
+    0x4C, 0x89, 0x61, 0x30,                               // mov         qword ptr [rcx+30h],r12
+    0x4C, 0x89, 0x69, 0x38,                               // mov         qword ptr [rcx+38h],r13
+    0x4C, 0x89, 0x71, 0x40,                               // mov         qword ptr [rcx+40h],r14
+    0x4C, 0x89, 0x79, 0x48,                               // mov         qword ptr [rcx+48h],r15
+    0x4C, 0x8B, 0x04, 0x24,                               // mov         r8,qword ptr [rsp]
+    0x4C, 0x89, 0x41, 0x50,                               // mov         qword ptr [rcx+50h],r8
+    0x0F, 0xAE, 0x59, 0x58,                               // stmxcsr     dword ptr [rcx+58h]
+    0xD9, 0x79, 0x5C,                                     // fnstcw      word ptr [rcx+5Ch]
+    0x66, 0x0F, 0x7F, 0x71, 0x60,                         // movdqa      xmmword ptr [rcx+60h],xmm6
+    0x66, 0x0F, 0x7F, 0x79, 0x70,                         // movdqa      xmmword ptr [rcx+70h],xmm7
+    0x66, 0x44, 0x0F, 0x7F, 0x81, 0x80, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+80h],xmm8
+    0x66, 0x44, 0x0F, 0x7F, 0x89, 0x90, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+90h],xmm9
+    0x66, 0x44, 0x0F, 0x7F, 0x91, 0xA0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+A0h],xmm10
+    0x66, 0x44, 0x0F, 0x7F, 0x99, 0xB0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+B0h],xmm11
+    0x66, 0x44, 0x0F, 0x7F, 0xA1, 0xC0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+C0h],xmm12
+    0x66, 0x44, 0x0F, 0x7F, 0xA9, 0xD0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+D0h],xmm13
+    0x66, 0x44, 0x0F, 0x7F, 0xB1, 0xE0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+E0h],xmm14
+    0x66, 0x44, 0x0F, 0x7F, 0xB9, 0xF0, 0x00, 0x00, 0x00, // movdqa      xmmword ptr [rcx+F0h],xmm15
+    0x33, 0xC0,                                           // xor         eax,eax
+    0xC3,                                                 // ret
+  };
+#endif
+
+  static SetJMP setjmp = NULL;
+  if (!setjmp)
+  {
+    setjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
+    memcpy(setjmp, buffer, sizeof(buffer));
+
+    DWORD old_protect;
+    VirtualProtect(setjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
+  }
+#endif
+
+  return (CySetJMP)setjmp;
+}
+
+CyLongJMP cyth_longjmp(void)
+{
+#ifdef _WIN32
+#ifdef _M_ARM64
+  static unsigned char buffer[] = {
+    0x13, 0x50, 0x40, 0xa9, //      ldp x19, x20, [x0,#0]
+    0x15, 0x58, 0x41, 0xa9, //      ldp x21, x22, [x0,#16]
+    0x17, 0x60, 0x42, 0xa9, //      ldp x23, x24, [x0,#32]
+    0x19, 0x68, 0x43, 0xa9, //      ldp x25, x26, [x0,#48]
+    0x1b, 0x70, 0x44, 0xa9, //      ldp x27, x28, [x0,#64]
+    0x1d, 0x78, 0x45, 0xa9, //      ldp x29, x30, [x0,#80]
+    0x02, 0x34, 0x40, 0xf9, //      ldr x2, [x0,#104]
+    0x5f, 0x00, 0x00, 0x91, //      mov sp, x2
+    0x08, 0x24, 0x47, 0x6d, //      ldp d8 , d9, [x0,#112]
+    0x0a, 0x2c, 0x48, 0x6d, //      ldp d10, d11, [x0,#128]
+    0x0c, 0x34, 0x49, 0x6d, //      ldp d12, d13, [x0,#144]
+    0x0e, 0x3c, 0x4a, 0x6d, //      ldp d14, d15, [x0,#160]
+    0xe0, 0x03, 0x01, 0xaa, //      mov x0, x1
+    0x21, 0x00, 0x00, 0xb5, //      cbnz x1, ret
+    0x20, 0x00, 0x80, 0xd2, // ret: mov x0, #1
+    0xc0, 0x03, 0x1f, 0xd6, //      br x30
+  };
+#else
+  static unsigned char buffer[] = {
+    0x8B, 0xC2,                                           // mov         eax,edx
+    0x48, 0x8B, 0x11,                                     // mov         rdx,qword ptr [rcx]
+    0x48, 0x8B, 0x59, 0x08,                               // mov         rbx,qword ptr [rcx+8]
+    0x48, 0x8B, 0x61, 0x10,                               // mov         rsp,qword ptr [rcx+10h]
+    0x48, 0x8B, 0x69, 0x18,                               // mov         rbp,qword ptr [rcx+18h]
+    0x48, 0x8B, 0x71, 0x20,                               // mov         rsi,qword ptr [rcx+20h]
+    0x48, 0x8B, 0x79, 0x28,                               // mov         rdi,qword ptr [rcx+28h]
+    0x4C, 0x8B, 0x61, 0x30,                               // mov         r12,qword ptr [rcx+30h]
+    0x4C, 0x8B, 0x69, 0x38,                               // mov         r13,qword ptr [rcx+38h]
+    0x4C, 0x8B, 0x71, 0x40,                               // mov         r14,qword ptr [rcx+40h]
+    0x4C, 0x8B, 0x79, 0x48,                               // mov         r15,qword ptr [rcx+48h]
+    0x4C, 0x8B, 0x41, 0x50,                               // mov         r8,qword ptr [rcx+50h]
+    0x66, 0x0F, 0x6F, 0x71, 0x60,                         // movdqa      xmm6,xmmword ptr [rcx+60h]
+    0x66, 0x0F, 0x6F, 0x79, 0x70,                         // movdqa      xmm7,xmmword ptr [rcx+70h]
+    0x66, 0x44, 0x0F, 0x6F, 0x81, 0x80, 0x00, 0x00, 0x00, // movdqa      xmm8,xmmword ptr [rcx+80h]
+    0x66, 0x44, 0x0F, 0x6F, 0x89, 0x90, 0x00, 0x00, 0x00, // movdqa      xmm9,xmmword ptr [rcx+90h]
+    0x66, 0x44, 0x0F, 0x6F, 0x91, 0xA0, 0x00, 0x00, 0x00, // movdqa      xmm10,xmmword ptr [rcx+A0h]
+    0x66, 0x44, 0x0F, 0x6F, 0x99, 0xB0, 0x00, 0x00, 0x00, // movdqa      xmm11,xmmword ptr [rcx+B0h]
+    0x66, 0x44, 0x0F, 0x6F, 0xA1, 0xC0, 0x00, 0x00, 0x00, // movdqa      xmm12,xmmword ptr [rcx+C0h]
+    0x66, 0x44, 0x0F, 0x6F, 0xA9, 0xD0, 0x00, 0x00, 0x00, // movdqa      xmm13,xmmword ptr [rcx+D0h]
+    0x66, 0x44, 0x0F, 0x6F, 0xB1, 0xE0, 0x00, 0x00, 0x00, // movdqa      xmm14,xmmword ptr [rcx+E0h]
+    0x66, 0x44, 0x0F, 0x6F, 0xB9, 0xF0, 0x00, 0x00, 0x00, // movdqa      xmm15,xmmword ptr [rcx+F0h]
+    0x41, 0xFF, 0xE0,                                     // jmp         r8
+  };
+#endif
+
+  static LongJMP longjmp = NULL;
+  if (!longjmp)
+  {
+    longjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
+    memcpy(longjmp, buffer, sizeof(buffer));
+
+    DWORD old_protect;
+    VirtualProtect(longjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
+  }
+#endif
+
+  return (CyLongJMP)longjmp;
+}
 
 void* cyth_push_jmp(CyVM* vm, void* new)
 {

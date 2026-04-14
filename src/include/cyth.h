@@ -205,13 +205,10 @@ extern "C"
 #define cyth_try_catch(_vm, _block)                                                                \
   do                                                                                               \
   {                                                                                                \
-    void* cyth_push_jmp(CyVM * vm, void* new_jmp);                                                 \
-    void cyth_pop_jmp(CyVM * vm, void* old_jmp);                                                   \
-                                                                                                   \
     jmp_buf _new;                                                                                  \
     jmp_buf* _old = (jmp_buf*)cyth_push_jmp((_vm), (void*)&_new);                                  \
                                                                                                    \
-    if (cyth_setjmp(_new) == 0)                                                                    \
+    if (cyth_setjmp()(_new) == 0)                                                                  \
       _block                                                                                       \
                                                                                                    \
         cyth_pop_jmp((_vm), (void*)_old);                                                          \
@@ -225,14 +222,14 @@ extern "C"
     char data[sizeof(value)];                                                                      \
   } name = { .size = sizeof(value) - 1, .data = value }
 
-#ifdef _WIN32
-  int cyth_setjmp(jmp_buf buf);
-  void cyth_longjmp(jmp_buf buf, int n);
-#else
-#define cyth_setjmp(buf) sigsetjmp(buf, 1)
-#define cyth_longjmp siglongjmp
-#endif
-#endif
+  typedef int (*CySetJMP)(jmp_buf buf);
+  typedef void (*CyLongJMP)(jmp_buf buf, int n);
+
+  CySetJMP cyth_setjmp(void);
+  CyLongJMP cyth_longjmp(void);
+  void* cyth_push_jmp(CyVM* vm, void* new_jmp);
+  void cyth_pop_jmp(CyVM* vm, void* old_jmp);
+
   int cyth_wasm_init(const char* filename, const char* string);
   int cyth_wasm_load_function(const char* signature, const char* module);
   int cyth_wasm_compile(int compile, int logging);
@@ -246,4 +243,5 @@ extern "C"
                                                          int def_column, int length));
 #ifdef __cplusplus
 }
+#endif
 #endif

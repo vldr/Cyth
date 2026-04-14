@@ -5386,7 +5386,7 @@ CySetJMP cyth_setjmp(void)
   };
 #endif
 
-  static SetJMP setjmp = NULL;
+  static CySetJMP setjmp = NULL;
   if (!setjmp)
   {
     setjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
@@ -5450,7 +5450,7 @@ CyLongJMP cyth_longjmp(void)
   };
 #endif
 
-  static LongJMP longjmp = NULL;
+  static CyLongJMP longjmp = NULL;
   if (!longjmp)
   {
     longjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);

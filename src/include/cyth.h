@@ -23,6 +23,9 @@ extern "C"
     void* data;
   } CyArray;
 
+  typedef int (*CySetJMP)(jmp_buf buf);
+  typedef void (*CyLongJMP)(jmp_buf buf, int n);
+
   // Creates a new VM instance.
   CyVM* cyth_init(void);
 
@@ -214,16 +217,13 @@ extern "C"
         cyth_pop_jmp((_vm), (void*)_old);                                                          \
   } while (0)
 
-// Declares a static Cyth string variable with the [name] and [value].
+  // Declares a static Cyth string variable with the [name] and [value].
 #define cyth_static_string(name, value)                                                            \
   static struct                                                                                    \
   {                                                                                                \
     int size;                                                                                      \
     char data[sizeof(value)];                                                                      \
   } name = { .size = sizeof(value) - 1, .data = value }
-
-  typedef int (*CySetJMP)(jmp_buf buf);
-  typedef void (*CyLongJMP)(jmp_buf buf, int n);
 
   CySetJMP cyth_setjmp(void);
   CyLongJMP cyth_longjmp(void);

@@ -5389,11 +5389,11 @@ CySetJMP cyth_setjmp(void)
   static CySetJMP setjmp = NULL;
   if (!setjmp)
   {
-    setjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
-    memcpy(setjmp, buffer, sizeof(buffer));
+    setjmp = (CySetJMP)(uintptr_t)VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
+    memcpy((void*)(uintptr_t)setjmp, buffer, sizeof(buffer));
 
     DWORD old_protect;
-    VirtualProtect(setjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
+    VirtualProtect((void*)(uintptr_t)setjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
   }
 #endif
 
@@ -5453,11 +5453,11 @@ CyLongJMP cyth_longjmp(void)
   static CyLongJMP longjmp = NULL;
   if (!longjmp)
   {
-    longjmp = VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
-    memcpy(longjmp, buffer, sizeof(buffer));
+    longjmp = (CyLongJMP)(uintptr_t)VirtualAlloc(NULL, sizeof(buffer), MEM_COMMIT, PAGE_READWRITE);
+    memcpy((void*)(uintptr_t)longjmp, buffer, sizeof(buffer));
 
     DWORD old_protect;
-    VirtualProtect(longjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
+    VirtualProtect((void*)(uintptr_t)longjmp, sizeof(buffer), PAGE_EXECUTE_READ, &old_protect);
   }
 #endif
 

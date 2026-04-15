@@ -148,6 +148,9 @@ cmake.exe -S . -B winbuild -G "Visual Studio 18 2026"
 
 Then, in the `winbuild` directory, open `cyth.sln` / `cyth.slnx` in Visual Studio.
 
+_Manual C compilation_:  
+`cl.exe third_party/mir/mir.c third_party/mir/mir-gen.c third_party/bdwgc/extra/gc.c src/jit.c src/checker.c src/environment.c src/main.c src/memory.c src/lexer.c src/map.c src/parser.c /Ithird_party/mir /Ithird_party/bdwgc/include /Ox /Fecyth`
+
 ### Web
 For web builds, you will need to have [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed.
 

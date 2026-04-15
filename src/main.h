@@ -1,8 +1,11 @@
 #ifndef main_h
 #define main_h
 
-#include <malloc.h>
 #include <stdio.h>
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 #if defined(_MSC_VER)
 #define trap() __debugbreak()

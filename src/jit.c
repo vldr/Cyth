@@ -101,7 +101,7 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
       continue;
 
     const uintptr_t base = (uintptr_t)item->u.func->machine_code;
-    if (pc < base && pc >= base + item->u.func->length)
+    if (pc < base || pc >= base + item->u.func->length)
       continue;
 
     uintptr_t offset = 0;
@@ -155,7 +155,7 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
         continue;
 
       const uintptr_t base = (uintptr_t)item->u.func->machine_code;
-      if (pc < base && pc >= base + item->u.func->length)
+      if (pc < base || pc >= base + item->u.func->length)
         continue;
 
       uintptr_t offset = 0;
@@ -5489,7 +5489,7 @@ void* cyth_push_jmp(CyVM* vm, void* new)
     sa.sa_sigaction = signal_handler;
     sigaction(SIGFPE, &sa, NULL);
 #else
-    ULONG size = 1024 * 1024;
+    ULONG size = 64 * 1024;
     SetThreadStackGuarantee(&size);
 
     handler = AddVectoredExceptionHandler(1, vector_handler);

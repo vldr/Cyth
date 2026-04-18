@@ -350,9 +350,30 @@
     </div>
   </div>
 
+  <script>
+    var Module = {
+      preRun: [],
+
+      printErr: function (error) {
+        if (Module.editor)
+          Module.editor.editorConsole.stderr += error + "\n";
+
+        console.error(error);
+      },
+
+      onRuntimeInitialized: async function () {
+        const response = await fetch("worker.js");
+        const code = await response.blob();
+
+        Module.blobUrl = URL.createObjectURL(code);
+
+        if (Module.editor) 
+          Module.editor.init(Module.blobUrl);
+      },
+    };
+  </script>
   <script type="text/javascript" src="monaco.js" defer></script>
   <script type="text/javascript" src="editor.js" defer></script>
-  <script type="text/javascript" src="cyth.js" defer></script>
 </body>
 
 </html>

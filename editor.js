@@ -504,14 +504,13 @@ class Editor {
       tabSize: 2,
     });
 
-    this.editorTabs = new EditorTabs(this);
-    this.editorTabs.load();
-
-    this.editor.layout();
     this.editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
       () => { }
     );
+
+    this.editorTabs = new EditorTabs(this);
+    this.editorTabs.load();
   }
 
   init(blobUrl) {

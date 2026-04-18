@@ -857,20 +857,7 @@ class Editor {
   }
 }
 
-var Module = {
-  preRun: [],
-  editor: new Editor(),
+Module.editor = new Editor();
 
-  printErr: function (error) {
-    Module.editor.editorConsole.stderr += error + "\n";
-    console.error(error);
-  },
-
-  onRuntimeInitialized: async function () {
-    const response = await fetch("worker.js");
-    const code = await response.blob();
-    const blobUrl = URL.createObjectURL(code);
-
-    this.editor.init(blobUrl);
-  },
-};
+if (Module.blobUrl)
+  Module.editor.init(Module.blobUrl);

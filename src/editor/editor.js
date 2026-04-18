@@ -13,6 +13,7 @@ class EditorConsole {
     this.consoleDragger = document.getElementById("dragger");
     this.consoleLeftPanel = document.getElementById("editor-wrapper");
     this.consoleRightPanel = document.getElementById("console");
+    this.consoleTopbar = document.getElementById("console-topbar-left");
     this.consoleStatus = document.getElementById("console-status");
     this.consoleCanvas = document.getElementById("console-canvas");
     this.consoleOutput = document.getElementById("console-output");
@@ -24,6 +25,9 @@ class EditorConsole {
     this.consoleButtonStopIcon = document.getElementById(
       "console-action-stop-icon"
     );
+
+    this.consoleTopbar.style.visibility = "visible";
+    this.consoleTopbar.style.opacity = "1";
 
     this.consoleButton.onclick = () => this.onClick();
     this.draggingDelta = 0;

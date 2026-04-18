@@ -25,14 +25,14 @@ static inline int get_native_mem_protect_flags (MIR_mem_protect_t prot) {
     : (PROT_READ | PROT_EXEC);
 }
 
-#if defined(__APPLE__) && defined(__aarch64__)
+#if defined(__APPLE__)
 #include <libkern/OSCacheControl.h>
 #include <pthread.h>
 #endif
 
 static int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, void *user_data CODE_ALLOC_UNUSED) {
   int native_prot = get_native_mem_protect_flags (prot);
-#if !defined(__APPLE__) || !defined(__aarch64__)
+#if !defined(__APPLE__)
   return mprotect (addr, len, native_prot);
 #else
   if ((native_prot & PROT_WRITE) && pthread_jit_write_protect_supported_np ())
@@ -56,7 +56,7 @@ static int default_mem_unmap (void *addr, size_t len, void *user_data CODE_ALLOC
 }
 
 static void *default_mem_map (size_t len, void *user_data CODE_ALLOC_UNUSED) {
-#if defined(__APPLE__) && defined(__aarch64__)
+#if defined(__APPLE__)
   return mmap (NULL, len, PROT_EXEC | PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,
                -1, 0);
 #else

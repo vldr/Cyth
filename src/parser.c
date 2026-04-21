@@ -516,6 +516,9 @@ static Expr* primary(void)
     {
       do
       {
+        if (check(TOKEN_RIGHT_BRACKET))
+          break;
+
         Token start_token = peek();
         Expr* value = expression();
         Token end_token = previous();
@@ -1297,7 +1300,7 @@ static Stmt* while_statement(void)
   return stmt;
 }
 
-static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
+static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, Stmt* stmt)
 {
   Token start_token = peek();
   Expr* list = cast_to_array(type, expression());
@@ -1401,7 +1404,10 @@ static Stmt* for_in_statement(DataTypeToken type, Token name, Stmt* stmt)
     array_add(&stmt->loop.incrementer, incrementer);
   }
 
-  consume(TOKEN_NEWLINE, "Expected a newline.");
+  if (parenthesis)
+    consume(TOKEN_RIGHT_PAREN, "Expected a ')' at the end of the for-loop.");
+
+  consume(TOKEN_NEWLINE, "Expected a newline at the end of the for-loop.");
 
   array_init(&stmt->loop.body);
   if (check(TOKEN_INDENT))
@@ -1448,6 +1454,8 @@ static Stmt* for_statement(void)
   stmt->type = STMT_WHILE;
   stmt->loop.keyword = advance();
 
+  bool parenthesis = match(TOKEN_LEFT_PAREN);
+
   array_init(&stmt->loop.initializer);
   array_init(&stmt->loop.incrementer);
 
@@ -1462,7 +1470,7 @@ static Stmt* for_statement(void)
 
       if (match(TOKEN_IN))
       {
-        return for_in_statement(type, name, stmt);
+        return for_in_statement(parenthesis, type, name, stmt);
       }
       else
       {
@@ -1498,7 +1506,7 @@ static Stmt* for_statement(void)
 
   consume(TOKEN_SEMICOLON, "Expected a semicolon after condition.");
 
-  if (!check(TOKEN_NEWLINE))
+  if (!check(TOKEN_NEWLINE) && !(parenthesis && check(TOKEN_RIGHT_PAREN)))
   {
   add_incrementer:
 
@@ -1510,7 +1518,10 @@ static Stmt* for_statement(void)
     }
   }
 
-  consume(TOKEN_NEWLINE, "Expected a newline after incrementer.");
+  if (parenthesis)
+    consume(TOKEN_RIGHT_PAREN, "Expected a ')' at the end of the for-loop.");
+
+  consume(TOKEN_NEWLINE, "Expected a newline at the end of the for-loop.");
 
   array_init(&stmt->loop.body);
 

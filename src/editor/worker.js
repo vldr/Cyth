@@ -205,8 +205,27 @@ onmessage = (event) => {
             context.fillStyle = `rgb(${r}, ${g}, ${b})`;
           },
 
+          "stroke.void(int, int, int)": function (r, g, b) {
+            context.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+          },
+
           "clear.void()": function () {
             context.fillRect(0, 0, canvas.width, canvas.height);
+          },
+
+          "line.void(int, int, int, int)": function (x0, y0, x1, y1) {
+            context.beginPath();
+            context.moveTo(x0, y0);
+            context.lineTo(x1, y1);
+            context.stroke();
+          },
+
+          "triangle.void(int, int, int, int, int, int)": function (x0, y0, x1, y1, x2, y2) {
+            context.beginPath();
+            context.moveTo(x0, y0);
+            context.lineTo(x1, y1);
+            context.lineTo(x2, y2);
+            context.fill();
           },
 
           "rect.void(int, int, int, int)": function (x, y, width, height) {

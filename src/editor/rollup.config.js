@@ -32,6 +32,7 @@ export default {
         { src: 'cyth.wasm', dest: 'dist' },
         { src: 'worker.js', dest: 'dist' },
         { src: 'codicon.ttf', dest: 'dist' },
+        { src: 'favicon.ico', dest: 'dist' },
       ],
     }),
   ],

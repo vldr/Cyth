@@ -10,6 +10,15 @@ export default {
     format: 'esm',
   },
   plugins: [
+    {
+      name: 'disable-node-builtins',
+      resolveId(id) {
+        if (['fs', 'path', 'crypto', 'os', 'stream', 'util', 'buffer'].includes(id)) return '\0' + id;
+      },
+      load(id) {
+        if (id.startsWith('\0')) return 'export default {}';
+      },
+    },
     resolve({ browser: true, }),
     postcss({ inject: true, minimize: true }),
     terser({

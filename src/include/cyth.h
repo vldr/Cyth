@@ -29,32 +29,6 @@ extern "C"
   // Creates a new VM instance.
   CyVM* cyth_init(void);
 
-  // Sets the error callback function.
-  //
-  // [error_callback] will be called when a compilation error occurs.
-  // This can be NULL, in which case it will not be called (though errors will still exist).
-  void cyth_set_error_callback(CyVM* vm,
-                               void (*error_callback)(const char* filename, int start_line,
-                                                      int start_column, int end_line,
-                                                      int end_column, const char* message));
-
-  // Sets the panic callback function.
-  //
-  // [panic_callback] will be called when a runtime error occurs.
-  // This can be NULL, in which case it will not be called (though panics will still exist).
-  //
-  // This callback will be called multiple times. The first call is a special case, where zero will
-  // be passed into the line and column, and the error reason will be in the function string.
-  //
-  // Subsequent calls will be for each function line/column combination in the stack trace.
-  void cyth_set_panic_callback(CyVM* vm,
-                               void (*panic_callback)(const char* function, int line, int column));
-
-  // Enable/disable logging.
-  //
-  // [logging] is 1, logging is enabled. When 0, logging is disabled.
-  void cyth_set_logging(CyVM* vm, int logging);
-
   // Loads a string to compile.
   //
   // You MUST call this after "cyth_init" but before "cyth_compile".
@@ -139,6 +113,34 @@ extern "C"
   //
   // [size] is the size in bytes to allocate.
   void* cyth_alloc(int atomic, uintptr_t size);
+
+  // Sets the error callback function.
+  //
+  // Using this function is optional, Cyth will use a default error callback function.
+  //
+  // [error_callback] will be called when a compilation error occurs.
+  void cyth_set_error_callback(CyVM* vm,
+                               void (*error_callback)(const char* filename, int start_line,
+                                                      int start_column, int end_line,
+                                                      int end_column, const char* message));
+
+  // Sets the panic callback function.
+  //
+  // Using this function is optional, Cyth will use a default panic callback function.
+  //
+  // [panic_callback] will be called when a runtime error occurs.
+  //
+  // This callback will be called multiple times. The first call is a special case, where zero will
+  // be passed into the line and column, and the error reason will be in the function string.
+  //
+  // Subsequent calls will be for each function line/column combination in the stack trace.
+  void cyth_set_panic_callback(CyVM* vm,
+                               void (*panic_callback)(const char* function, int line, int column));
+
+  // Enable/disable logging.
+  //
+  // [logging] is 1, logging is enabled. When 0, logging is disabled.
+  void cyth_set_logging(CyVM* vm, int logging);
 
   // Returns the address to a Cyth function.
   //

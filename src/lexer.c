@@ -345,6 +345,7 @@ static void number(void)
   unsigned int length = 0;
 
   bool underscore = false;
+  bool decimal = false;
   bool period = false;
   bool invalid = false;
 
@@ -371,28 +372,30 @@ static void number(void)
     }
     else if (c == '.')
     {
-      if (period)
+      if (decimal)
       {
         break;
       }
 
       period = true;
+      decimal = true;
       lexeme[length++] = advance();
     }
     else
     {
+      period = false;
       underscore = false;
       lexeme[length++] = advance();
     }
   }
 
-  if (invalid || underscore)
+  if (invalid || underscore || period)
   {
     error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
           lexer.current_column, "Invalid numeric literal.");
   }
 
-  add_custom_token(period ? TOKEN_FLOAT : TOKEN_INTEGER, lexeme, length);
+  add_custom_token(decimal ? TOKEN_FLOAT : TOKEN_INTEGER, lexeme, length);
 }
 
 static void literal(void)

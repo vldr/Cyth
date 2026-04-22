@@ -19,6 +19,7 @@ log(1.1_)
 log(1_.1_)
 log(1_._1_)
 log(1._1_)
+log(1.)
 
 #! 5:5-5:7 Invalid hexadecimal literal.
 #! 6:5-6:8 Invalid hexadecimal literal.
@@ -36,3 +37,4 @@ log(1._1_)
 #! 19:5-19:10 Invalid numeric literal.
 #! 20:5-20:11 Invalid numeric literal.
 #! 21:5-21:10 Invalid numeric literal.
+#! 22:5-22:7 Invalid numeric literal.

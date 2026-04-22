@@ -2874,7 +2874,9 @@ static DataType check_call_expression(CallExpr* expression)
         return DATA_TYPE(TYPE_VOID);
       }
 
-      FuncStmt* function = function_data_type.function;
+      FuncStmt* function = function_data_type.type == TYPE_FUNCTION
+                             ? function_data_type.function
+                             : function_data_type.function_member.function;
       int number_of_arguments = array_size(&expression->arguments);
       int expected_number_of_arguments = array_size(&function->parameters);
 
@@ -4020,7 +4022,7 @@ static void check_function_declaration(FuncStmt* statement)
 
     check_binary_overload_function_declaration(statement, "__mod__");
     check_binary_overload_function_declaration(statement, "__and__");
-    check_binary_overload_function_declaration(statement, "__or_");
+    check_binary_overload_function_declaration(statement, "__or__");
     check_binary_overload_function_declaration(statement, "__xor__");
     check_binary_overload_function_declaration(statement, "__lshift__");
     check_binary_overload_function_declaration(statement, "__rshift__");

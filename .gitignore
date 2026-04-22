@@ -3,6 +3,9 @@ src/editor/cyth.wasm
 src/extension/cyth.js
 src/extension/cyth.wasm
 compile_commands.json
+package-lock.json
+node_modules/
+src/editor/dist/
 build/
 xbuild/
 winbuild/

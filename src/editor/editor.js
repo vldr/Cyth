@@ -861,7 +861,4 @@ class Editor {
   }
 }
 
-Module.editor = new Editor();
-
-if (Module.blobUrl)
-  Module.editor.init(Module.blobUrl);
+window.Module.editor = new Editor();

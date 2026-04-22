@@ -230,6 +230,7 @@ jobs:
           emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
           cd embuild
           make -j3
+          make bundle
 
       - name: Test (Emscripten)
         run: |
@@ -253,7 +254,7 @@ jobs:
       - name: Publish (Web)
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: src/editor
+          folder: src/editor/dist
 
   build-macos:
     name: MacOS

@@ -13,11 +13,6 @@
     onload="this.onload=null;this.rel='stylesheet'">
 
   <style>
-    @font-face {
-      font-family: "Codicon";
-      src: url("codicon.ttf") format("truetype");
-    }
-
     :root {
       color-scheme: dark;
     }
@@ -352,28 +347,21 @@
 
   <script>
     var Module = {
-      preRun: [],
-
       printErr: function (error) {
-        if (Module.editor)
-          Module.editor.editorConsole.stderr += error + "\n";
-
         console.error(error);
+        Module.editor.editorConsole.stderr += error + "\n";
       },
 
       onRuntimeInitialized: async function () {
         const response = await fetch("worker.js");
         const code = await response.blob();
+        const blobUrl = URL.createObjectURL(code);
 
-        Module.blobUrl = URL.createObjectURL(code);
-
-        if (Module.editor) 
-          Module.editor.init(Module.blobUrl);
+        Module.editor.init(blobUrl);
       },
     };
   </script>
-  <script type="text/javascript" src="monaco.js" defer></script>
-  <script type="text/javascript" src="editor.js" defer></script>
+  <script type="text/javascript" src="cyth.js" defer></script>
 </body>
 
 </html>

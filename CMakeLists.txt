@@ -15,7 +15,7 @@ if (NOT MSVC)
 endif()
 
 if (EMSCRIPTEN)
-    add_link_options(--closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 
+    add_link_options(--closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 -sNODERAWFS=0 -sENVIRONMENT=web
                      -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString,HEAPU8 -sSTACK_SIZE=524288
                      -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_cyth_wasm_init,_cyth_wasm_load_function,_cyth_wasm_compile,_cyth_wasm_set_error_callback,_cyth_wasm_set_result_callback,_cyth_wasm_set_link_callback)
 
@@ -25,9 +25,15 @@ if (EMSCRIPTEN)
         DEPENDS cyth
     )
 
+    add_custom_target(bundle
+        COMMAND npm run build
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/editor
+        DEPENDS cyth
+    )
+
     add_custom_target(serve
-        COMMAND npx http-server -c-1 src/editor/
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND npm run serve
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/editor
         DEPENDS cyth
     )
 

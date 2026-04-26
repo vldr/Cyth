@@ -2701,6 +2701,7 @@ static DataType check_call_expression(CallExpr* expression)
         .filename = function->name.filename,
       };
       argument->var.variable = array_at(&function->parameters, 0);
+      argument->var.variable->reg = 1;
       argument->var.template_types = NULL;
       argument->var.data_type = DATA_TYPE(TYPE_OBJECT);
       argument->var.data_type.class = checker.class;

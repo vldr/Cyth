@@ -4552,6 +4552,10 @@ static BinaryenExpressionRef generate_variable_declaration(VarStmt* statement)
 
 static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
 {
+  if (BinaryenGetFunction(codegen.module, statement->name.lexeme) &&
+      strcmp(codegen.function, "<start>") != 0)
+    return NULL;
+
   ArrayBinaryenType parameter_types;
   array_init(&parameter_types);
 

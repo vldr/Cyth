@@ -4496,7 +4496,22 @@ static void generate_function_declaration(CyVM* vm, FuncStmt* statement)
     return;
 
   if (statement->item == NULL || statement->proto == NULL)
+  {
+    Function* function = map_get_function(&vm->functions, statement->name.lexeme);
+    if (function)
+    {
+      statement->item = function->func;
+      statement->proto = function->proto;
+      return;
+    }
+
     init_function_declaration(vm, statement);
+
+    function = ALLOC(Function);
+    function->proto = statement->proto;
+    function->func = statement->item;
+    map_put_function(&vm->functions, statement->name.lexeme, function);
+  }
 
   MIR_item_t previous_function = vm->function;
   vm->function = statement->item;

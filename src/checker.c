@@ -18,6 +18,7 @@ typedef struct _TOKEN_LINK
 static struct
 {
   ArrayStmt statements;
+  ArrayLiteralArrayExpr literal_arrays;
 
   Environment* environment;
   Environment* global_environment;
@@ -715,10 +716,7 @@ static void data_type_inference(Expr** source_expression, DataType* source, Data
   if (source->type == TYPE_ARRAY && source->array.data_type->type == TYPE_VOID)
   {
     if (target->type != TYPE_ARRAY)
-    {
-      error_array_type_is_unresolved(source->array.token);
       return;
-    }
 
     *source->array.data_type = *target->array.data_type;
     *source->array.count = *target->array.count;
@@ -1203,12 +1201,6 @@ static DataType data_type_token_to_data_type(DataTypeToken data_type_token)
 
 static Expr* cast_to_bool(Expr* expression, DataType data_type)
 {
-  if (data_type.type == TYPE_ARRAY && data_type.array.data_type->type == TYPE_VOID)
-  {
-    error_array_type_is_unresolved(data_type.array.token);
-    return NULL;
-  }
-
   if (boolable_data_type(data_type))
   {
     Expr* cast_expression = EXPR();
@@ -1327,14 +1319,6 @@ static bool upcast_boolable_to_bool(BinaryExpr* expression, DataType* left, Data
   if (!boolable_data_type(*left) && !boolable_data_type(*right))
     return false;
 
-  if ((left->type == TYPE_ARRAY && left->array.data_type->type == TYPE_VOID) ||
-      (right->type == TYPE_ARRAY && right->array.data_type->type == TYPE_VOID))
-  {
-    error_array_type_is_unresolved(left->type == TYPE_ARRAY ? left->array.token
-                                                            : right->array.token);
-    return false;
-  }
-
   return upcast(expression, left, right, from, DATA_TYPE(TYPE_BOOL));
 }
 
@@ -1364,13 +1348,6 @@ static void expand_function_group(DataType* data_type, DataType* argument_data_t
           {
             DataType argument_data_type = argument_data_types[i - offset];
             DataType parameter_data_type = function->parameters.elems[i]->data_type;
-
-            if (argument_data_type.type == TYPE_ARRAY &&
-                argument_data_type.array.data_type->type == TYPE_VOID)
-            {
-              error_array_type_is_unresolved(argument_data_type.array.token);
-              return;
-            }
 
             if (!equal_data_type(parameter_data_type, argument_data_type) &&
                 !assignable_data_type(true, parameter_data_type, argument_data_type))
@@ -3042,12 +3019,6 @@ static DataType check_access_expression(AccessExpr* expression)
   }
   else if (data_type.type == TYPE_ARRAY)
   {
-    if (data_type.array.data_type->type == TYPE_VOID)
-    {
-      error_array_type_is_unresolved(expression->expr_token);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
     const char* name = expression->name.lexeme;
     if (strcmp("length", name) == 0 || strcmp("capacity", name) == 0)
     {
@@ -3516,12 +3487,6 @@ static DataType check_index_expression(IndexExpr* expression)
       return DATA_TYPE(TYPE_VOID);
     }
 
-    if (expr_data_type.array.data_type->type == TYPE_VOID)
-    {
-      error_array_type_is_unresolved(expression->expr_token);
-      return DATA_TYPE(TYPE_VOID);
-    }
-
     expression->data_type = array_data_type_element(expr_data_type);
     expression->expr_data_type = expr_data_type;
     expression->index_data_type = index_data_type;
@@ -3626,6 +3591,8 @@ static DataType check_array_expression(LiteralArrayExpr* expression)
 
   *expression->data_type.array.count = 1;
   *expression->data_type.array.data_type = DATA_TYPE(TYPE_VOID);
+
+  array_add(&checker.literal_arrays, expression);
 
   return expression->data_type;
 }
@@ -4207,6 +4174,7 @@ void checker_init(ArrayStmt statements,
   checker.global_environment = checker.environment;
 
   array_init(&checker.global_locals);
+  array_init(&checker.literal_arrays);
 }
 
 int checker_errors(void)
@@ -4277,6 +4245,16 @@ void checker_validate(void)
 
     default:
       break;
+    }
+  }
+
+  LiteralArrayExpr* array_expression;
+  array_foreach(&checker.literal_arrays, array_expression)
+  {
+    if (array_expression->data_type.array.data_type->type == TYPE_VOID)
+    {
+      checker.error = false;
+      error_array_type_is_unresolved(array_expression->token);
     }
   }
 }

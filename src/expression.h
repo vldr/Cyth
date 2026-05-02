@@ -33,6 +33,7 @@ typedef struct _LITERAL_ARRAY_EXPR LiteralArrayExpr;
 typedef struct _VAR_STMT VarStmt;
 
 array_def(Expr*, Expr);
+array_def(struct _LITERAL_ARRAY_EXPR*, LiteralArrayExpr);
 array_def(struct _DATA_TYPE, DataType);
 
 typedef enum _SCOPE

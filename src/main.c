@@ -62,9 +62,10 @@ static void panic_callback(const char* filename, const char* function, int line,
     }
     else
     {
-      const bool filename_empty = filename[0] == '\0';
-      fprintf(stderr, "  at %s:%d:%d %s%s%s\n", function, line, column, filename_empty ? "" : "(",
-              filename, filename_empty ? "" : ")");
+      if (*filename)
+        fprintf(stderr, "  at %s (%s:%d:%d)\n", function, filename, line, column);
+      else
+        fprintf(stderr, "  at %s:%d:%d\n", function, line, column);
 
       cyth.previous_count = 0;
     }
@@ -83,8 +84,7 @@ static void panic_callback(const char* filename, const char* function, int line,
 static void error_callback(const char* filename, int start_line, int start_column, int end_line,
                            int end_column, const char* message)
 {
-  const bool filename_empty = filename[0] == '\0';
-  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", filename, filename_empty ? "" : ":", start_line,
+  fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", filename, *filename ? ":" : "", start_line,
           start_column, end_line, end_column, message);
 
   cyth.error = true;

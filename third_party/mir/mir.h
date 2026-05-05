@@ -293,7 +293,8 @@ typedef struct MIR_location {
   int line;
   int column;
   int next;
-  const char* name;
+  uint32_t filename;
+  uint32_t function;
 } MIR_location_t;
 
 struct MIR_insn {

@@ -37,7 +37,8 @@ static struct
 
   void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
                          int end_column, const char* message);
-  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
+  void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,
+                        const char* def_filename, int def_line, int def_column, int length);
 } checker;
 
 static void check_statement(Stmt* statement, bool synchronize);
@@ -76,8 +77,8 @@ static void error(Token token, const char* message)
 
   if (!checker.error)
     if (checker.error_callback)
-      checker.error_callback(token.filename, token.start_line, token.start_column, token.end_line,
-                             token.end_column, message);
+      checker.error_callback(token.filename ? token.filename : "", token.start_line,
+                             token.start_column, token.end_line, token.end_column, message);
 
   checker.error = true;
   checker.errors++;
@@ -86,8 +87,9 @@ static void error(Token token, const char* message)
 static void link(Token reference, Token definition, int length)
 {
   if (checker.link_callback)
-    checker.link_callback(reference.start_line, reference.start_column, definition.start_line,
-                          definition.start_column, length);
+    checker.link_callback(reference.filename ? reference.filename : "", reference.start_line,
+                          reference.start_column, definition.filename ? definition.filename : "",
+                          definition.start_line, definition.start_column, length);
 }
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
@@ -4153,7 +4155,8 @@ static bool analyze_statements(ArrayStmt statements)
 void checker_init(ArrayStmt statements,
                   void (*error_callback)(const char* filename, int start_line, int start_column,
                                          int end_line, int end_column, const char* message),
-                  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column,
+                  void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,
+                                        const char* def_filename, int def_line, int def_column,
                                         int length))
 {
   checker.function = NULL;

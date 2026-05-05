@@ -17,7 +17,7 @@ endif()
 if (EMSCRIPTEN)
     add_link_options(--closure 1 -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1
                      -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString,HEAPU8 -sSTACK_SIZE=524288
-                     -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_cyth_wasm_init,_cyth_wasm_load_function,_cyth_wasm_compile,_cyth_wasm_set_error_callback,_cyth_wasm_set_result_callback,_cyth_wasm_set_link_callback)
+                     -sEXPORTED_FUNCTIONS=_free,_memory_alloc,_cyth_wasm_init,_cyth_wasm_load_function,_cyth_wasm_compile,_cyth_wasm_set_error_callback,_cyth_wasm_set_result_callback,_cyth_wasm_set_link_callback,_cyth_wasm_load_string)
 
     add_custom_target(test
         COMMAND node test/_test_wasm_web.js

@@ -102,14 +102,15 @@ for (const filename of scripts) {
     errors.length = 0;
     logs.length = 0;
 
-    if (cyth._cyth_wasm_init(encodeText(filename), encodeText(text))) {
-      cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
-      cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
-      cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
-      cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
-      cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+    cyth._cyth_wasm_init();
+    cyth._cyth_wasm_load_function(encodeText("void log(int n)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(bool n)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+
+    if (cyth._cyth_wasm_load_string(encodeText(filename), encodeText(text)))
       cyth._cyth_wasm_compile(true, false);
-    }
 
     if (errors.length === 0) {
       function log(output) {

@@ -519,7 +519,7 @@ class Editor {
     );
 
     Module._cyth_wasm_set_link_callback(
-      Module.addFunction(this.onLink.bind(this), "viiiii")
+      Module.addFunction(this.onLink.bind(this), "viiiiiii")
     );
 
     monaco.languages.setLanguageConfiguration("cyth", {
@@ -772,32 +772,33 @@ class Editor {
     const text = this.encodeText(this.editor.getValue());
     const module = this.encodeText("env");
 
-    if (Module._cyth_wasm_init(0, text)) {
-      Module._cyth_wasm_load_function(this.encodeText("void log(int n)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void log(bool n)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void log(float n)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void log(char n)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void log(string n)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float random()"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void clear()"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void size(int width, int height)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void line(int x0, int y0, int x1, int y1)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void triangle(int x0, int y0, int x1, int y1, int x2, int y2)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void stroke(int r, int g, int b)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void fill(int r, int g, int b)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void rect(int x, int y, int width, int height)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void circle(int x, int y, int radius)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float sqrt(float val)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float sin(float a)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float cos(float a)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float pow(float base, float exp)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("float atan2(float y, float x)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("any createImage(int width, int height)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void clearImage(any image, int r, int g, int b)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void setImagePixel(any image, int x, int y, int r, int g, int b)"), module);
-      Module._cyth_wasm_load_function(this.encodeText("void drawImage(any image, int x, int y)"), module);
+    Module._cyth_wasm_init();
+    Module._cyth_wasm_load_function(this.encodeText("void log(int n)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void log(bool n)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void log(float n)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void log(char n)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void log(string n)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float random()"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void clear()"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void size(int width, int height)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void line(int x0, int y0, int x1, int y1)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void triangle(int x0, int y0, int x1, int y1, int x2, int y2)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void stroke(int r, int g, int b)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void fill(int r, int g, int b)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void rect(int x, int y, int width, int height)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void circle(int x, int y, int radius)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float sqrt(float val)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float sin(float a)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float cos(float a)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float pow(float base, float exp)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("float atan2(float y, float x)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("any createImage(int width, int height)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void clearImage(any image, int r, int g, int b)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void setImagePixel(any image, int x, int y, int r, int g, int b)"), module);
+    Module._cyth_wasm_load_function(this.encodeText("void drawImage(any image, int x, int y)"), module);
+
+    if (Module._cyth_wasm_load_string(0, text))
       Module._cyth_wasm_compile(generate, false);
-    }
   }
 
   goto(lineNumber, column) {
@@ -815,7 +816,7 @@ class Editor {
     this.editor.updateOptions({ readOnly: value });
   }
 
-  onLink(refLineNumber, refColumn, defLineNumber, defColumn, length) {
+  onLink(refFilename, refLineNumber, refColumn, defFilename, defLineNumber, defColumn, length) {
     this.links.push({
       refLineNumber,
       refColumn,

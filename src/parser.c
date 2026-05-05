@@ -29,8 +29,8 @@ static void error(Token token, const char* message)
 {
   if (!parser.error)
     if (parser.error_callback)
-      parser.error_callback(token.filename, token.start_line, token.start_column, token.end_line,
-                            token.end_column, message);
+      parser.error_callback(token.filename ? token.filename : "", token.start_line,
+                            token.start_column, token.end_line, token.end_column, message);
 
   parser.error = true;
   parser.errors++;

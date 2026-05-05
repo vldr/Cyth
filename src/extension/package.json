@@ -27,6 +27,33 @@
         "scopeName": "source.cyth",
         "path": "./language.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Cyth",
+      "properties": {
+        "cyth.imports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "void log(int n)",
+            "void log(bool n)",
+            "void log(float n)",
+            "void log(char n)",
+            "void log(string n)"
+          ],
+          "description": "List of imports"
+        },
+        "cyth.files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Key-value map of files"
+        }
+      }
+    }
   }
 }

@@ -87,7 +87,8 @@ static struct
   void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
                          int end_column, const char* message);
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
-  void (*link_callback)(int ref_line, int ref_column, int def_line, int def_column, int length);
+  void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,
+                        const char* def_filename, int def_line, int def_column, int length);
 } codegen;
 
 static const char* get_function_member(DataType data_type, const char* name)
@@ -4931,10 +4932,14 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
   return block;
 }
 
-int cyth_wasm_init(char* filename, const char* source)
+void cyth_wasm_init(void)
 {
   array_init(&codegen.statements);
-  lexer_init(filename, source, codegen.error_callback);
+}
+
+int cyth_wasm_load_string(const char* filename, const char* string)
+{
+  lexer_init(filename, string, codegen.error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -4952,7 +4957,12 @@ int cyth_wasm_init(char* filename, const char* source)
     return false;
   }
 
-  codegen.statements = statements;
+  Stmt* statement;
+  array_foreach(&statements, statement)
+  {
+    array_add(&codegen.statements, statement);
+  }
+
   return true;
 }
 
@@ -5070,8 +5080,9 @@ void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* da
   codegen.result_callback = result_callback;
 }
 
-void cyth_wasm_set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
-                                                       int def_column, int length))
+void cyth_wasm_set_link_callback(void (*link_callback)(const char* ref_filename, int ref_line,
+                                                       int ref_column, const char* def_filename,
+                                                       int def_line, int def_column, int length))
 {
   codegen.link_callback = link_callback;
 }

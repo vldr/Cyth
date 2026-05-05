@@ -131,11 +131,13 @@ extern "C"
   // [panic_callback] will be called when a runtime error occurs.
   //
   // This callback will be called multiple times. The first call is a special case, where zero will
-  // be passed into the line and column, and the error reason will be in the function string.
+  // be passed into the line and column parameters and the error reason will be passed into both the
+  // filename and function parameter.
   //
   // Subsequent calls will be for each function line/column combination in the stack trace.
   void cyth_set_panic_callback(CyVM* vm,
-                               void (*panic_callback)(const char* function, int line, int column));
+                               void (*panic_callback)(const char* filename, const char* function,
+                                                      int line, int column));
 
   // Enable/disable logging.
   //
@@ -232,7 +234,8 @@ extern "C"
   void* cyth_push_jmp(CyVM* vm, void* new_jmp);
   void cyth_pop_jmp(CyVM* vm, void* old_jmp);
 
-  int cyth_wasm_init(const char* filename, const char* string);
+  void cyth_wasm_init(void);
+  int cyth_wasm_load_string(const char* filename, const char* string);
   int cyth_wasm_load_function(const char* signature, const char* module);
   int cyth_wasm_compile(int compile, int logging);
   void cyth_wasm_set_error_callback(void (*error_callback)(const char* filename, int start_line,
@@ -241,8 +244,9 @@ extern "C"
   void cyth_wasm_set_result_callback(void (*result_callback)(size_t size, void* data,
                                                              size_t source_map_size,
                                                              void* source_map));
-  void cyth_wasm_set_link_callback(void (*link_callback)(int ref_line, int ref_column, int def_line,
-                                                         int def_column, int length));
+  void cyth_wasm_set_link_callback(void (*link_callback)(const char* ref_filename, int ref_line,
+                                                         int ref_column, const char* def_filename,
+                                                         int def_line, int def_column, int length));
 #ifdef __cplusplus
 }
 #endif

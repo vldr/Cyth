@@ -57,7 +57,8 @@ static void error(const char* filename, int start_line, int start_column, int en
   lexer.errors++;
 
   if (lexer.error_callback)
-    lexer.error_callback(filename, start_line, start_column, end_line, end_column, message);
+    lexer.error_callback(filename ? filename : "", start_line, start_column, end_line, end_column,
+                         message);
 }
 
 static void add_custom_token_offset(TokenKind type, int start_line, int start_column, int end_line,

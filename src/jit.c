@@ -130,6 +130,8 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
 
             location = MIR_get_location(vm->ctx, location->next);
           }
+
+          goto done;
         }
       }
 
@@ -137,6 +139,7 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
     }
   }
 
+done:
   if (!fp)
   {
 #if defined(__clang__) || defined(__GNUC__)
@@ -190,11 +193,14 @@ static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
 
               location = MIR_get_location(vm->ctx, location->next);
             }
+
+            goto next;
           }
         }
       }
     }
 
+  next:
     fp = *(uintptr_t*)fp;
   }
 

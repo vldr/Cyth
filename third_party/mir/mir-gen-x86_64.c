@@ -704,7 +704,6 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   func = curr_func_item->u.func;
   block_arg_func_p = FALSE;
   start_sp_from_bp_offset = 8;
-  // keep_fp_p = func->vararg_p;
   keep_fp_p = TRUE;
   for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
@@ -829,7 +828,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }
-  alloca_p = FALSE;
+  alloca_p = TRUE;
   leaf_p = TRUE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);

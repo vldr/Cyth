@@ -69,7 +69,7 @@ for (const filename of scripts) {
     const text = await fs.readFile(fullPath, "utf-8");
     const expectedLogs = text
       .split("\n")
-      .filter((line) => line.startsWith("#") && !line.startsWith("#!"))
+      .filter((line) => line.startsWith("#") && !line.startsWith("#!") && !line.startsWith("#>") && !line.startsWith("#<"))
       .map((line) =>
         line
           .substring(line.indexOf("#") + 1)
@@ -85,18 +85,18 @@ for (const filename of scripts) {
 
     const expectedErrors = text
       .split("\n")
-      .filter((line) => line.startsWith("#!"))
+      .filter((line) => line.startsWith("#!") || line.startsWith("#<"))
       .map((line) => {
         const matches = line.match(/^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)$/);
 
-        return {
+        return matches ? {
           filename,
           startLineNumber: parseInt(matches[1]),
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
           message: matches[5].replaceAll("\\n", "\n").replaceAll("\r", "")
-        }
+        } : line.replace("#< ", "#<").replace("#<", "");
       });
 
     errors.length = 0;
@@ -142,7 +142,11 @@ for (const filename of scripts) {
         },
       });
 
-      result.instance.exports["<start>"]();
+      try {
+        result.instance.exports["<start>"]();
+      } catch (error) {
+        errors.push(error.toString());
+      }
     }
 
     assert.deepStrictEqual(errors, expectedErrors);

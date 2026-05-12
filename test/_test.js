@@ -16,7 +16,7 @@ for (const filename of scripts) {
     const text = await fs.readFile(fullPath, "utf-8");
     const expectedLogs = text
       .split("\n")
-      .filter((line) => line.startsWith("#") && !line.startsWith("#!"))
+      .filter((line) => line.startsWith("#") && !line.startsWith("#!") && !line.startsWith("#>") && !line.startsWith("#<"))
       .map((line) =>
         line
           .substring(line.indexOf("#") + 1)
@@ -37,21 +37,20 @@ for (const filename of scripts) {
       }
     }
 
-
     const expectedErrors = text
       .split("\n")
-      .filter((line) => line.startsWith("#!"))
+      .filter((line) => line.startsWith("#!") || line.startsWith("#>"))
       .map((line) => {
         const matches = line.match(
           /^#!\s*([0-9]+):([0-9]+)-([0-9]+):([0-9]+) (.+)/
         );
-        return {
+        return matches ? {
           startLineNumber: parseInt(matches[1]),
           startColumn: parseInt(matches[2]),
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
           message: matches[5].replaceAll("\r", ""),
-        };
+        } : line.replace("#> ", "#>").replace("#>", "");
       });
 
     const process = child_process.spawnSync(executable, ["-"], { input: text });

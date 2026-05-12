@@ -894,7 +894,7 @@ static Function* generate_array_pop_function(CyVM* vm, DataType data_type)
 
       MIR_append_insn(vm->ctx, vm->function, panic_label);
 
-      generate_panic(vm, "Out of bounds access", TOKEN_EMPTY());
+      generate_panic(vm, "Out of bounds access.", TOKEN_EMPTY());
 
       MIR_append_insn(vm->ctx, vm->function, finish_label);
     }
@@ -1189,7 +1189,7 @@ static Function* generate_array_reserve_function(CyVM* vm, DataType data_type)
 
       MIR_append_insn(vm->ctx, vm->function, panic_label);
 
-      generate_panic(vm, "Invalid reservation amount", TOKEN_EMPTY());
+      generate_panic(vm, "Invalid reservation amount.", TOKEN_EMPTY());
 
       MIR_append_insn(vm->ctx, vm->function, continue_label);
     }
@@ -3567,7 +3567,7 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
       MIR_append_insn(vm->ctx, vm->function, if_false_label);
 
-      generate_panic(vm, "Invalid type cast", expression->type.token);
+      generate_panic(vm, "Invalid type cast to string.", expression->type.token);
 
       MIR_append_insn(vm->ctx, vm->function, cont_label);
       return;
@@ -3720,7 +3720,7 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
       MIR_append_insn(vm->ctx, vm->function, if_false_label);
 
-      generate_panic(vm, "Invalid type cast", expression->type.token);
+      generate_panic(vm, "Invalid type cast to array.", expression->type.token);
 
       MIR_append_insn(vm->ctx, vm->function, cont_label);
       return;
@@ -3761,7 +3761,7 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
       MIR_append_insn(vm->ctx, vm->function, if_false_label);
 
-      generate_panic(vm, "Invalid type cast", expression->type.token);
+      generate_panic(vm, "Invalid type cast to object.", expression->type.token);
 
       MIR_append_insn(vm->ctx, vm->function, cont_label);
       return;

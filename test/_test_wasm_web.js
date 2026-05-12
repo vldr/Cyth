@@ -96,7 +96,7 @@ for (const filename of scripts) {
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
           message: matches[5].replaceAll("\\n", "\n").replaceAll("\r", "")
-        } : line.replace("#< ", "#<").replace("#<", "");
+        } : line.replace("#< ", "#<").replace("#<", "").replaceAll("\r", "");
       });
 
     errors.length = 0;

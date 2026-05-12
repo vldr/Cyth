@@ -44,7 +44,7 @@ for (const filename of scripts) {
           endLineNumber: parseInt(matches[3]),
           endColumn: parseInt(matches[4]),
           message: matches[5].replaceAll("\r", ""),
-        } : line.replace("#< ", "#<").replace("#<", "");
+        } : line.replace("#< ", "#<").replace("#<", "").replaceAll("\r", "");
       });
 
     const process = child_process.spawnSync(executable, ["wasm", "-"], { input: text });
@@ -69,7 +69,7 @@ for (const filename of scripts) {
             endColumn: parseInt(matches[4]),
             message: matches[5].replaceAll("\r", ""),
           }
-          : line;
+          : line.replaceAll("\r", "");
       });
 
     const noCompileErrors = errors.length === 0;

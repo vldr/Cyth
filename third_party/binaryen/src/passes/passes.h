@@ -84,7 +84,7 @@ Pass* createLocalSubtypingPass();
 // Pass* createLLVMMemoryCopyFillLoweringPass();
 // Pass* createLoopInvariantCodeMotionPass();
 // Pass* createMemory64LoweringPass();
-Pass* createMemoryPackingPass();
+// Pass* createMemoryPackingPass();
 Pass* createMergeBlocksPass();
 // Pass* createMergeSimilarFunctionsPass();
 // Pass* createMergeLocalsPass();

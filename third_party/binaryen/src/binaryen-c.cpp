@@ -26,7 +26,7 @@
 #include "pass.h"
 #include "support/colors.h"
 #include "support/string.h"
-#include "wasm-binary.h"
+// #include "wasm-binary.h"
 #include "wasm-builder.h"
 #include "wasm-interpreter.h"
 #include "wasm-stack.h"
@@ -5596,29 +5596,31 @@ char* BinaryenModuleAllocateAndWriteStackIR(BinaryenModuleRef module) {
   return output;
 }
 
-BinaryenModuleRef BinaryenModuleReadWithFeatures(char* input,
-                                                 size_t inputSize,
-                                                 BinaryenFeatures features) {
-  auto* wasm = new Module;
-  std::vector<char> buffer(false);
-  buffer.resize(inputSize);
-  std::copy_n(input, inputSize, buffer.begin());
-  try {
-    WasmBinaryReader parser(*wasm, features, buffer);
-    parser.read();
-  } catch (ParseException& p) {
-    p.dump(std::cerr);
-    Fatal() << "error in parsing wasm binary";
-  }
-  // Do not regress code size by maintaining type order. TODO: Add an option to
-  // control this.
-  wasm->typeIndices.clear();
-  return wasm;
-}
+// BinaryenModuleRef BinaryenModuleReadWithFeatures(char* input,
+//                                                  size_t inputSize,
+//                                                  BinaryenFeatures features) {
+//   auto* wasm = new Module;
+//   std::vector<char> buffer(false);
+//   buffer.resize(inputSize);
+//   std::copy_n(input, inputSize, buffer.begin());
+//   try {
+//     WasmBinaryReader parser(*wasm, features, buffer);
+//     parser.read();
+//   } catch (ParseException& p) {
+//     p.dump(std::cerr);
+//     Fatal() << "error in parsing wasm binary";
+//   }
+//   // Do not regress code size by maintaining type order. TODO: Add an option
+//   to
+//   // control this.
+//   wasm->typeIndices.clear();
+//   return wasm;
+// }
 
-BinaryenModuleRef BinaryenModuleRead(char* input, size_t inputSize) {
-  return BinaryenModuleReadWithFeatures(input, inputSize, BinaryenFeatureMVP());
-}
+// BinaryenModuleRef BinaryenModuleRead(char* input, size_t inputSize) {
+//   return BinaryenModuleReadWithFeatures(input, inputSize,
+//   BinaryenFeatureMVP());
+// }
 
 BinaryenIndex BinaryenModuleAddDebugInfoFileName(BinaryenModuleRef module,
                                                  const char* filename) {
@@ -6263,57 +6265,57 @@ void BinaryenSetColorsEnabled(bool enabled) { Colors::setEnabled(enabled); }
 bool BinaryenAreColorsEnabled() { return Colors::isEnabled(); }
 
 #ifdef __EMSCRIPTEN__
-// Internal binaryen.js APIs
+// // Internal binaryen.js APIs
 
-// Returns the size of a Literal object.
-size_t BinaryenSizeofLiteral(void) { return sizeof(Literal); }
+// // Returns the size of a Literal object.
+// size_t BinaryenSizeofLiteral(void) { return sizeof(Literal); }
 
-// Returns the size of an allocate and write result object.
-size_t BinaryenSizeofAllocateAndWriteResult(void) {
-  return sizeof(BinaryenModuleAllocateAndWriteResult);
-}
+// // Returns the size of an allocate and write result object.
+// size_t BinaryenSizeofAllocateAndWriteResult(void) {
+//   return sizeof(BinaryenModuleAllocateAndWriteResult);
+// }
 
-// Helpers for accessing Binaryen's memory from another module without the
-// need to round-trip through JS, e.g. when allocating and initializing
-// strings passed to / reading strings returned by the C-API.
+// // Helpers for accessing Binaryen's memory from another module without the
+// // need to round-trip through JS, e.g. when allocating and initializing
+// // strings passed to / reading strings returned by the C-API.
 
-// TODO: Remove these once Wasm supports multiple memories.
+// // TODO: Remove these once Wasm supports multiple memories.
 
-// Stores an 8-bit integer to Binaryen memory.
-void _i32_store8(int8_t* ptr, int8_t value) { *ptr = value; }
+// // Stores an 8-bit integer to Binaryen memory.
+// void _i32_store8(int8_t* ptr, int8_t value) { *ptr = value; }
 
-// Stores a 16-bit integer to Binaryen memory.
-void _i32_store16(int16_t* ptr, int16_t value) { *ptr = value; }
+// // Stores a 16-bit integer to Binaryen memory.
+// void _i32_store16(int16_t* ptr, int16_t value) { *ptr = value; }
 
-// Stores a 32-bit integer to Binaryen memory.
-void _i32_store(int32_t* ptr, int32_t value) { *ptr = value; }
+// // Stores a 32-bit integer to Binaryen memory.
+// void _i32_store(int32_t* ptr, int32_t value) { *ptr = value; }
 
-// Stores a 32-bit float to Binaryen memory.
-void _f32_store(float* ptr, float value) { *ptr = value; }
+// // Stores a 32-bit float to Binaryen memory.
+// void _f32_store(float* ptr, float value) { *ptr = value; }
 
-// Stores a 64-bit float to Binaryen memory.
-void _f64_store(double* ptr, double value) { *ptr = value; }
+// // Stores a 64-bit float to Binaryen memory.
+// void _f64_store(double* ptr, double value) { *ptr = value; }
 
-// Loads an 8-bit signed integer from Binaryen memory.
-int8_t _i32_load8_s(int8_t* ptr) { return *ptr; }
+// // Loads an 8-bit signed integer from Binaryen memory.
+// int8_t _i32_load8_s(int8_t* ptr) { return *ptr; }
 
-// Loads an 8-bit unsigned integer from Binaryen memory.
-uint8_t _i32_load8_u(uint8_t* ptr) { return *ptr; }
+// // Loads an 8-bit unsigned integer from Binaryen memory.
+// uint8_t _i32_load8_u(uint8_t* ptr) { return *ptr; }
 
-// Loads a 16-bit signed integer from Binaryen memory.
-int16_t _i32_load16_s(int16_t* ptr) { return *ptr; }
+// // Loads a 16-bit signed integer from Binaryen memory.
+// int16_t _i32_load16_s(int16_t* ptr) { return *ptr; }
 
-// Loads a 16-bit unsigned integer from Binaryen memory.
-uint16_t _i32_load16_u(uint16_t* ptr) { return *ptr; }
+// // Loads a 16-bit unsigned integer from Binaryen memory.
+// uint16_t _i32_load16_u(uint16_t* ptr) { return *ptr; }
 
-// Loads a 32-bit integer from Binaryen memory.
-int32_t _i32_load(int32_t* ptr) { return *ptr; }
+// // Loads a 32-bit integer from Binaryen memory.
+// int32_t _i32_load(int32_t* ptr) { return *ptr; }
 
-// Loads a 32-bit float from Binaryen memory.
-float _f32_load(float* ptr) { return *ptr; }
+// // Loads a 32-bit float from Binaryen memory.
+// float _f32_load(float* ptr) { return *ptr; }
 
-// Loads a 64-bit float from Binaryen memory.
-double _f64_load(double* ptr) { return *ptr; }
+// // Loads a 64-bit float from Binaryen memory.
+// double _f64_load(double* ptr) { return *ptr; }
 
 #endif // __EMSCRIPTEN__
 

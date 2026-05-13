@@ -1768,3217 +1768,3266 @@ void WasmBinaryWriter::writeField(const Field& field) {
 
 // reader
 
-WasmBinaryReader::WasmBinaryReader(Module& wasm,
-                                   FeatureSet features,
-                                   const std::vector<char>& input,
-                                   const std::vector<char>& sourceMap)
-  : wasm(wasm), allocator(wasm.allocator), input(input), builder(wasm),
-    sourceMapReader(sourceMap) {
-  wasm.features = features;
-}
-
-bool WasmBinaryReader::hasDWARFSections() {
-  assert(pos == 0);
-  getInt32(); // magic
-  getInt32(); // version
-  bool has = false;
-  while (more()) {
-    uint8_t sectionCode = getInt8();
-    uint32_t payloadLen = getU32LEB();
-    if (uint64_t(pos) + uint64_t(payloadLen) > input.size()) {
-      throwError("Section extends beyond end of input");
-    }
-    auto oldPos = pos;
-    if (sectionCode == BinaryConsts::Section::Custom) {
-      auto sectionName = getInlineString();
-      if (Debug::isDWARFSection(sectionName)) {
-        has = true;
-        break;
-      }
-    }
-    pos = oldPos + payloadLen;
-  }
-  pos = 0;
-  return has;
-}
-
-void WasmBinaryReader::read() {
-  if (DWARF) {
-    // In order to update dwarf, we must store info about each IR node's
-    // binary position. This has noticeable memory overhead, so we don't do it
-    // by default: the user must request it by setting "DWARF", and even if so
-    // we scan ahead to see that there actually *are* DWARF sections, so that
-    // we don't do unnecessary work.
-    if (!hasDWARFSections()) {
-      DWARF = false;
-    }
-  }
-
-  // Skip ahead and read the name section so we know what names to use when we
-  // construct module elements.
-  if (debugInfo) {
-    findAndReadNames();
-  }
-
-  readHeader();
-  sourceMapReader.readHeader(wasm);
-
-  // Read sections until the end
-  while (more()) {
-    uint8_t sectionCode = getInt8();
-    uint32_t payloadLen = getU32LEB();
-    if (uint64_t(pos) + uint64_t(payloadLen) > input.size()) {
-      throwError("Section extends beyond end of input");
-    }
-
-    auto oldPos = pos;
-
-    // Note the section in the list of seen sections, as almost no sections can
-    // appear more than once, and verify those that shouldn't do not.
-    if (sectionCode != BinaryConsts::Section::Custom &&
-        !seenSections.insert(sectionCode).second) {
-      throwError("section seen more than once: " + std::to_string(sectionCode));
-    }
-
-    switch (sectionCode) {
-      case BinaryConsts::Section::Start:
-        readStart();
-        break;
-      case BinaryConsts::Section::Memory:
-        readMemories();
-        break;
-      case BinaryConsts::Section::Type:
-        readTypes();
-        break;
-      case BinaryConsts::Section::Import:
-        readImports();
-        break;
-      case BinaryConsts::Section::Function:
-        readFunctionSignatures();
-        break;
-      case BinaryConsts::Section::Code:
-        if (DWARF) {
-          codeSectionLocation = pos;
-        }
-        readFunctions();
-        break;
-      case BinaryConsts::Section::Export:
-        readExports();
-        break;
-      case BinaryConsts::Section::Element:
-        readElementSegments();
-        break;
-      case BinaryConsts::Section::Strings:
-        readStrings();
-        break;
-      case BinaryConsts::Section::Global:
-        readGlobals();
-        break;
-      case BinaryConsts::Section::Data:
-        readDataSegments();
-        break;
-      case BinaryConsts::Section::DataCount:
-        readDataSegmentCount();
-        break;
-      case BinaryConsts::Section::Table:
-        readTableDeclarations();
-        break;
-      case BinaryConsts::Section::Tag:
-        readTags();
-        break;
-      case BinaryConsts::Section::Custom: {
-        readCustomSection(payloadLen);
-        if (pos > oldPos + payloadLen) {
-          throwError("bad user section size, started at " +
-                     std::to_string(oldPos) + " plus payload " +
-                     std::to_string(payloadLen) +
-                     " not being equal to new position " + std::to_string(pos));
-        }
-        pos = oldPos + payloadLen;
-        break;
-      }
-      default:
-        throwError(std::string("unrecognized section ID: ") +
-                   std::to_string(sectionCode));
-    }
-
-    // make sure we advanced exactly past this section
-    if (pos != oldPos + payloadLen) {
-      throwError("bad section size, started at " + std::to_string(oldPos) +
-                 " plus payload " + std::to_string(payloadLen) +
-                 " not being equal to new position " + std::to_string(pos));
-    }
-  }
-
-  validateBinary();
-}
-
-void WasmBinaryReader::readCustomSection(size_t payloadLen) {
-  auto oldPos = pos;
-  Name sectionName = getInlineString();
-  size_t read = pos - oldPos;
-  if (read > payloadLen) {
-    throwError("bad user section size");
-  }
-  payloadLen -= read;
-  if (sectionName.equals(BinaryConsts::CustomSections::Name)) {
-    // We already read the name section before anything else.
-    pos += payloadLen;
-  } else if (sectionName.equals(BinaryConsts::CustomSections::TargetFeatures)) {
-    readFeatures(payloadLen);
-  } else if (sectionName.equals(BinaryConsts::CustomSections::Dylink)) {
-    readDylink(payloadLen);
-  } else if (sectionName.equals(BinaryConsts::CustomSections::Dylink0)) {
-    readDylink0(payloadLen);
-  } else {
-    // an unfamiliar custom section
-    if (sectionName.equals(BinaryConsts::CustomSections::Linking)) {
-      std::cerr
-        << "warning: linking section is present, so this is not a standard "
-           "wasm file - binaryen cannot handle this properly!\n";
-    }
-    wasm.customSections.resize(wasm.customSections.size() + 1);
-    auto& section = wasm.customSections.back();
-    section.name = sectionName.str;
-    auto data = getByteView(payloadLen);
-    section.data = {data.begin(), data.end()};
-  }
-}
-
-std::string_view WasmBinaryReader::getByteView(size_t size) {
-  if (size > input.size() || pos > input.size() - size) {
-    throwError("unexpected end of input");
-  }
-  pos += size;
-  return {input.data() + (pos - size), size};
-}
-
-uint8_t WasmBinaryReader::getInt8() {
-  if (!more()) {
-    throwError("unexpected end of input");
-  }
-  return input[pos++];
-}
-
-uint16_t WasmBinaryReader::getInt16() {
-  auto ret = uint16_t(getInt8());
-  ret |= uint16_t(getInt8()) << 8;
-  return ret;
-}
-
-uint32_t WasmBinaryReader::getInt32() {
-  auto ret = uint32_t(getInt16());
-  ret |= uint32_t(getInt16()) << 16;
-  return ret;
-}
-
-uint64_t WasmBinaryReader::getInt64() {
-  auto ret = uint64_t(getInt32());
-  ret |= uint64_t(getInt32()) << 32;
-  return ret;
-}
-
-uint8_t WasmBinaryReader::getLaneIndex(size_t lanes) {
-  auto ret = getInt8();
-  if (ret >= lanes) {
-    throwError("Illegal lane index");
-  }
-  return ret;
-}
-
-Literal WasmBinaryReader::getFloat32Literal() {
-  auto ret = Literal(getInt32());
-  ret = ret.castToF32();
-  return ret;
-}
-
-Literal WasmBinaryReader::getFloat64Literal() {
-  auto ret = Literal(getInt64());
-  ret = ret.castToF64();
-  return ret;
-}
-
-Literal WasmBinaryReader::getVec128Literal() {
-  std::array<uint8_t, 16> bytes;
-  for (auto i = 0; i < 16; ++i) {
-    bytes[i] = getInt8();
-  }
-  auto ret = Literal(bytes.data());
-  return ret;
-}
-
-uint32_t WasmBinaryReader::getU32LEB() {
-  U32LEB ret;
-  ret.read([&]() { return getInt8(); });
-  return ret.value;
-}
-
-uint64_t WasmBinaryReader::getU64LEB() {
-  U64LEB ret;
-  ret.read([&]() { return getInt8(); });
-  return ret.value;
-}
-
-int32_t WasmBinaryReader::getS32LEB() {
-  S32LEB ret;
-  ret.read([&]() { return (int8_t)getInt8(); });
-  return ret.value;
-}
-
-int64_t WasmBinaryReader::getS64LEB() {
-  S64LEB ret;
-  ret.read([&]() { return (int8_t)getInt8(); });
-  return ret.value;
-}
-
-bool WasmBinaryReader::getBasicType(int32_t code, Type& out) {
-  switch (code) {
-    case BinaryConsts::EncodedType::i32:
-      out = Type::i32;
-      return true;
-    case BinaryConsts::EncodedType::i64:
-      out = Type::i64;
-      return true;
-    case BinaryConsts::EncodedType::f32:
-      out = Type::f32;
-      return true;
-    case BinaryConsts::EncodedType::f64:
-      out = Type::f64;
-      return true;
-    case BinaryConsts::EncodedType::v128:
-      out = Type::v128;
-      return true;
-    case BinaryConsts::EncodedType::funcref:
-      out = Type(HeapType::func, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::contref:
-      out = Type(HeapType::cont, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::externref:
-      out = Type(HeapType::ext, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::anyref:
-      out = Type(HeapType::any, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::eqref:
-      out = Type(HeapType::eq, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::i31ref:
-      out = Type(HeapType::i31, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::structref:
-      out = Type(HeapType::struct_, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::arrayref:
-      out = Type(HeapType::array, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::exnref:
-      out = Type(HeapType::exn, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::stringref:
-      out = Type(HeapType::string, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::nullref:
-      out = Type(HeapType::none, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::nullexternref:
-      out = Type(HeapType::noext, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::nullfuncref:
-      out = Type(HeapType::nofunc, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::nullexnref:
-      out = Type(HeapType::noexn, Nullable);
-      return true;
-    case BinaryConsts::EncodedType::nullcontref:
-      out = Type(HeapType::nocont, Nullable);
-      return true;
-    default:
-      return false;
-  }
-}
-
-bool WasmBinaryReader::getBasicHeapType(int64_t code, HeapType& out) {
-  switch (code) {
-    case BinaryConsts::EncodedHeapType::func:
-      out = HeapType::func;
-      return true;
-    case BinaryConsts::EncodedHeapType::cont:
-      out = HeapType::cont;
-      return true;
-    case BinaryConsts::EncodedHeapType::ext:
-      out = HeapType::ext;
-      return true;
-    case BinaryConsts::EncodedHeapType::any:
-      out = HeapType::any;
-      return true;
-    case BinaryConsts::EncodedHeapType::eq:
-      out = HeapType::eq;
-      return true;
-    case BinaryConsts::EncodedHeapType::i31:
-      out = HeapType::i31;
-      return true;
-    case BinaryConsts::EncodedHeapType::struct_:
-      out = HeapType::struct_;
-      return true;
-    case BinaryConsts::EncodedHeapType::array:
-      out = HeapType::array;
-      return true;
-    case BinaryConsts::EncodedHeapType::exn:
-      out = HeapType::exn;
-      return true;
-    case BinaryConsts::EncodedHeapType::string:
-      out = HeapType::string;
-      return true;
-    case BinaryConsts::EncodedHeapType::none:
-      out = HeapType::none;
-      return true;
-    case BinaryConsts::EncodedHeapType::noext:
-      out = HeapType::noext;
-      return true;
-    case BinaryConsts::EncodedHeapType::nofunc:
-      out = HeapType::nofunc;
-      return true;
-    case BinaryConsts::EncodedHeapType::noexn:
-      out = HeapType::noexn;
-      return true;
-    case BinaryConsts::EncodedHeapType::nocont:
-      out = HeapType::nocont;
-      return true;
-    default:
-      return false;
-  }
-}
-
-Signature WasmBinaryReader::getBlockType() {
-  // Single value types are negative; signature indices are non-negative.
-  auto code = getS32LEB();
-  if (code >= 0) {
-    return getSignatureByTypeIndex(code);
-  }
-  if (code == BinaryConsts::EncodedType::Empty) {
-    return Signature();
-  }
-  return Signature(Type::none, getType(code));
-}
-
-Type WasmBinaryReader::getType(int code) {
-  Type type;
-  if (getBasicType(code, type)) {
-    return type;
-  }
-  switch (code) {
-    case BinaryConsts::EncodedType::nullable:
-      return Type(getHeapType(), Nullable);
-    case BinaryConsts::EncodedType::nonnullable:
-      return Type(getHeapType(), NonNullable);
-    default:
-      throwError("invalid wasm type: " + std::to_string(code));
-  }
-  WASM_UNREACHABLE("unexpected type");
-}
-
-Type WasmBinaryReader::getType() { return getType(getS32LEB()); }
-
-HeapType WasmBinaryReader::getHeapType() {
-  auto type = getS64LEB(); // TODO: Actually s33
-  // Single heap types are negative; heap type indices are non-negative
-  if (type >= 0) {
-    if (size_t(type) >= types.size()) {
-      throwError("invalid signature index: " + std::to_string(type));
-    }
-    return types[type];
-  }
-  auto share = Unshared;
-  if (type == BinaryConsts::EncodedType::Shared) {
-    share = Shared;
-    type = getS64LEB(); // TODO: Actually s33
-  }
-  HeapType ht;
-  if (getBasicHeapType(type, ht)) {
-    return ht.getBasic(share);
-  } else {
-    throwError("invalid wasm heap type: " + std::to_string(type));
-  }
-  WASM_UNREACHABLE("unexpected type");
-}
-
-HeapType WasmBinaryReader::getIndexedHeapType() {
-  auto index = getU32LEB();
-  if (index >= types.size()) {
-    throwError("invalid heap type index: " + std::to_string(index));
-  }
-  return types[index];
-}
-
-Type WasmBinaryReader::getConcreteType() {
-  auto type = getType();
-  if (!type.isConcrete()) {
-    throwError("non-concrete type when one expected");
-  }
-  return type;
-}
-
-Name WasmBinaryReader::getInlineString(bool requireValid) {
-  auto len = getU32LEB();
-  auto data = getByteView(len);
-  if (requireValid && !String::isUTF8(data)) {
-    throwError("invalid UTF-8 string");
-  }
-  return Name(data);
-}
-
-void WasmBinaryReader::verifyInt8(int8_t x) {
-  int8_t y = getInt8();
-  if (x != y) {
-    throwError("surprising value");
-  }
-}
-
-void WasmBinaryReader::verifyInt16(int16_t x) {
-  int16_t y = getInt16();
-  if (x != y) {
-    throwError("surprising value");
-  }
-}
-
-void WasmBinaryReader::verifyInt32(int32_t x) {
-  int32_t y = getInt32();
-  if (x != y) {
-    throwError("surprising value");
-  }
-}
-
-void WasmBinaryReader::verifyInt64(int64_t x) {
-  int64_t y = getInt64();
-  if (x != y) {
-    throwError("surprising value");
-  }
-}
-
-void WasmBinaryReader::readHeader() {
-  verifyInt32(BinaryConsts::Magic);
-  auto version = getInt32();
-  if (version != BinaryConsts::Version) {
-    if (version == 0x1000d) {
-      throwError("this looks like a wasm component, which Binaryen does not "
-                 "support yet (see "
-                 "https://github.com/WebAssembly/binaryen/issues/6728)");
-    }
-    throwError("invalid version");
-  }
-}
-
-void WasmBinaryReader::readStart() {
-  startIndex = getU32LEB();
-  wasm.start = getFunctionName(startIndex);
-}
-
-static Name makeName(std::string prefix, size_t counter) {
-  return Name(prefix + std::to_string(counter));
-}
-
-// Look up a name from the names section or use a validated version of the
-// provided name. Return the name and whether it is explicit in the input.
-static std::pair<Name, bool>
-getOrMakeName(const std::unordered_map<Index, Name>& nameMap,
-              Index i,
-              Name name,
-              std::unordered_set<Name>& usedNames) {
-  if (auto it = nameMap.find(i); it != nameMap.end()) {
-    return {it->second, true};
-  } else {
-    auto valid = Names::getValidNameGivenExisting(name, usedNames);
-    usedNames.insert(valid);
-    return {valid, false};
-  }
-}
-
-void WasmBinaryReader::readMemories() {
-  auto num = getU32LEB();
-  auto numImports = wasm.memories.size();
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : memoryNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: memory index out of bounds in name section: "
-                << name << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < num; i++) {
-    auto [name, isExplicit] =
-      getOrMakeName(memoryNames, numImports + i, makeName("", i), usedNames);
-    auto memory = Builder::makeMemory(name);
-    memory->hasExplicitName = isExplicit;
-    getResizableLimits(memory->initial,
-                       memory->max,
-                       memory->shared,
-                       memory->addressType,
-                       Memory::kUnlimitedSize);
-    wasm.addMemory(std::move(memory));
-  }
-}
-
-void WasmBinaryReader::readTypes() {
-  TypeBuilder builder(getU32LEB());
-
-  auto readHeapType = [&]() -> HeapType {
-    int64_t htCode = getS64LEB(); // TODO: Actually s33
-    auto share = Unshared;
-    if (htCode == BinaryConsts::EncodedType::Shared) {
-      share = Shared;
-      htCode = getS64LEB(); // TODO: Actually s33
-    }
-    HeapType ht;
-    if (getBasicHeapType(htCode, ht)) {
-      return ht.getBasic(share);
-    }
-    if (size_t(htCode) >= builder.size()) {
-      throwError("invalid type index: " + std::to_string(htCode));
-    }
-    return builder.getTempHeapType(size_t(htCode));
-  };
-  auto makeType = [&](int32_t typeCode) {
-    Type type;
-    if (getBasicType(typeCode, type)) {
-      return type;
-    }
-
-    switch (typeCode) {
-      case BinaryConsts::EncodedType::nullable:
-      case BinaryConsts::EncodedType::nonnullable: {
-        auto nullability = typeCode == BinaryConsts::EncodedType::nullable
-                             ? Nullable
-                             : NonNullable;
-
-        HeapType ht = readHeapType();
-        if (ht.isBasic()) {
-          return Type(ht, nullability);
-        }
-
-        return builder.getTempRefType(ht, nullability);
-      }
-      default:
-        throwError("unexpected type index: " + std::to_string(typeCode));
-    }
-    WASM_UNREACHABLE("unexpected type");
-  };
-  auto readType = [&]() { return makeType(getS32LEB()); };
-
-  auto readSignatureDef = [&]() {
-    std::vector<Type> params;
-    std::vector<Type> results;
-    size_t numParams = getU32LEB();
-    for (size_t j = 0; j < numParams; j++) {
-      params.push_back(readType());
-    }
-    auto numResults = getU32LEB();
-    for (size_t j = 0; j < numResults; j++) {
-      results.push_back(readType());
-    }
-    return Signature(builder.getTempTupleType(params),
-                     builder.getTempTupleType(results));
-  };
-
-  auto readContinuationDef = [&]() {
-    HeapType ht = readHeapType();
-    if (!ht.isSignature()) {
-      throw ParseException("cont types must be built from function types");
-    }
-    return Continuation(ht);
-  };
-
-  auto readMutability = [&]() {
-    switch (getU32LEB()) {
-      case 0:
-        return Immutable;
-      case 1:
-        return Mutable;
-      default:
-        throw ParseException("Expected 0 or 1 for mutability");
-    }
-  };
-
-  auto readFieldDef = [&]() {
-    // The value may be a general wasm type, or one of the types only possible
-    // in a field.
-    auto typeCode = getS32LEB();
-    if (typeCode == BinaryConsts::EncodedType::i8) {
-      auto mutable_ = readMutability();
-      return Field(Field::i8, mutable_);
-    }
-    if (typeCode == BinaryConsts::EncodedType::i16) {
-      auto mutable_ = readMutability();
-      return Field(Field::i16, mutable_);
-    }
-    // It's a regular wasm value.
-    auto type = makeType(typeCode);
-    auto mutable_ = readMutability();
-    return Field(type, mutable_);
-  };
-
-  auto readStructDef = [&]() {
-    FieldList fields;
-    size_t numFields = getU32LEB();
-    for (size_t j = 0; j < numFields; j++) {
-      fields.push_back(readFieldDef());
-    }
-    return Struct(std::move(fields));
-  };
-
-  for (size_t i = 0; i < builder.size(); i++) {
-    auto form = getInt8();
-    if (form == BinaryConsts::EncodedType::Rec) {
-      uint32_t groupSize = getU32LEB();
-      if (groupSize == 0u) {
-        // TODO: Support groups of size zero by shrinking the builder.
-        throwError("Recursion groups of size zero not supported");
-      }
-      // The group counts as one element in the type section, so we have to
-      // allocate space for the extra types.
-      builder.grow(groupSize - 1);
-      builder.createRecGroup(i, groupSize);
-      form = getInt8();
-    }
-    std::optional<uint32_t> superIndex;
-    if (form == BinaryConsts::EncodedType::Sub ||
-        form == BinaryConsts::EncodedType::SubFinal) {
-      if (form == BinaryConsts::EncodedType::Sub) {
-        builder[i].setOpen();
-      }
-      uint32_t supers = getU32LEB();
-      if (supers > 0) {
-        if (supers != 1) {
-          throwError("Invalid type definition with " + std::to_string(supers) +
-                     " supertypes");
-        }
-        superIndex = getU32LEB();
-      }
-      form = getInt8();
-    }
-    if (form == BinaryConsts::SharedDef) {
-      builder[i].setShared();
-      form = getInt8();
-    }
-    if (form == BinaryConsts::EncodedType::Func) {
-      builder[i] = readSignatureDef();
-    } else if (form == BinaryConsts::EncodedType::Cont) {
-      builder[i] = readContinuationDef();
-    } else if (form == BinaryConsts::EncodedType::Struct) {
-      builder[i] = readStructDef();
-    } else if (form == BinaryConsts::EncodedType::Array) {
-      builder[i] = Array(readFieldDef());
-    } else {
-      throwError("Bad type form " + std::to_string(form));
-    }
-    if (superIndex) {
-      if (*superIndex > builder.size()) {
-        throwError("Out of bounds supertype index " +
-                   std::to_string(*superIndex));
-      }
-      builder[i].subTypeOf(builder[*superIndex]);
-    }
-  }
-
-  auto result = builder.build();
-  if (auto* err = result.getError()) {
-    Fatal() << "Invalid type: " << err->reason << " at index " << err->index;
-  }
-  types = std::move(*result);
-
-  // Record the type indices.
-  for (Index i = 0; i < types.size(); ++i) {
-    wasm.typeIndices.insert({types[i], i});
-  }
-
-  // Assign names from the names section.
-  for (auto& [index, name] : typeNames) {
-    if (index >= types.size()) {
-      std::cerr << "warning: type index out of bounds in name section: " << name
-                << " at index " << index << '\n';
-      continue;
-    }
-    wasm.typeNames[types[index]].name = name;
-  }
-  for (auto& [index, fields] : fieldNames) {
-    if (index >= types.size()) {
-      std::cerr
-        << "warning: type index out of bounds in name section: fields at index "
-        << index << '\n';
-      continue;
-    }
-    if (!types[index].isStruct()) {
-      std::cerr << "warning: field names applied to non-struct type at index "
-                << index << '\n';
-      continue;
-    }
-    auto& names = wasm.typeNames[types[index]].fieldNames;
-    for (auto& [field, name] : fields) {
-      if (field >= types[index].getStruct().fields.size()) {
-        std::cerr << "warning: field index out of bounds in name section: "
-                  << name << " at index " << field << " in type " << index
-                  << '\n';
-        continue;
-      }
-      names[field] = name;
-    }
-  }
-}
-
-Name WasmBinaryReader::getFunctionName(Index index) {
-  if (index >= wasm.functions.size()) {
-    throwError("invalid function index");
-  }
-  return wasm.functions[index]->name;
-}
-
-Name WasmBinaryReader::getTableName(Index index) {
-  if (index >= wasm.tables.size()) {
-    throwError("invalid table index");
-  }
-  return wasm.tables[index]->name;
-}
-
-Name WasmBinaryReader::getMemoryName(Index index) {
-  if (index >= wasm.memories.size()) {
-    throwError("invalid memory index");
-  }
-  return wasm.memories[index]->name;
-}
-
-Name WasmBinaryReader::getGlobalName(Index index) {
-  if (index >= wasm.globals.size()) {
-    throwError("invalid global index");
-  }
-  return wasm.globals[index]->name;
-}
-
-Table* WasmBinaryReader::getTable(Index index) {
-  if (index < wasm.tables.size()) {
-    return wasm.tables[index].get();
-  }
-  throwError("Table index out of range.");
-}
-
-Name WasmBinaryReader::getTagName(Index index) {
-  if (index >= wasm.tags.size()) {
-    throwError("invalid tag index");
-  }
-  return wasm.tags[index]->name;
-}
-
-Name WasmBinaryReader::getDataName(Index index) {
-  if (index >= wasm.dataSegments.size()) {
-    throwError("invalid data segment index");
-  }
-  return wasm.dataSegments[index]->name;
-}
-
-Name WasmBinaryReader::getElemName(Index index) {
-  if (index >= wasm.elementSegments.size()) {
-    throwError("invalid element segment index");
-  }
-  return wasm.elementSegments[index]->name;
-}
-
-Memory* WasmBinaryReader::getMemory(Index index) {
-  if (index < wasm.memories.size()) {
-    return wasm.memories[index].get();
-  }
-  throwError("Memory index out of range.");
-}
-
-void WasmBinaryReader::getResizableLimits(Address& initial,
-                                          Address& max,
-                                          bool& shared,
-                                          Type& addressType,
-                                          Address defaultIfNoMax) {
-  auto flags = getU32LEB();
-  bool hasMax = (flags & BinaryConsts::HasMaximum) != 0;
-  bool isShared = (flags & BinaryConsts::IsShared) != 0;
-  bool is64 = (flags & BinaryConsts::Is64) != 0;
-  initial = is64 ? getU64LEB() : getU32LEB();
-  if (isShared && !hasMax) {
-    throwError("shared memory must have max size");
-  }
-  shared = isShared;
-  addressType = is64 ? Type::i64 : Type::i32;
-  if (hasMax) {
-    max = is64 ? getU64LEB() : getU32LEB();
-  } else {
-    max = defaultIfNoMax;
-  }
-}
-
-void WasmBinaryReader::readImports() {
-  size_t num = getU32LEB();
-  Builder builder(wasm);
-  std::unordered_set<Name> usedFunctionNames, usedTableNames, usedMemoryNames,
-    usedGlobalNames, usedTagNames;
-  for (size_t i = 0; i < num; i++) {
-    auto module = getInlineString();
-    auto base = getInlineString();
-    auto kind = (ExternalKind)getU32LEB();
-    // We set a unique prefix for the name based on the kind. This ensures no
-    // collisions between them, which can't occur here (due to the index i) but
-    // could occur later due to the names section.
-    switch (kind) {
-      case ExternalKind::Function: {
-        auto [name, isExplicit] =
-          getOrMakeName(functionNames,
-                        wasm.functions.size(),
-                        makeName("fimport$", wasm.functions.size()),
-                        usedFunctionNames);
-        auto index = getU32LEB();
-        functionTypes.push_back(getTypeByIndex(index));
-        auto type = getTypeByIndex(index);
-        if (!type.isSignature()) {
-          throwError(std::string("Imported function ") + module.toString() +
-                     '.' + base.toString() +
-                     "'s type must be a signature. Given: " + type.toString());
-        }
-        auto curr = builder.makeFunction(name, type, {});
-        curr->hasExplicitName = isExplicit;
-        curr->module = module;
-        curr->base = base;
-        setLocalNames(*curr, wasm.functions.size());
-        wasm.addFunction(std::move(curr));
-        break;
-      }
-      case ExternalKind::Table: {
-        auto [name, isExplicit] =
-          getOrMakeName(tableNames,
-                        wasm.tables.size(),
-                        makeName("timport$", wasm.tables.size()),
-                        usedTableNames);
-        auto table = builder.makeTable(name);
-        table->hasExplicitName = isExplicit;
-        table->module = module;
-        table->base = base;
-        table->type = getType();
-
-        bool is_shared;
-        getResizableLimits(table->initial,
-                           table->max,
-                           is_shared,
-                           table->addressType,
-                           Table::kUnlimitedSize);
-        if (is_shared) {
-          throwError("Tables may not be shared");
-        }
-        wasm.addTable(std::move(table));
-        break;
-      }
-      case ExternalKind::Memory: {
-        auto [name, isExplicit] =
-          getOrMakeName(memoryNames,
-                        wasm.memories.size(),
-                        makeName("mimport$", wasm.memories.size()),
-                        usedMemoryNames);
-        auto memory = builder.makeMemory(name);
-        memory->hasExplicitName = isExplicit;
-        memory->module = module;
-        memory->base = base;
-        getResizableLimits(memory->initial,
-                           memory->max,
-                           memory->shared,
-                           memory->addressType,
-                           Memory::kUnlimitedSize);
-        wasm.addMemory(std::move(memory));
-        break;
-      }
-      case ExternalKind::Global: {
-        auto [name, isExplicit] =
-          getOrMakeName(globalNames,
-                        wasm.globals.size(),
-                        makeName("gimport$", wasm.globals.size()),
-                        usedGlobalNames);
-        auto type = getConcreteType();
-        auto mutable_ = getU32LEB();
-        if (mutable_ & ~1) {
-          throwError("Global mutability must be 0 or 1");
-        }
-        auto curr =
-          builder.makeGlobal(name,
-                             type,
-                             nullptr,
-                             mutable_ ? Builder::Mutable : Builder::Immutable);
-        curr->hasExplicitName = isExplicit;
-        curr->module = module;
-        curr->base = base;
-        wasm.addGlobal(std::move(curr));
-        break;
-      }
-      case ExternalKind::Tag: {
-        auto [name, isExplicit] =
-          getOrMakeName(tagNames,
-                        wasm.tags.size(),
-                        makeName("eimport$", wasm.tags.size()),
-                        usedTagNames);
-        getInt8(); // Reserved 'attribute' field
-        auto index = getU32LEB();
-        auto curr = builder.makeTag(name, getSignatureByTypeIndex(index));
-        curr->hasExplicitName = isExplicit;
-        curr->module = module;
-        curr->base = base;
-        wasm.addTag(std::move(curr));
-        break;
-      }
-      default: {
-        throwError("bad import kind");
-      }
-    }
-  }
-  numFuncImports = wasm.functions.size();
-}
-
-void WasmBinaryReader::setLocalNames(Function& func, Index i) {
-  if (auto it = localNames.find(i); it != localNames.end()) {
-    for (auto& [local, name] : it->second) {
-      if (local >= func.getNumLocals()) {
-        std::cerr << "warning: local index out of bounds in name section: "
-                  << name << " at index " << local << " in function " << i
-                  << '\n';
-        continue;
-      }
-      func.setLocalName(local, name);
-    }
-  }
-}
-
-void WasmBinaryReader::readFunctionSignatures() {
-  size_t num = getU32LEB();
-  auto numImports = wasm.functions.size();
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : functionNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: function index out of bounds in name section: "
-                << name << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  // Also check that the function indices in the local names subsection are
-  // in-bounds, even though we don't use them here.
-  for (auto& [index, locals] : localNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: function index out of bounds in name section: "
-                   "locals at index "
-                << index << '\n';
-    }
-  }
-  for (size_t i = 0; i < num; i++) {
-    auto [name, isExplicit] =
-      getOrMakeName(functionNames, numImports + i, makeName("", i), usedNames);
-    auto index = getU32LEB();
-    HeapType type = getTypeByIndex(index);
-    functionTypes.push_back(type);
-    // Check that the type is a signature.
-    getSignatureByTypeIndex(index);
-    auto func = Builder(wasm).makeFunction(name, type, {}, nullptr);
-    func->hasExplicitName = isExplicit;
-    wasm.addFunction(std::move(func));
-  }
-}
-
-HeapType WasmBinaryReader::getTypeByIndex(Index index) {
-  if (index >= types.size()) {
-    throwError("invalid type index " + std::to_string(index) + " / " +
-               std::to_string(types.size()));
-  }
-  return types[index];
-}
-
-HeapType WasmBinaryReader::getTypeByFunctionIndex(Index index) {
-  if (index >= functionTypes.size()) {
-    throwError("invalid function index");
-  }
-  return functionTypes[index];
-}
-
-Signature WasmBinaryReader::getSignatureByTypeIndex(Index index) {
-  auto heapType = getTypeByIndex(index);
-  if (!heapType.isSignature()) {
-    throwError("invalid signature type " + heapType.toString());
-  }
-  return heapType.getSignature();
-}
-
-Signature WasmBinaryReader::getSignatureByFunctionIndex(Index index) {
-  auto heapType = getTypeByFunctionIndex(index);
-  if (!heapType.isSignature()) {
-    throwError("invalid signature type " + heapType.toString());
-  }
-  return heapType.getSignature();
-}
-
-void WasmBinaryReader::readFunctions() {
-  numFuncBodies = getU32LEB();
-  if (numFuncBodies + numFuncImports != wasm.functions.size()) {
-    throwError("invalid function section size, must equal types");
-  }
-  if (DWARF) {
-    builder.setBinaryLocation(&pos, codeSectionLocation);
-  }
-  for (size_t i = 0; i < numFuncBodies; i++) {
-    auto sizePos = pos;
-    size_t size = getU32LEB();
-    if (size == 0) {
-      throwError("empty function size");
-    }
-    Index endOfFunction = pos + size;
-
-    auto& func = wasm.functions[numFuncImports + i];
-    currFunction = func.get();
-
-    if (DWARF) {
-      func->funcLocation = BinaryLocations::FunctionLocations{
-        BinaryLocation(sizePos - codeSectionLocation),
-        BinaryLocation(pos - codeSectionLocation),
-        BinaryLocation(pos - codeSectionLocation + size)};
-    }
-
-    func->prologLocation = sourceMapReader.readDebugLocationAt(pos);
-
-    readVars();
-    setLocalNames(*func, numFuncImports + i);
-    {
-      // Process the function body. Even if we are skipping function bodies we
-      // need to not skip the start function. That contains important code for
-      // wasm-emscripten-finalize in the form of pthread-related segment
-      // initializations. As this is just one function, it doesn't add
-      // significant time, so the optimization of skipping bodies is still very
-      // useful.
-      auto currFunctionIndex = wasm.functions.size();
-      bool isStart = startIndex == currFunctionIndex;
-      if (skipFunctionBodies && !isStart) {
-        // When skipping the function body we need to put something valid in
-        // their place so we validate. An unreachable is always acceptable
-        // there.
-        func->body = Builder(wasm).makeUnreachable();
-        // Skip reading the contents.
-        pos = endOfFunction;
-      } else {
-        auto start = builder.visitFunctionStart(func.get());
-        if (auto* err = start.getErr()) {
-          throwError(err->msg);
-        }
-        while (pos < endOfFunction) {
-          auto inst = readInst();
-          if (auto* err = inst.getErr()) {
-            throwError(err->msg);
-          }
-        }
-        if (pos != endOfFunction) {
-          throwError("function overflowed its bounds");
-        }
-        if (!builder.empty()) {
-          throwError("expected function end");
-        }
-      }
-    }
-
-    sourceMapReader.finishFunction();
-    TypeUpdating::handleNonDefaultableLocals(func.get(), wasm);
-    currFunction = nullptr;
-  }
-}
-
-void WasmBinaryReader::readVars() {
-  uint32_t totalVars = 0;
-  size_t numLocalTypes = getU32LEB();
-  // Use a SmallVector as in the common (MVP) case there are only 4 possible
-  // types.
-  SmallVector<std::pair<uint32_t, Type>, 4> decodedVars;
-  decodedVars.reserve(numLocalTypes);
-  for (size_t t = 0; t < numLocalTypes; t++) {
-    auto num = getU32LEB();
-    if (std::ckd_add(&totalVars, totalVars, num)) {
-      throwError("unaddressable number of locals");
-    }
-    auto type = getConcreteType();
-    decodedVars.emplace_back(num, type);
-  }
-  currFunction->vars.reserve(totalVars);
-  for (auto [num, type] : decodedVars) {
-    while (num > 0) {
-      currFunction->vars.push_back(type);
-      num--;
-    }
-  }
-}
-
-Result<> WasmBinaryReader::readInst() {
-  if (auto loc = sourceMapReader.readDebugLocationAt(pos)) {
-    builder.setDebugLocation(loc);
-  }
-  uint8_t code = getInt8();
-  switch (code) {
-    case BinaryConsts::Block:
-      return builder.makeBlock(Name(), getBlockType());
-    case BinaryConsts::If:
-      return builder.makeIf(Name(), getBlockType());
-    case BinaryConsts::Loop:
-      return builder.makeLoop(Name(), getBlockType());
-    case BinaryConsts::Br:
-      return builder.makeBreak(getU32LEB(), false);
-    case BinaryConsts::BrIf:
-      return builder.makeBreak(getU32LEB(), true);
-    case BinaryConsts::BrTable: {
-      auto numTargets = getU32LEB();
-      std::vector<Index> labels(numTargets);
-      for (Index i = 0; i < numTargets; ++i) {
-        labels[i] = getU32LEB();
-      }
-      return builder.makeSwitch(labels, getU32LEB());
-    }
-    case BinaryConsts::CallFunction:
-    case BinaryConsts::RetCallFunction:
-      return builder.makeCall(getFunctionName(getU32LEB()),
-                              code == BinaryConsts::RetCallFunction);
-    case BinaryConsts::CallIndirect:
-    case BinaryConsts::RetCallIndirect: {
-      auto type = getIndexedHeapType();
-      auto table = getTableName(getU32LEB());
-      return builder.makeCallIndirect(
-        table, type, code == BinaryConsts::RetCallIndirect);
-    }
-    case BinaryConsts::LocalGet:
-      return builder.makeLocalGet(getU32LEB());
-    case BinaryConsts::LocalSet:
-      return builder.makeLocalSet(getU32LEB());
-    case BinaryConsts::LocalTee:
-      return builder.makeLocalTee(getU32LEB());
-    case BinaryConsts::GlobalGet:
-      return builder.makeGlobalGet(getGlobalName(getU32LEB()));
-    case BinaryConsts::GlobalSet:
-      return builder.makeGlobalSet(getGlobalName(getU32LEB()));
-    case BinaryConsts::Select:
-      return builder.makeSelect(std::nullopt);
-    case BinaryConsts::SelectWithType: {
-      auto numTypes = getU32LEB();
-      std::vector<Type> types;
-      for (Index i = 0; i < numTypes; ++i) {
-        auto t = getType();
-        if (!t.isConcrete()) {
-          return Err{"bad select type"};
-        }
-        types.push_back(t);
-      }
-      return builder.makeSelect(Type(types));
-    }
-    case BinaryConsts::Return:
-      return builder.makeReturn();
-    case BinaryConsts::Nop:
-      return builder.makeNop();
-    case BinaryConsts::Unreachable:
-      return builder.makeUnreachable();
-    case BinaryConsts::Drop:
-      return builder.makeDrop();
-    case BinaryConsts::End:
-      return builder.visitEnd();
-    case BinaryConsts::Else:
-      return builder.visitElse();
-    case BinaryConsts::Catch_Legacy:
-      return builder.visitCatch(getTagName(getU32LEB()));
-    case BinaryConsts::CatchAll_Legacy:
-      return builder.visitCatchAll();
-    case BinaryConsts::Delegate:
-      return builder.visitDelegate(getU32LEB());
-    case BinaryConsts::RefNull:
-      return builder.makeRefNull(getHeapType());
-    case BinaryConsts::RefIsNull:
-      return builder.makeRefIsNull();
-    case BinaryConsts::RefFunc:
-      return builder.makeRefFunc(getFunctionName(getU32LEB()));
-    case BinaryConsts::RefEq:
-      return builder.makeRefEq();
-    case BinaryConsts::RefAsNonNull:
-      return builder.makeRefAs(RefAsNonNull);
-    case BinaryConsts::BrOnNull:
-      return builder.makeBrOn(getU32LEB(), BrOnNull);
-    case BinaryConsts::BrOnNonNull:
-      return builder.makeBrOn(getU32LEB(), BrOnNonNull);
-    case BinaryConsts::TableGet:
-      return builder.makeTableGet(getTableName(getU32LEB()));
-    case BinaryConsts::TableSet:
-      return builder.makeTableSet(getTableName(getU32LEB()));
-    case BinaryConsts::Try:
-      return builder.makeTry(Name(), getBlockType());
-    case BinaryConsts::TryTable: {
-      auto type = getBlockType();
-      std::vector<Name> tags;
-      std::vector<Index> labels;
-      std::vector<bool> isRefs;
-      auto numHandlers = getU32LEB();
-      for (Index i = 0; i < numHandlers; ++i) {
-        uint8_t code = getInt8();
-        if (code == BinaryConsts::Catch || code == BinaryConsts::CatchRef) {
-          tags.push_back(getTagName(getU32LEB()));
-        } else {
-          tags.push_back(Name());
-        }
-        labels.push_back(getU32LEB());
-        isRefs.push_back(code == BinaryConsts::CatchRef ||
-                         code == BinaryConsts::CatchAllRef);
-      }
-      return builder.makeTryTable(Name(), type, tags, labels, isRefs);
-    }
-    case BinaryConsts::Throw:
-      return builder.makeThrow(getTagName(getU32LEB()));
-    case BinaryConsts::Rethrow:
-      return builder.makeRethrow(getU32LEB());
-    case BinaryConsts::ThrowRef:
-      return builder.makeThrowRef();
-    case BinaryConsts::MemorySize:
-      return builder.makeMemorySize(getMemoryName(getU32LEB()));
-    case BinaryConsts::MemoryGrow:
-      return builder.makeMemoryGrow(getMemoryName(getU32LEB()));
-    case BinaryConsts::CallRef:
-    case BinaryConsts::RetCallRef:
-      return builder.makeCallRef(getIndexedHeapType(),
-                                 code == BinaryConsts::RetCallRef);
-    case BinaryConsts::ContBind: {
-      auto before = getIndexedHeapType();
-      auto after = getIndexedHeapType();
-      return builder.makeContBind(before, after);
-    }
-    case BinaryConsts::ContNew:
-      return builder.makeContNew(getIndexedHeapType());
-    case BinaryConsts::Resume: {
-      auto type = getIndexedHeapType();
-      std::vector<Name> tags;
-      std::vector<Index> labels;
-      auto numHandlers = getU32LEB();
-      for (Index i = 0; i < numHandlers; ++i) {
-        tags.push_back(getTagName(getU32LEB()));
-        labels.push_back(getU32LEB());
-      }
-      return builder.makeResume(type, tags, labels);
-    }
-    case BinaryConsts::Suspend:
-      return builder.makeSuspend(getTagName(getU32LEB()));
-
-#define BINARY_INT(code)                                                       \
-  case BinaryConsts::I32##code:                                                \
-    return builder.makeBinary(code##Int32);                                    \
-  case BinaryConsts::I64##code:                                                \
-    return builder.makeBinary(code##Int64);
-#define BINARY_FLOAT(code)                                                     \
-  case BinaryConsts::F32##code:                                                \
-    return builder.makeBinary(code##Float32);                                  \
-  case BinaryConsts::F64##code:                                                \
-    return builder.makeBinary(code##Float64);
-#define BINARY_NUM(code)                                                       \
-  BINARY_INT(code)                                                             \
-  BINARY_FLOAT(code)
-
-      BINARY_NUM(Add);
-      BINARY_NUM(Sub);
-      BINARY_NUM(Mul);
-      BINARY_INT(DivS);
-      BINARY_INT(DivU);
-      BINARY_INT(RemS);
-      BINARY_INT(RemU);
-      BINARY_INT(And);
-      BINARY_INT(Or);
-      BINARY_INT(Xor);
-      BINARY_INT(Shl);
-      BINARY_INT(ShrU);
-      BINARY_INT(ShrS);
-      BINARY_INT(RotL);
-      BINARY_INT(RotR);
-      BINARY_FLOAT(Div);
-      BINARY_FLOAT(CopySign);
-      BINARY_FLOAT(Min);
-      BINARY_FLOAT(Max);
-      BINARY_NUM(Eq);
-      BINARY_NUM(Ne);
-      BINARY_INT(LtS);
-      BINARY_INT(LtU);
-      BINARY_INT(LeS);
-      BINARY_INT(LeU);
-      BINARY_INT(GtS);
-      BINARY_INT(GtU);
-      BINARY_INT(GeS);
-      BINARY_INT(GeU);
-      BINARY_FLOAT(Lt);
-      BINARY_FLOAT(Le);
-      BINARY_FLOAT(Gt);
-      BINARY_FLOAT(Ge);
-
-#define UNARY_INT(code)                                                        \
-  case BinaryConsts::I32##code:                                                \
-    return builder.makeUnary(code##Int32);                                     \
-  case BinaryConsts::I64##code:                                                \
-    return builder.makeUnary(code##Int64);
-#define UNARY_FLOAT(code)                                                      \
-  case BinaryConsts::F32##code:                                                \
-    return builder.makeUnary(code##Float32);                                   \
-  case BinaryConsts::F64##code:                                                \
-    return builder.makeUnary(code##Float64);
-
-      UNARY_INT(Clz);
-      UNARY_INT(Ctz);
-      UNARY_INT(Popcnt);
-      UNARY_INT(EqZ);
-      UNARY_FLOAT(Neg);
-      UNARY_FLOAT(Abs);
-      UNARY_FLOAT(Ceil);
-      UNARY_FLOAT(Floor);
-      UNARY_FLOAT(Nearest);
-      UNARY_FLOAT(Sqrt);
-
-    case BinaryConsts::F32UConvertI32:
-      return builder.makeUnary(ConvertUInt32ToFloat32);
-    case BinaryConsts::F64UConvertI32:
-      return builder.makeUnary(ConvertUInt32ToFloat64);
-    case BinaryConsts::F32SConvertI32:
-      return builder.makeUnary(ConvertSInt32ToFloat32);
-    case BinaryConsts::F64SConvertI32:
-      return builder.makeUnary(ConvertSInt32ToFloat64);
-    case BinaryConsts::F32UConvertI64:
-      return builder.makeUnary(ConvertUInt64ToFloat32);
-    case BinaryConsts::F64UConvertI64:
-      return builder.makeUnary(ConvertUInt64ToFloat64);
-    case BinaryConsts::F32SConvertI64:
-      return builder.makeUnary(ConvertSInt64ToFloat32);
-    case BinaryConsts::F64SConvertI64:
-      return builder.makeUnary(ConvertSInt64ToFloat64);
-    case BinaryConsts::I64SExtendI32:
-      return builder.makeUnary(ExtendSInt32);
-    case BinaryConsts::I64UExtendI32:
-      return builder.makeUnary(ExtendUInt32);
-    case BinaryConsts::I32WrapI64:
-      return builder.makeUnary(WrapInt64);
-    case BinaryConsts::I32UTruncF32:
-      return builder.makeUnary(TruncUFloat32ToInt32);
-    case BinaryConsts::I32UTruncF64:
-      return builder.makeUnary(TruncUFloat64ToInt32);
-    case BinaryConsts::I32STruncF32:
-      return builder.makeUnary(TruncSFloat32ToInt32);
-    case BinaryConsts::I32STruncF64:
-      return builder.makeUnary(TruncSFloat64ToInt32);
-    case BinaryConsts::I64UTruncF32:
-      return builder.makeUnary(TruncUFloat32ToInt64);
-    case BinaryConsts::I64UTruncF64:
-      return builder.makeUnary(TruncUFloat64ToInt64);
-    case BinaryConsts::I64STruncF32:
-      return builder.makeUnary(TruncSFloat32ToInt64);
-    case BinaryConsts::I64STruncF64:
-      return builder.makeUnary(TruncSFloat64ToInt64);
-    case BinaryConsts::F32Trunc:
-      return builder.makeUnary(TruncFloat32);
-    case BinaryConsts::F64Trunc:
-      return builder.makeUnary(TruncFloat64);
-    case BinaryConsts::F32DemoteI64:
-      return builder.makeUnary(DemoteFloat64);
-    case BinaryConsts::F64PromoteF32:
-      return builder.makeUnary(PromoteFloat32);
-    case BinaryConsts::I32ReinterpretF32:
-      return builder.makeUnary(ReinterpretFloat32);
-    case BinaryConsts::I64ReinterpretF64:
-      return builder.makeUnary(ReinterpretFloat64);
-    case BinaryConsts::F32ReinterpretI32:
-      return builder.makeUnary(ReinterpretInt32);
-    case BinaryConsts::F64ReinterpretI64:
-      return builder.makeUnary(ReinterpretInt64);
-    case BinaryConsts::I32ExtendS8:
-      return builder.makeUnary(ExtendS8Int32);
-    case BinaryConsts::I32ExtendS16:
-      return builder.makeUnary(ExtendS16Int32);
-    case BinaryConsts::I64ExtendS8:
-      return builder.makeUnary(ExtendS8Int64);
-    case BinaryConsts::I64ExtendS16:
-      return builder.makeUnary(ExtendS16Int64);
-    case BinaryConsts::I64ExtendS32:
-      return builder.makeUnary(ExtendS32Int64);
-    case BinaryConsts::I32Const:
-      return builder.makeConst(Literal(getS32LEB()));
-    case BinaryConsts::I64Const:
-      return builder.makeConst(Literal(getS64LEB()));
-    case BinaryConsts::F32Const:
-      return builder.makeConst(getFloat32Literal());
-    case BinaryConsts::F64Const:
-      return builder.makeConst(getFloat64Literal());
-    case BinaryConsts::I32LoadMem8S: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(1, true, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32LoadMem8U: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(1, false, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32LoadMem16S: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(2, true, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32LoadMem16U: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(2, false, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32LoadMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(4, false, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I64LoadMem8S: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(1, true, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem8U: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(1, false, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem16S: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(2, true, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem16U: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(2, false, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem32S: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(4, true, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem32U: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(4, false, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64LoadMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(8, false, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::F32LoadMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(4, false, offset, align, Type::f32, mem);
-    }
-    case BinaryConsts::F64LoadMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeLoad(8, false, offset, align, Type::f64, mem);
-    }
-    case BinaryConsts::I32StoreMem8: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(1, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32StoreMem16: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(2, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I32StoreMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(4, offset, align, Type::i32, mem);
-    }
-    case BinaryConsts::I64StoreMem8: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(1, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64StoreMem16: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(2, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64StoreMem32: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(4, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::I64StoreMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(8, offset, align, Type::i64, mem);
-    }
-    case BinaryConsts::F32StoreMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(4, offset, align, Type::f32, mem);
-    }
-    case BinaryConsts::F64StoreMem: {
-      auto [mem, align, offset] = getMemarg();
-      return builder.makeStore(8, offset, align, Type::f64, mem);
-    }
-    case BinaryConsts::AtomicPrefix: {
-      auto op = getU32LEB();
-      switch (op) {
-        case BinaryConsts::I32AtomicLoad8U: {
-          // TODO: pass align through for validation.
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(1, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicLoad16U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(2, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicLoad: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(4, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I64AtomicLoad8U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(1, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicLoad16U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(2, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicLoad32U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(4, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicLoad: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicLoad(8, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I32AtomicStore8: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(1, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicStore16: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(2, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicStore: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(4, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I64AtomicStore8: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(1, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicStore16: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(2, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicStore32: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(4, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicStore: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicStore(8, offset, Type::i64, mem);
-        }
-
-#define RMW(op)                                                                \
-  case BinaryConsts::I32AtomicRMW##op: {                                       \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 4, offset, Type::i32, mem);          \
-  }                                                                            \
-  case BinaryConsts::I32AtomicRMW##op##8U: {                                   \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 1, offset, Type::i32, mem);          \
-  }                                                                            \
-  case BinaryConsts::I32AtomicRMW##op##16U: {                                  \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 2, offset, Type::i32, mem);          \
-  }                                                                            \
-  case BinaryConsts::I64AtomicRMW##op: {                                       \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 8, offset, Type::i64, mem);          \
-  }                                                                            \
-  case BinaryConsts::I64AtomicRMW##op##8U: {                                   \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 1, offset, Type::i64, mem);          \
-  }                                                                            \
-  case BinaryConsts::I64AtomicRMW##op##16U: {                                  \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 2, offset, Type::i64, mem);          \
-  }                                                                            \
-  case BinaryConsts::I64AtomicRMW##op##32U: {                                  \
-    auto [mem, align, offset] = getMemarg();                                   \
-    return builder.makeAtomicRMW(RMW##op, 4, offset, Type::i64, mem);          \
-  }
-
-          RMW(Add);
-          RMW(Sub);
-          RMW(And);
-          RMW(Or);
-          RMW(Xor);
-          RMW(Xchg);
-
-        case BinaryConsts::I32AtomicCmpxchg: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(4, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicCmpxchg8U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(1, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I32AtomicCmpxchg16U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(2, offset, Type::i32, mem);
-        }
-        case BinaryConsts::I64AtomicCmpxchg: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(8, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicCmpxchg8U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(1, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicCmpxchg16U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(2, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I64AtomicCmpxchg32U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicCmpxchg(4, offset, Type::i64, mem);
-        }
-        case BinaryConsts::I32AtomicWait: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicWait(Type::i32, offset, mem);
-        }
-        case BinaryConsts::I64AtomicWait: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicWait(Type::i64, offset, mem);
-        }
-        case BinaryConsts::AtomicNotify: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeAtomicNotify(offset, mem);
-        }
-        case BinaryConsts::AtomicFence:
-          if (getInt8() != 0) {
-            return Err{"expected 0x00 byte immediate on atomic.fence"};
-          }
-          return builder.makeAtomicFence();
-      }
-      return Err{"unknown atomic operation"};
-    }
-    case BinaryConsts::MiscPrefix: {
-      auto op = getU32LEB();
-      switch (op) {
-        case BinaryConsts::I32STruncSatF32:
-          return builder.makeUnary(TruncSatSFloat32ToInt32);
-        case BinaryConsts::I32UTruncSatF32:
-          return builder.makeUnary(TruncSatUFloat32ToInt32);
-        case BinaryConsts::I32STruncSatF64:
-          return builder.makeUnary(TruncSatSFloat64ToInt32);
-        case BinaryConsts::I32UTruncSatF64:
-          return builder.makeUnary(TruncSatUFloat64ToInt32);
-        case BinaryConsts::I64STruncSatF32:
-          return builder.makeUnary(TruncSatSFloat32ToInt64);
-        case BinaryConsts::I64UTruncSatF32:
-          return builder.makeUnary(TruncSatUFloat32ToInt64);
-        case BinaryConsts::I64STruncSatF64:
-          return builder.makeUnary(TruncSatSFloat64ToInt64);
-        case BinaryConsts::I64UTruncSatF64:
-          return builder.makeUnary(TruncSatUFloat64ToInt64);
-        case BinaryConsts::MemoryInit: {
-          auto data = getDataName(getU32LEB());
-          auto mem = getMemoryName(getU32LEB());
-          return builder.makeMemoryInit(data, mem);
-        }
-        case BinaryConsts::DataDrop:
-          return builder.makeDataDrop(getDataName(getU32LEB()));
-        case BinaryConsts::MemoryCopy: {
-          auto dest = getMemoryName(getU32LEB());
-          auto src = getMemoryName(getU32LEB());
-          return builder.makeMemoryCopy(dest, src);
-        }
-        case BinaryConsts::MemoryFill:
-          return builder.makeMemoryFill(getMemoryName(getU32LEB()));
-        case BinaryConsts::TableSize:
-          return builder.makeTableSize(getTableName(getU32LEB()));
-        case BinaryConsts::TableGrow:
-          return builder.makeTableGrow(getTableName(getU32LEB()));
-        case BinaryConsts::TableFill:
-          return builder.makeTableFill(getTableName(getU32LEB()));
-        case BinaryConsts::TableCopy: {
-          auto dest = getTableName(getU32LEB());
-          auto src = getTableName(getU32LEB());
-          return builder.makeTableCopy(dest, src);
-        }
-        case BinaryConsts::TableInit: {
-          auto elem = getElemName(getU32LEB());
-          auto table = getTableName(getU32LEB());
-          return builder.makeTableInit(elem, table);
-        }
-        case BinaryConsts::F32_F16LoadMem: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeLoad(2, false, offset, align, Type::f32, mem);
-        }
-        case BinaryConsts::F32_F16StoreMem: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeStore(2, offset, align, Type::f32, mem);
-        }
-      }
-      return Err{"unknown misc operation"};
-    }
-    case BinaryConsts::SIMDPrefix: {
-      auto op = getU32LEB();
-      switch (op) {
-        case BinaryConsts::I8x16Eq:
-          return builder.makeBinary(EqVecI8x16);
-        case BinaryConsts::I8x16Ne:
-          return builder.makeBinary(NeVecI8x16);
-        case BinaryConsts::I8x16LtS:
-          return builder.makeBinary(LtSVecI8x16);
-        case BinaryConsts::I8x16LtU:
-          return builder.makeBinary(LtUVecI8x16);
-        case BinaryConsts::I8x16GtS:
-          return builder.makeBinary(GtSVecI8x16);
-        case BinaryConsts::I8x16GtU:
-          return builder.makeBinary(GtUVecI8x16);
-        case BinaryConsts::I8x16LeS:
-          return builder.makeBinary(LeSVecI8x16);
-        case BinaryConsts::I8x16LeU:
-          return builder.makeBinary(LeUVecI8x16);
-        case BinaryConsts::I8x16GeS:
-          return builder.makeBinary(GeSVecI8x16);
-        case BinaryConsts::I8x16GeU:
-          return builder.makeBinary(GeUVecI8x16);
-        case BinaryConsts::I16x8Eq:
-          return builder.makeBinary(EqVecI16x8);
-        case BinaryConsts::I16x8Ne:
-          return builder.makeBinary(NeVecI16x8);
-        case BinaryConsts::I16x8LtS:
-          return builder.makeBinary(LtSVecI16x8);
-        case BinaryConsts::I16x8LtU:
-          return builder.makeBinary(LtUVecI16x8);
-        case BinaryConsts::I16x8GtS:
-          return builder.makeBinary(GtSVecI16x8);
-        case BinaryConsts::I16x8GtU:
-          return builder.makeBinary(GtUVecI16x8);
-        case BinaryConsts::I16x8LeS:
-          return builder.makeBinary(LeSVecI16x8);
-        case BinaryConsts::I16x8LeU:
-          return builder.makeBinary(LeUVecI16x8);
-        case BinaryConsts::I16x8GeS:
-          return builder.makeBinary(GeSVecI16x8);
-        case BinaryConsts::I16x8GeU:
-          return builder.makeBinary(GeUVecI16x8);
-        case BinaryConsts::I32x4Eq:
-          return builder.makeBinary(EqVecI32x4);
-        case BinaryConsts::I32x4Ne:
-          return builder.makeBinary(NeVecI32x4);
-        case BinaryConsts::I32x4LtS:
-          return builder.makeBinary(LtSVecI32x4);
-        case BinaryConsts::I32x4LtU:
-          return builder.makeBinary(LtUVecI32x4);
-        case BinaryConsts::I32x4GtS:
-          return builder.makeBinary(GtSVecI32x4);
-        case BinaryConsts::I32x4GtU:
-          return builder.makeBinary(GtUVecI32x4);
-        case BinaryConsts::I32x4LeS:
-          return builder.makeBinary(LeSVecI32x4);
-        case BinaryConsts::I32x4LeU:
-          return builder.makeBinary(LeUVecI32x4);
-        case BinaryConsts::I32x4GeS:
-          return builder.makeBinary(GeSVecI32x4);
-        case BinaryConsts::I32x4GeU:
-          return builder.makeBinary(GeUVecI32x4);
-        case BinaryConsts::I64x2Eq:
-          return builder.makeBinary(EqVecI64x2);
-        case BinaryConsts::I64x2Ne:
-          return builder.makeBinary(NeVecI64x2);
-        case BinaryConsts::I64x2LtS:
-          return builder.makeBinary(LtSVecI64x2);
-        case BinaryConsts::I64x2GtS:
-          return builder.makeBinary(GtSVecI64x2);
-        case BinaryConsts::I64x2LeS:
-          return builder.makeBinary(LeSVecI64x2);
-        case BinaryConsts::I64x2GeS:
-          return builder.makeBinary(GeSVecI64x2);
-        case BinaryConsts::F16x8Eq:
-          return builder.makeBinary(EqVecF16x8);
-        case BinaryConsts::F16x8Ne:
-          return builder.makeBinary(NeVecF16x8);
-        case BinaryConsts::F16x8Lt:
-          return builder.makeBinary(LtVecF16x8);
-        case BinaryConsts::F16x8Gt:
-          return builder.makeBinary(GtVecF16x8);
-        case BinaryConsts::F16x8Le:
-          return builder.makeBinary(LeVecF16x8);
-        case BinaryConsts::F16x8Ge:
-          return builder.makeBinary(GeVecF16x8);
-        case BinaryConsts::F32x4Eq:
-          return builder.makeBinary(EqVecF32x4);
-        case BinaryConsts::F32x4Ne:
-          return builder.makeBinary(NeVecF32x4);
-        case BinaryConsts::F32x4Lt:
-          return builder.makeBinary(LtVecF32x4);
-        case BinaryConsts::F32x4Gt:
-          return builder.makeBinary(GtVecF32x4);
-        case BinaryConsts::F32x4Le:
-          return builder.makeBinary(LeVecF32x4);
-        case BinaryConsts::F32x4Ge:
-          return builder.makeBinary(GeVecF32x4);
-        case BinaryConsts::F64x2Eq:
-          return builder.makeBinary(EqVecF64x2);
-        case BinaryConsts::F64x2Ne:
-          return builder.makeBinary(NeVecF64x2);
-        case BinaryConsts::F64x2Lt:
-          return builder.makeBinary(LtVecF64x2);
-        case BinaryConsts::F64x2Gt:
-          return builder.makeBinary(GtVecF64x2);
-        case BinaryConsts::F64x2Le:
-          return builder.makeBinary(LeVecF64x2);
-        case BinaryConsts::F64x2Ge:
-          return builder.makeBinary(GeVecF64x2);
-        case BinaryConsts::V128And:
-          return builder.makeBinary(AndVec128);
-        case BinaryConsts::V128Or:
-          return builder.makeBinary(OrVec128);
-        case BinaryConsts::V128Xor:
-          return builder.makeBinary(XorVec128);
-        case BinaryConsts::V128Andnot:
-          return builder.makeBinary(AndNotVec128);
-        case BinaryConsts::I8x16Add:
-          return builder.makeBinary(AddVecI8x16);
-        case BinaryConsts::I8x16AddSatS:
-          return builder.makeBinary(AddSatSVecI8x16);
-        case BinaryConsts::I8x16AddSatU:
-          return builder.makeBinary(AddSatUVecI8x16);
-        case BinaryConsts::I8x16Sub:
-          return builder.makeBinary(SubVecI8x16);
-        case BinaryConsts::I8x16SubSatS:
-          return builder.makeBinary(SubSatSVecI8x16);
-        case BinaryConsts::I8x16SubSatU:
-          return builder.makeBinary(SubSatUVecI8x16);
-        case BinaryConsts::I8x16MinS:
-          return builder.makeBinary(MinSVecI8x16);
-        case BinaryConsts::I8x16MinU:
-          return builder.makeBinary(MinUVecI8x16);
-        case BinaryConsts::I8x16MaxS:
-          return builder.makeBinary(MaxSVecI8x16);
-        case BinaryConsts::I8x16MaxU:
-          return builder.makeBinary(MaxUVecI8x16);
-        case BinaryConsts::I8x16AvgrU:
-          return builder.makeBinary(AvgrUVecI8x16);
-        case BinaryConsts::I16x8Add:
-          return builder.makeBinary(AddVecI16x8);
-        case BinaryConsts::I16x8AddSatS:
-          return builder.makeBinary(AddSatSVecI16x8);
-        case BinaryConsts::I16x8AddSatU:
-          return builder.makeBinary(AddSatUVecI16x8);
-        case BinaryConsts::I16x8Sub:
-          return builder.makeBinary(SubVecI16x8);
-        case BinaryConsts::I16x8SubSatS:
-          return builder.makeBinary(SubSatSVecI16x8);
-        case BinaryConsts::I16x8SubSatU:
-          return builder.makeBinary(SubSatUVecI16x8);
-        case BinaryConsts::I16x8Mul:
-          return builder.makeBinary(MulVecI16x8);
-        case BinaryConsts::I16x8MinS:
-          return builder.makeBinary(MinSVecI16x8);
-        case BinaryConsts::I16x8MinU:
-          return builder.makeBinary(MinUVecI16x8);
-        case BinaryConsts::I16x8MaxS:
-          return builder.makeBinary(MaxSVecI16x8);
-        case BinaryConsts::I16x8MaxU:
-          return builder.makeBinary(MaxUVecI16x8);
-        case BinaryConsts::I16x8AvgrU:
-          return builder.makeBinary(AvgrUVecI16x8);
-        case BinaryConsts::I16x8Q15MulrSatS:
-          return builder.makeBinary(Q15MulrSatSVecI16x8);
-        case BinaryConsts::I16x8ExtmulLowI8x16S:
-          return builder.makeBinary(ExtMulLowSVecI16x8);
-        case BinaryConsts::I16x8ExtmulHighI8x16S:
-          return builder.makeBinary(ExtMulHighSVecI16x8);
-        case BinaryConsts::I16x8ExtmulLowI8x16U:
-          return builder.makeBinary(ExtMulLowUVecI16x8);
-        case BinaryConsts::I16x8ExtmulHighI8x16U:
-          return builder.makeBinary(ExtMulHighUVecI16x8);
-        case BinaryConsts::I32x4Add:
-          return builder.makeBinary(AddVecI32x4);
-        case BinaryConsts::I32x4Sub:
-          return builder.makeBinary(SubVecI32x4);
-        case BinaryConsts::I32x4Mul:
-          return builder.makeBinary(MulVecI32x4);
-        case BinaryConsts::I32x4MinS:
-          return builder.makeBinary(MinSVecI32x4);
-        case BinaryConsts::I32x4MinU:
-          return builder.makeBinary(MinUVecI32x4);
-        case BinaryConsts::I32x4MaxS:
-          return builder.makeBinary(MaxSVecI32x4);
-        case BinaryConsts::I32x4MaxU:
-          return builder.makeBinary(MaxUVecI32x4);
-        case BinaryConsts::I32x4DotI16x8S:
-          return builder.makeBinary(DotSVecI16x8ToVecI32x4);
-        case BinaryConsts::I32x4ExtmulLowI16x8S:
-          return builder.makeBinary(ExtMulLowSVecI32x4);
-        case BinaryConsts::I32x4ExtmulHighI16x8S:
-          return builder.makeBinary(ExtMulHighSVecI32x4);
-        case BinaryConsts::I32x4ExtmulLowI16x8U:
-          return builder.makeBinary(ExtMulLowUVecI32x4);
-        case BinaryConsts::I32x4ExtmulHighI16x8U:
-          return builder.makeBinary(ExtMulHighUVecI32x4);
-        case BinaryConsts::I64x2Add:
-          return builder.makeBinary(AddVecI64x2);
-        case BinaryConsts::I64x2Sub:
-          return builder.makeBinary(SubVecI64x2);
-        case BinaryConsts::I64x2Mul:
-          return builder.makeBinary(MulVecI64x2);
-        case BinaryConsts::I64x2ExtmulLowI32x4S:
-          return builder.makeBinary(ExtMulLowSVecI64x2);
-        case BinaryConsts::I64x2ExtmulHighI32x4S:
-          return builder.makeBinary(ExtMulHighSVecI64x2);
-        case BinaryConsts::I64x2ExtmulLowI32x4U:
-          return builder.makeBinary(ExtMulLowUVecI64x2);
-        case BinaryConsts::I64x2ExtmulHighI32x4U:
-          return builder.makeBinary(ExtMulHighUVecI64x2);
-        case BinaryConsts::F16x8Add:
-          return builder.makeBinary(AddVecF16x8);
-        case BinaryConsts::F16x8Sub:
-          return builder.makeBinary(SubVecF16x8);
-        case BinaryConsts::F16x8Mul:
-          return builder.makeBinary(MulVecF16x8);
-        case BinaryConsts::F16x8Div:
-          return builder.makeBinary(DivVecF16x8);
-        case BinaryConsts::F16x8Min:
-          return builder.makeBinary(MinVecF16x8);
-        case BinaryConsts::F16x8Max:
-          return builder.makeBinary(MaxVecF16x8);
-        case BinaryConsts::F16x8Pmin:
-          return builder.makeBinary(PMinVecF16x8);
-        case BinaryConsts::F16x8Pmax:
-          return builder.makeBinary(PMaxVecF16x8);
-        case BinaryConsts::F32x4Add:
-          return builder.makeBinary(AddVecF32x4);
-        case BinaryConsts::F32x4Sub:
-          return builder.makeBinary(SubVecF32x4);
-        case BinaryConsts::F32x4Mul:
-          return builder.makeBinary(MulVecF32x4);
-        case BinaryConsts::F32x4Div:
-          return builder.makeBinary(DivVecF32x4);
-        case BinaryConsts::F32x4Min:
-          return builder.makeBinary(MinVecF32x4);
-        case BinaryConsts::F32x4Max:
-          return builder.makeBinary(MaxVecF32x4);
-        case BinaryConsts::F32x4Pmin:
-          return builder.makeBinary(PMinVecF32x4);
-        case BinaryConsts::F32x4Pmax:
-          return builder.makeBinary(PMaxVecF32x4);
-        case BinaryConsts::F64x2Add:
-          return builder.makeBinary(AddVecF64x2);
-        case BinaryConsts::F64x2Sub:
-          return builder.makeBinary(SubVecF64x2);
-        case BinaryConsts::F64x2Mul:
-          return builder.makeBinary(MulVecF64x2);
-        case BinaryConsts::F64x2Div:
-          return builder.makeBinary(DivVecF64x2);
-        case BinaryConsts::F64x2Min:
-          return builder.makeBinary(MinVecF64x2);
-        case BinaryConsts::F64x2Max:
-          return builder.makeBinary(MaxVecF64x2);
-        case BinaryConsts::F64x2Pmin:
-          return builder.makeBinary(PMinVecF64x2);
-        case BinaryConsts::F64x2Pmax:
-          return builder.makeBinary(PMaxVecF64x2);
-        case BinaryConsts::I8x16NarrowI16x8S:
-          return builder.makeBinary(NarrowSVecI16x8ToVecI8x16);
-        case BinaryConsts::I8x16NarrowI16x8U:
-          return builder.makeBinary(NarrowUVecI16x8ToVecI8x16);
-        case BinaryConsts::I16x8NarrowI32x4S:
-          return builder.makeBinary(NarrowSVecI32x4ToVecI16x8);
-        case BinaryConsts::I16x8NarrowI32x4U:
-          return builder.makeBinary(NarrowUVecI32x4ToVecI16x8);
-        case BinaryConsts::I8x16Swizzle:
-          return builder.makeBinary(SwizzleVecI8x16);
-        case BinaryConsts::I8x16RelaxedSwizzle:
-          return builder.makeBinary(RelaxedSwizzleVecI8x16);
-        case BinaryConsts::F32x4RelaxedMin:
-          return builder.makeBinary(RelaxedMinVecF32x4);
-        case BinaryConsts::F32x4RelaxedMax:
-          return builder.makeBinary(RelaxedMaxVecF32x4);
-        case BinaryConsts::F64x2RelaxedMin:
-          return builder.makeBinary(RelaxedMinVecF64x2);
-        case BinaryConsts::F64x2RelaxedMax:
-          return builder.makeBinary(RelaxedMaxVecF64x2);
-        case BinaryConsts::I16x8RelaxedQ15MulrS:
-          return builder.makeBinary(RelaxedQ15MulrSVecI16x8);
-        case BinaryConsts::I16x8DotI8x16I7x16S:
-          return builder.makeBinary(DotI8x16I7x16SToVecI16x8);
-        case BinaryConsts::I8x16Splat:
-          return builder.makeUnary(SplatVecI8x16);
-        case BinaryConsts::I16x8Splat:
-          return builder.makeUnary(SplatVecI16x8);
-        case BinaryConsts::I32x4Splat:
-          return builder.makeUnary(SplatVecI32x4);
-        case BinaryConsts::I64x2Splat:
-          return builder.makeUnary(SplatVecI64x2);
-        case BinaryConsts::F16x8Splat:
-          return builder.makeUnary(SplatVecF16x8);
-        case BinaryConsts::F32x4Splat:
-          return builder.makeUnary(SplatVecF32x4);
-        case BinaryConsts::F64x2Splat:
-          return builder.makeUnary(SplatVecF64x2);
-        case BinaryConsts::V128Not:
-          return builder.makeUnary(NotVec128);
-        case BinaryConsts::V128AnyTrue:
-          return builder.makeUnary(AnyTrueVec128);
-        case BinaryConsts::I8x16Popcnt:
-          return builder.makeUnary(PopcntVecI8x16);
-        case BinaryConsts::I8x16Abs:
-          return builder.makeUnary(AbsVecI8x16);
-        case BinaryConsts::I8x16Neg:
-          return builder.makeUnary(NegVecI8x16);
-        case BinaryConsts::I8x16AllTrue:
-          return builder.makeUnary(AllTrueVecI8x16);
-        case BinaryConsts::I8x16Bitmask:
-          return builder.makeUnary(BitmaskVecI8x16);
-        case BinaryConsts::I16x8Abs:
-          return builder.makeUnary(AbsVecI16x8);
-        case BinaryConsts::I16x8Neg:
-          return builder.makeUnary(NegVecI16x8);
-        case BinaryConsts::I16x8AllTrue:
-          return builder.makeUnary(AllTrueVecI16x8);
-        case BinaryConsts::I16x8Bitmask:
-          return builder.makeUnary(BitmaskVecI16x8);
-        case BinaryConsts::I32x4Abs:
-          return builder.makeUnary(AbsVecI32x4);
-        case BinaryConsts::I32x4Neg:
-          return builder.makeUnary(NegVecI32x4);
-        case BinaryConsts::I32x4AllTrue:
-          return builder.makeUnary(AllTrueVecI32x4);
-        case BinaryConsts::I32x4Bitmask:
-          return builder.makeUnary(BitmaskVecI32x4);
-        case BinaryConsts::I64x2Abs:
-          return builder.makeUnary(AbsVecI64x2);
-        case BinaryConsts::I64x2Neg:
-          return builder.makeUnary(NegVecI64x2);
-        case BinaryConsts::I64x2AllTrue:
-          return builder.makeUnary(AllTrueVecI64x2);
-        case BinaryConsts::I64x2Bitmask:
-          return builder.makeUnary(BitmaskVecI64x2);
-        case BinaryConsts::F16x8Abs:
-          return builder.makeUnary(AbsVecF16x8);
-        case BinaryConsts::F16x8Neg:
-          return builder.makeUnary(NegVecF16x8);
-        case BinaryConsts::F16x8Sqrt:
-          return builder.makeUnary(SqrtVecF16x8);
-        case BinaryConsts::F16x8Ceil:
-          return builder.makeUnary(CeilVecF16x8);
-        case BinaryConsts::F16x8Floor:
-          return builder.makeUnary(FloorVecF16x8);
-        case BinaryConsts::F16x8Trunc:
-          return builder.makeUnary(TruncVecF16x8);
-        case BinaryConsts::F16x8Nearest:
-          return builder.makeUnary(NearestVecF16x8);
-        case BinaryConsts::F32x4Abs:
-          return builder.makeUnary(AbsVecF32x4);
-        case BinaryConsts::F32x4Neg:
-          return builder.makeUnary(NegVecF32x4);
-        case BinaryConsts::F32x4Sqrt:
-          return builder.makeUnary(SqrtVecF32x4);
-        case BinaryConsts::F32x4Ceil:
-          return builder.makeUnary(CeilVecF32x4);
-        case BinaryConsts::F32x4Floor:
-          return builder.makeUnary(FloorVecF32x4);
-        case BinaryConsts::F32x4Trunc:
-          return builder.makeUnary(TruncVecF32x4);
-        case BinaryConsts::F32x4Nearest:
-          return builder.makeUnary(NearestVecF32x4);
-        case BinaryConsts::F64x2Abs:
-          return builder.makeUnary(AbsVecF64x2);
-        case BinaryConsts::F64x2Neg:
-          return builder.makeUnary(NegVecF64x2);
-        case BinaryConsts::F64x2Sqrt:
-          return builder.makeUnary(SqrtVecF64x2);
-        case BinaryConsts::F64x2Ceil:
-          return builder.makeUnary(CeilVecF64x2);
-        case BinaryConsts::F64x2Floor:
-          return builder.makeUnary(FloorVecF64x2);
-        case BinaryConsts::F64x2Trunc:
-          return builder.makeUnary(TruncVecF64x2);
-        case BinaryConsts::F64x2Nearest:
-          return builder.makeUnary(NearestVecF64x2);
-        case BinaryConsts::I16x8ExtaddPairwiseI8x16S:
-          return builder.makeUnary(ExtAddPairwiseSVecI8x16ToI16x8);
-        case BinaryConsts::I16x8ExtaddPairwiseI8x16U:
-          return builder.makeUnary(ExtAddPairwiseUVecI8x16ToI16x8);
-        case BinaryConsts::I32x4ExtaddPairwiseI16x8S:
-          return builder.makeUnary(ExtAddPairwiseSVecI16x8ToI32x4);
-        case BinaryConsts::I32x4ExtaddPairwiseI16x8U:
-          return builder.makeUnary(ExtAddPairwiseUVecI16x8ToI32x4);
-        case BinaryConsts::I32x4TruncSatF32x4S:
-          return builder.makeUnary(TruncSatSVecF32x4ToVecI32x4);
-        case BinaryConsts::I32x4TruncSatF32x4U:
-          return builder.makeUnary(TruncSatUVecF32x4ToVecI32x4);
-        case BinaryConsts::F32x4ConvertI32x4S:
-          return builder.makeUnary(ConvertSVecI32x4ToVecF32x4);
-        case BinaryConsts::F32x4ConvertI32x4U:
-          return builder.makeUnary(ConvertUVecI32x4ToVecF32x4);
-        case BinaryConsts::I16x8ExtendLowI8x16S:
-          return builder.makeUnary(ExtendLowSVecI8x16ToVecI16x8);
-        case BinaryConsts::I16x8ExtendHighI8x16S:
-          return builder.makeUnary(ExtendHighSVecI8x16ToVecI16x8);
-        case BinaryConsts::I16x8ExtendLowI8x16U:
-          return builder.makeUnary(ExtendLowUVecI8x16ToVecI16x8);
-        case BinaryConsts::I16x8ExtendHighI8x16U:
-          return builder.makeUnary(ExtendHighUVecI8x16ToVecI16x8);
-        case BinaryConsts::I32x4ExtendLowI16x8S:
-          return builder.makeUnary(ExtendLowSVecI16x8ToVecI32x4);
-        case BinaryConsts::I32x4ExtendHighI16x8S:
-          return builder.makeUnary(ExtendHighSVecI16x8ToVecI32x4);
-        case BinaryConsts::I32x4ExtendLowI16x8U:
-          return builder.makeUnary(ExtendLowUVecI16x8ToVecI32x4);
-        case BinaryConsts::I32x4ExtendHighI16x8U:
-          return builder.makeUnary(ExtendHighUVecI16x8ToVecI32x4);
-        case BinaryConsts::I64x2ExtendLowI32x4S:
-          return builder.makeUnary(ExtendLowSVecI32x4ToVecI64x2);
-        case BinaryConsts::I64x2ExtendHighI32x4S:
-          return builder.makeUnary(ExtendHighSVecI32x4ToVecI64x2);
-        case BinaryConsts::I64x2ExtendLowI32x4U:
-          return builder.makeUnary(ExtendLowUVecI32x4ToVecI64x2);
-        case BinaryConsts::I64x2ExtendHighI32x4U:
-          return builder.makeUnary(ExtendHighUVecI32x4ToVecI64x2);
-        case BinaryConsts::F64x2ConvertLowI32x4S:
-          return builder.makeUnary(ConvertLowSVecI32x4ToVecF64x2);
-        case BinaryConsts::F64x2ConvertLowI32x4U:
-          return builder.makeUnary(ConvertLowUVecI32x4ToVecF64x2);
-        case BinaryConsts::I32x4TruncSatF64x2SZero:
-          return builder.makeUnary(TruncSatZeroSVecF64x2ToVecI32x4);
-        case BinaryConsts::I32x4TruncSatF64x2UZero:
-          return builder.makeUnary(TruncSatZeroUVecF64x2ToVecI32x4);
-        case BinaryConsts::F32x4DemoteF64x2Zero:
-          return builder.makeUnary(DemoteZeroVecF64x2ToVecF32x4);
-        case BinaryConsts::F64x2PromoteLowF32x4:
-          return builder.makeUnary(PromoteLowVecF32x4ToVecF64x2);
-        case BinaryConsts::I32x4RelaxedTruncF32x4S:
-          return builder.makeUnary(RelaxedTruncSVecF32x4ToVecI32x4);
-        case BinaryConsts::I32x4RelaxedTruncF32x4U:
-          return builder.makeUnary(RelaxedTruncUVecF32x4ToVecI32x4);
-        case BinaryConsts::I32x4RelaxedTruncF64x2SZero:
-          return builder.makeUnary(RelaxedTruncZeroSVecF64x2ToVecI32x4);
-        case BinaryConsts::I32x4RelaxedTruncF64x2UZero:
-          return builder.makeUnary(RelaxedTruncZeroUVecF64x2ToVecI32x4);
-        case BinaryConsts::I16x8TruncSatF16x8S:
-          return builder.makeUnary(TruncSatSVecF16x8ToVecI16x8);
-        case BinaryConsts::I16x8TruncSatF16x8U:
-          return builder.makeUnary(TruncSatUVecF16x8ToVecI16x8);
-        case BinaryConsts::F16x8ConvertI16x8S:
-          return builder.makeUnary(ConvertSVecI16x8ToVecF16x8);
-        case BinaryConsts::F16x8ConvertI16x8U:
-          return builder.makeUnary(ConvertUVecI16x8ToVecF16x8);
-        case BinaryConsts::I8x16ExtractLaneS:
-          return builder.makeSIMDExtract(ExtractLaneSVecI8x16,
-                                         getLaneIndex(16));
-        case BinaryConsts::I8x16ExtractLaneU:
-          return builder.makeSIMDExtract(ExtractLaneUVecI8x16,
-                                         getLaneIndex(16));
-        case BinaryConsts::I16x8ExtractLaneS:
-          return builder.makeSIMDExtract(ExtractLaneSVecI16x8, getLaneIndex(8));
-        case BinaryConsts::I16x8ExtractLaneU:
-          return builder.makeSIMDExtract(ExtractLaneUVecI16x8, getLaneIndex(8));
-        case BinaryConsts::I32x4ExtractLane:
-          return builder.makeSIMDExtract(ExtractLaneVecI32x4, getLaneIndex(4));
-        case BinaryConsts::I64x2ExtractLane:
-          return builder.makeSIMDExtract(ExtractLaneVecI64x2, getLaneIndex(2));
-        case BinaryConsts::F16x8ExtractLane:
-          return builder.makeSIMDExtract(ExtractLaneVecF16x8, getLaneIndex(8));
-        case BinaryConsts::F32x4ExtractLane:
-          return builder.makeSIMDExtract(ExtractLaneVecF32x4, getLaneIndex(4));
-        case BinaryConsts::F64x2ExtractLane:
-          return builder.makeSIMDExtract(ExtractLaneVecF64x2, getLaneIndex(2));
-        case BinaryConsts::I8x16ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecI8x16, getLaneIndex(16));
-        case BinaryConsts::I16x8ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecI16x8, getLaneIndex(8));
-        case BinaryConsts::I32x4ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecI32x4, getLaneIndex(4));
-        case BinaryConsts::I64x2ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecI64x2, getLaneIndex(2));
-        case BinaryConsts::F16x8ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecF16x8, getLaneIndex(8));
-        case BinaryConsts::F32x4ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecF32x4, getLaneIndex(4));
-        case BinaryConsts::F64x2ReplaceLane:
-          return builder.makeSIMDReplace(ReplaceLaneVecF64x2, getLaneIndex(2));
-        case BinaryConsts::I8x16Shuffle: {
-          std::array<uint8_t, 16> lanes;
-          for (Index i = 0; i < 16; ++i) {
-            lanes[i] = getLaneIndex(32);
-          }
-          return builder.makeSIMDShuffle(lanes);
-        }
-        case BinaryConsts::V128Bitselect:
-          return builder.makeSIMDTernary(Bitselect);
-        case BinaryConsts::I8x16Laneselect:
-          return builder.makeSIMDTernary(LaneselectI8x16);
-        case BinaryConsts::I16x8Laneselect:
-          return builder.makeSIMDTernary(LaneselectI16x8);
-        case BinaryConsts::I32x4Laneselect:
-          return builder.makeSIMDTernary(LaneselectI32x4);
-        case BinaryConsts::I64x2Laneselect:
-          return builder.makeSIMDTernary(LaneselectI64x2);
-        case BinaryConsts::F16x8RelaxedMadd:
-          return builder.makeSIMDTernary(RelaxedMaddVecF16x8);
-        case BinaryConsts::F16x8RelaxedNmadd:
-          return builder.makeSIMDTernary(RelaxedNmaddVecF16x8);
-        case BinaryConsts::F32x4RelaxedMadd:
-          return builder.makeSIMDTernary(RelaxedMaddVecF32x4);
-        case BinaryConsts::F32x4RelaxedNmadd:
-          return builder.makeSIMDTernary(RelaxedNmaddVecF32x4);
-        case BinaryConsts::F64x2RelaxedMadd:
-          return builder.makeSIMDTernary(RelaxedMaddVecF64x2);
-        case BinaryConsts::F64x2RelaxedNmadd:
-          return builder.makeSIMDTernary(RelaxedNmaddVecF64x2);
-        case BinaryConsts::I32x4DotI8x16I7x16AddS:
-          return builder.makeSIMDTernary(DotI8x16I7x16AddSToVecI32x4);
-        case BinaryConsts::I8x16Shl:
-          return builder.makeSIMDShift(ShlVecI8x16);
-        case BinaryConsts::I8x16ShrS:
-          return builder.makeSIMDShift(ShrSVecI8x16);
-        case BinaryConsts::I8x16ShrU:
-          return builder.makeSIMDShift(ShrUVecI8x16);
-        case BinaryConsts::I16x8Shl:
-          return builder.makeSIMDShift(ShlVecI16x8);
-        case BinaryConsts::I16x8ShrS:
-          return builder.makeSIMDShift(ShrSVecI16x8);
-        case BinaryConsts::I16x8ShrU:
-          return builder.makeSIMDShift(ShrUVecI16x8);
-        case BinaryConsts::I32x4Shl:
-          return builder.makeSIMDShift(ShlVecI32x4);
-        case BinaryConsts::I32x4ShrS:
-          return builder.makeSIMDShift(ShrSVecI32x4);
-        case BinaryConsts::I32x4ShrU:
-          return builder.makeSIMDShift(ShrUVecI32x4);
-        case BinaryConsts::I64x2Shl:
-          return builder.makeSIMDShift(ShlVecI64x2);
-        case BinaryConsts::I64x2ShrS:
-          return builder.makeSIMDShift(ShrSVecI64x2);
-        case BinaryConsts::I64x2ShrU:
-          return builder.makeSIMDShift(ShrUVecI64x2);
-        case BinaryConsts::V128Const:
-          return builder.makeConst(getVec128Literal());
-        case BinaryConsts::V128Store: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeStore(16, offset, align, Type::v128, mem);
-        }
-        case BinaryConsts::V128Load: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeLoad(16, false, offset, align, Type::v128, mem);
-        }
-        case BinaryConsts::V128Load8Splat: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load8SplatVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load16Splat: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load16SplatVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load32Splat: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load32SplatVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load64Splat: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load64SplatVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load8x8S: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load8x8SVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load8x8U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load8x8UVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load16x4S: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load16x4SVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load16x4U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load16x4UVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load32x2S: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load32x2SVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load32x2U: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load32x2UVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load32Zero: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load32ZeroVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load64Zero: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoad(Load64ZeroVec128, offset, align, mem);
-        }
-        case BinaryConsts::V128Load8Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Load8LaneVec128, offset, align, getLaneIndex(16), mem);
-        }
-        case BinaryConsts::V128Load16Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Load16LaneVec128, offset, align, getLaneIndex(8), mem);
-        }
-        case BinaryConsts::V128Load32Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Load32LaneVec128, offset, align, getLaneIndex(4), mem);
-        }
-        case BinaryConsts::V128Load64Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Load64LaneVec128, offset, align, getLaneIndex(2), mem);
-        }
-        case BinaryConsts::V128Store8Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Store8LaneVec128, offset, align, getLaneIndex(16), mem);
-        }
-        case BinaryConsts::V128Store16Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Store16LaneVec128, offset, align, getLaneIndex(8), mem);
-        }
-        case BinaryConsts::V128Store32Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Store32LaneVec128, offset, align, getLaneIndex(4), mem);
-        }
-        case BinaryConsts::V128Store64Lane: {
-          auto [mem, align, offset] = getMemarg();
-          return builder.makeSIMDLoadStoreLane(
-            Store64LaneVec128, offset, align, getLaneIndex(2), mem);
-        }
-      }
-      return Err{"unknown SIMD operation"};
-    }
-    case BinaryConsts::GCPrefix: {
-      auto op = getU32LEB();
-      switch (op) {
-        case BinaryConsts::RefI31:
-          return builder.makeRefI31(Unshared);
-        case BinaryConsts::RefI31Shared:
-          return builder.makeRefI31(Shared);
-        case BinaryConsts::I31GetS:
-          return builder.makeI31Get(true);
-        case BinaryConsts::I31GetU:
-          return builder.makeI31Get(false);
-        case BinaryConsts::RefTest:
-          return builder.makeRefTest(Type(getHeapType(), NonNullable));
-        case BinaryConsts::RefTestNull:
-          return builder.makeRefTest(Type(getHeapType(), Nullable));
-        case BinaryConsts::RefCast:
-          return builder.makeRefCast(Type(getHeapType(), NonNullable));
-        case BinaryConsts::RefCastNull:
-          return builder.makeRefCast(Type(getHeapType(), Nullable));
-        case BinaryConsts::BrOnCast:
-        case BinaryConsts::BrOnCastFail: {
-          auto flags = getInt8();
-          auto label = getU32LEB();
-          auto in = Type(getHeapType(), (flags & 1) ? Nullable : NonNullable);
-          auto cast = Type(getHeapType(), (flags & 2) ? Nullable : NonNullable);
-          auto kind = op == BinaryConsts::BrOnCast ? BrOnCast : BrOnCastFail;
-          return builder.makeBrOn(label, kind, in, cast);
-        }
-        case BinaryConsts::StructNew:
-          return builder.makeStructNew(getIndexedHeapType());
-        case BinaryConsts::StructNewDefault:
-          return builder.makeStructNewDefault(getIndexedHeapType());
-        case BinaryConsts::StructGet:
-        case BinaryConsts::StructGetS:
-        case BinaryConsts::StructGetU: {
-          auto type = getIndexedHeapType();
-          auto field = getU32LEB();
-          return builder.makeStructGet(
-            type, field, op == BinaryConsts::StructGetS);
-        }
-        case BinaryConsts::StructSet: {
-          auto type = getIndexedHeapType();
-          auto field = getU32LEB();
-          return builder.makeStructSet(type, field);
-        }
-        case BinaryConsts::ArrayNew:
-          return builder.makeArrayNew(getIndexedHeapType());
-        case BinaryConsts::ArrayNewDefault:
-          return builder.makeArrayNewDefault(getIndexedHeapType());
-        case BinaryConsts::ArrayNewFixed: {
-          auto type = getIndexedHeapType();
-          auto arity = getU32LEB();
-          return builder.makeArrayNewFixed(type, arity);
-        }
-        case BinaryConsts::ArrayNewData: {
-          auto type = getIndexedHeapType();
-          auto data = getDataName(getU32LEB());
-          return builder.makeArrayNewData(type, data);
-        }
-        case BinaryConsts::ArrayNewElem: {
-          auto type = getIndexedHeapType();
-          auto elem = getElemName(getU32LEB());
-          return builder.makeArrayNewElem(type, elem);
-        }
-        case BinaryConsts::ArrayGet:
-        case BinaryConsts::ArrayGetU:
-          return builder.makeArrayGet(getIndexedHeapType(), false);
-        case BinaryConsts::ArrayGetS:
-          return builder.makeArrayGet(getIndexedHeapType(), true);
-        case BinaryConsts::ArraySet:
-          return builder.makeArraySet(getIndexedHeapType());
-        case BinaryConsts::ArrayLen:
-          return builder.makeArrayLen();
-        case BinaryConsts::ArrayCopy: {
-          auto dest = getIndexedHeapType();
-          auto src = getIndexedHeapType();
-          return builder.makeArrayCopy(dest, src);
-        }
-        case BinaryConsts::ArrayFill:
-          return builder.makeArrayFill(getIndexedHeapType());
-        case BinaryConsts::ArrayInitData: {
-          auto type = getIndexedHeapType();
-          auto data = getDataName(getU32LEB());
-          return builder.makeArrayInitData(type, data);
-        }
-        case BinaryConsts::ArrayInitElem: {
-          auto type = getIndexedHeapType();
-          auto elem = getElemName(getU32LEB());
-          return builder.makeArrayInitElem(type, elem);
-        }
-        case BinaryConsts::StringNewLossyUTF8Array:
-          return builder.makeStringNew(StringNewLossyUTF8Array);
-        case BinaryConsts::StringNewWTF16Array:
-          return builder.makeStringNew(StringNewWTF16Array);
-        case BinaryConsts::StringFromCodePoint:
-          return builder.makeStringNew(StringNewFromCodePoint);
-        case BinaryConsts::StringAsWTF16:
-          // This turns into nothing because we do not represent stringviews in
-          // the IR.
-          return Ok{};
-        case BinaryConsts::StringConst:
-          return builder.makeStringConst(getIndexedString());
-        case BinaryConsts::StringMeasureUTF8:
-          return builder.makeStringMeasure(StringMeasureUTF8);
-        case BinaryConsts::StringMeasureWTF16:
-          return builder.makeStringMeasure(StringMeasureWTF16);
-        case BinaryConsts::StringEncodeLossyUTF8Array:
-          return builder.makeStringEncode(StringEncodeLossyUTF8Array);
-        case BinaryConsts::StringEncodeWTF16Array:
-          return builder.makeStringEncode(StringEncodeWTF16Array);
-        case BinaryConsts::StringConcat:
-          return builder.makeStringConcat();
-        case BinaryConsts::StringEq:
-          return builder.makeStringEq(StringEqEqual);
-        case BinaryConsts::StringCompare:
-          return builder.makeStringEq(StringEqCompare);
-        case BinaryConsts::StringViewWTF16GetCodePoint:
-          return builder.makeStringWTF16Get();
-        case BinaryConsts::StringViewWTF16Slice:
-          return builder.makeStringSliceWTF();
-        case BinaryConsts::AnyConvertExtern:
-          return builder.makeRefAs(AnyConvertExtern);
-        case BinaryConsts::ExternConvertAny:
-          return builder.makeRefAs(ExternConvertAny);
-      }
-      return Err{"unknown GC operation"};
-    }
-  }
-  return Err{"unknown operation"};
-}
-
-void WasmBinaryReader::readExports() {
-  size_t num = getU32LEB();
-  std::unordered_set<Name> names;
-  for (size_t i = 0; i < num; i++) {
-    auto curr = std::make_unique<Export>();
-    curr->name = getInlineString();
-    if (!names.emplace(curr->name).second) {
-      throwError("duplicate export name");
-    }
-    curr->kind = (ExternalKind)getU32LEB();
-    auto* ex = wasm.addExport(std::move(curr));
-    auto index = getU32LEB();
-    switch (ex->kind) {
-      case ExternalKind::Function:
-        ex->value = getFunctionName(index);
-        continue;
-      case ExternalKind::Table:
-        ex->value = getTableName(index);
-        continue;
-      case ExternalKind::Memory:
-        ex->value = getMemoryName(index);
-        continue;
-      case ExternalKind::Global:
-        ex->value = getGlobalName(index);
-        continue;
-      case ExternalKind::Tag:
-        ex->value = getTagName(index);
-        continue;
-      case ExternalKind::Invalid:
-        break;
-    }
-    throwError("invalid export kind");
-  }
-}
-
-Expression* WasmBinaryReader::readExpression() {
-  assert(builder.empty());
-  while (input[pos] != BinaryConsts::End) {
-    auto inst = readInst();
-    if (auto* err = inst.getErr()) {
-      throwError(err->msg);
-    }
-  }
-  ++pos;
-  auto expr = builder.build();
-  if (auto* err = expr.getErr()) {
-    throwError(err->msg);
-  }
-  return *expr;
-}
-
-void WasmBinaryReader::readStrings() {
-  auto reserved = getU32LEB();
-  if (reserved != 0) {
-    throwError("unexpected reserved value in strings");
-  }
-  size_t num = getU32LEB();
-  for (size_t i = 0; i < num; i++) {
-    auto string = getInlineString(false);
-    // Re-encode from WTF-8 to WTF-16.
-    std::stringstream wtf16;
-    if (!String::convertWTF8ToWTF16(wtf16, string.str)) {
-      throwError("invalid string constant");
-    }
-    // TODO: Use wtf16.view() once we have C++20.
-    strings.push_back(wtf16.str());
-  }
-}
-
-Name WasmBinaryReader::getIndexedString() {
-  auto index = getU32LEB();
-  if (index >= strings.size()) {
-    throwError("bad string index");
-  }
-  return strings[index];
-}
-
-void WasmBinaryReader::readGlobals() {
-  size_t num = getU32LEB();
-  auto numImports = wasm.globals.size();
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : globalNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: global index out of bounds in name section: "
-                << name << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < num; i++) {
-    auto [name, isExplicit] = getOrMakeName(
-      globalNames, numImports + i, makeName("global$", i), usedNames);
-    auto type = getConcreteType();
-    auto mutable_ = getU32LEB();
-    if (mutable_ & ~1) {
-      throwError("Global mutability must be 0 or 1");
-    }
-    auto* init = readExpression();
-    auto global = Builder::makeGlobal(
-      name, type, init, mutable_ ? Builder::Mutable : Builder::Immutable);
-    global->hasExplicitName = isExplicit;
-    wasm.addGlobal(std::move(global));
-  }
-}
-
-void WasmBinaryReader::validateBinary() {
-  if (hasDataCount && wasm.dataSegments.size() != dataCount) {
-    throwError("Number of segments does not agree with DataCount section");
-  }
-
-  if (functionTypes.size() != numFuncImports + numFuncBodies) {
-    throwError("function and code sections have inconsistent lengths");
-  }
-}
-
-void WasmBinaryReader::createDataSegments(Index count) {
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : dataNames) {
-    if (index >= count) {
-      std::cerr << "warning: data index out of bounds in name section: " << name
-                << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < count; ++i) {
-    auto [name, isExplicit] =
-      getOrMakeName(dataNames, i, makeName("", i), usedNames);
-    auto curr = Builder::makeDataSegment(name);
-    curr->hasExplicitName = isExplicit;
-    wasm.addDataSegment(std::move(curr));
-  }
-}
-
-void WasmBinaryReader::readDataSegmentCount() {
-  hasDataCount = true;
-  dataCount = getU32LEB();
-  // Eagerly create the data segments so they are available during parsing of
-  // the code section.
-  createDataSegments(dataCount);
-}
-
-void WasmBinaryReader::readDataSegments() {
-  auto num = getU32LEB();
-  if (hasDataCount) {
-    if (num != dataCount) {
-      throwError("data count and data sections disagree on size");
-    }
-  } else {
-    // We haven't already created the data segments, so create them now.
-    createDataSegments(num);
-  }
-  assert(wasm.dataSegments.size() == num);
-  for (size_t i = 0; i < num; i++) {
-    auto& curr = wasm.dataSegments[i];
-    uint32_t flags = getU32LEB();
-    if (flags > 2) {
-      throwError("bad segment flags, must be 0, 1, or 2, not " +
-                 std::to_string(flags));
-    }
-    curr->isPassive = flags & BinaryConsts::IsPassive;
-    if (curr->isPassive) {
-      curr->memory = Name();
-      curr->offset = nullptr;
-    } else {
-      Index memIdx = 0;
-      if (flags & BinaryConsts::HasIndex) {
-        memIdx = getU32LEB();
-      }
-      curr->memory = getMemoryName(memIdx);
-      curr->offset = readExpression();
-    }
-    auto size = getU32LEB();
-    auto data = getByteView(size);
-    curr->data = {data.begin(), data.end()};
-  }
-}
-
-void WasmBinaryReader::readTableDeclarations() {
-  auto num = getU32LEB();
-  auto numImports = wasm.tables.size();
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : tableNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: table index out of bounds in name section: "
-                << name << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < num; i++) {
-    auto [name, isExplicit] =
-      getOrMakeName(tableNames, numImports + i, makeName("", i), usedNames);
-    auto elemType = getType();
-    if (!elemType.isRef()) {
-      throwError("Table type must be a reference type");
-    }
-    auto table = Builder::makeTable(name, elemType);
-    table->hasExplicitName = isExplicit;
-    bool is_shared;
-    getResizableLimits(table->initial,
-                       table->max,
-                       is_shared,
-                       table->addressType,
-                       Table::kUnlimitedSize);
-    if (is_shared) {
-      throwError("Tables may not be shared");
-    }
-    wasm.addTable(std::move(table));
-  }
-}
-
-void WasmBinaryReader::readElementSegments() {
-  auto num = getU32LEB();
-  if (num >= Table::kMaxSize) {
-    throwError("Too many segments");
-  }
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : elemNames) {
-    if (index >= num) {
-      std::cerr << "warning: elem index out of bounds in name section: " << name
-                << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < num; i++) {
-    auto [name, isExplicit] =
-      getOrMakeName(elemNames, i, makeName("", i), usedNames);
-    auto flags = getU32LEB();
-    bool isPassive = (flags & BinaryConsts::IsPassive) != 0;
-    bool hasTableIdx = !isPassive && ((flags & BinaryConsts::HasIndex) != 0);
-    bool isDeclarative =
-      isPassive && ((flags & BinaryConsts::IsDeclarative) != 0);
-    bool usesExpressions = (flags & BinaryConsts::UsesExpressions) != 0;
-
-    if (isDeclarative) {
-      // Declared segments are needed in wasm text and binary, but not in
-      // Binaryen IR; skip over the segment
-      [[maybe_unused]] auto type = getU32LEB();
-      auto num = getU32LEB();
-      for (Index i = 0; i < num; i++) {
-        if (usesExpressions) {
-          readExpression();
-        } else {
-          getU32LEB();
-        }
-      }
-      continue;
-    }
-
-    auto segment = std::make_unique<ElementSegment>();
-    segment->setName(name, isExplicit);
-
-    if (!isPassive) {
-      Index tableIdx = 0;
-      if (hasTableIdx) {
-        tableIdx = getU32LEB();
-      }
-
-      if (tableIdx >= wasm.tables.size()) {
-        throwError("Table index out of range.");
-      }
-      auto* table = wasm.tables[tableIdx].get();
-      segment->table = table->name;
-      segment->offset = readExpression();
-    }
-
-    if (isPassive || hasTableIdx) {
-      if (usesExpressions) {
-        segment->type = getType();
-      } else {
-        auto elemKind = getU32LEB();
-        if (elemKind != 0x0) {
-          throwError("Invalid kind (!= funcref(0)) since !usesExpressions.");
-        }
-      }
-    }
-
-    auto& segmentData = segment->data;
-    auto size = getU32LEB();
-    if (usesExpressions) {
-      for (Index j = 0; j < size; j++) {
-        segmentData.push_back(readExpression());
-      }
-    } else {
-      for (Index j = 0; j < size; j++) {
-        Index index = getU32LEB();
-        auto sig = getTypeByFunctionIndex(index);
-        auto* refFunc = Builder(wasm).makeRefFunc(getFunctionName(index), sig);
-        segmentData.push_back(refFunc);
-      }
-    }
-    wasm.addElementSegment(std::move(segment));
-  }
-}
-
-void WasmBinaryReader::readTags() {
-  size_t num = getU32LEB();
-  auto numImports = wasm.tags.size();
-  std::unordered_set<Name> usedNames;
-  for (auto& [index, name] : tagNames) {
-    if (index >= num + numImports) {
-      std::cerr << "warning: tag index out of bounds in name section: " << name
-                << " at index " << index << '\n';
-    }
-    usedNames.insert(name);
-  }
-  for (size_t i = 0; i < num; i++) {
-    getInt8(); // Reserved 'attribute' field
-    auto [name, isExplicit] =
-      getOrMakeName(tagNames, numImports + i, makeName("tag$", i), usedNames);
-    auto typeIndex = getU32LEB();
-    auto tag = Builder::makeTag(name, getSignatureByTypeIndex(typeIndex));
-    tag->hasExplicitName = isExplicit;
-    wasm.addTag(std::move(tag));
-  }
-}
-
-static bool isIdChar(char ch) {
-  return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') ||
-         (ch >= 'a' && ch <= 'z') || ch == '!' || ch == '#' || ch == '$' ||
-         ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' ||
-         ch == '-' || ch == '.' || ch == '/' || ch == ':' || ch == '<' ||
-         ch == '=' || ch == '>' || ch == '?' || ch == '@' || ch == '^' ||
-         ch == '_' || ch == '`' || ch == '|' || ch == '~';
-}
-
-static char formatNibble(int nibble) {
-  return nibble < 10 ? '0' + nibble : 'a' - 10 + nibble;
-}
-
-Name WasmBinaryReader::escape(Name name) {
-  bool allIdChars = true;
-  for (char c : name.str) {
-    if (!(allIdChars = isIdChar(c))) {
-      break;
-    }
-  }
-  if (allIdChars) {
-    return name;
-  }
-  // encode name, if at least one non-idchar (per WebAssembly spec) was found
-  std::string escaped;
-  for (char c : name.str) {
-    if (isIdChar(c)) {
-      escaped.push_back(c);
-      continue;
-    }
-    // replace non-idchar with `\xx` escape
-    escaped.push_back('\\');
-    escaped.push_back(formatNibble(c >> 4));
-    escaped.push_back(formatNibble(c & 15));
-  }
-  return escaped;
-}
-
-namespace {
-
-// Performs necessary processing of names from the name section before using
-// them. Specifically it escapes and deduplicates them.
-class NameProcessor {
-public:
-  // Returns a unique, escaped name. Notes that name for the items to follow to
-  // keep them unique as well.
-  Name process(Name name) {
-    return deduplicate(WasmBinaryReader::escape(name));
-  }
-
-private:
-  std::unordered_set<Name> usedNames;
-
-  Name deduplicate(Name base) {
-    auto name = Names::getValidNameGivenExisting(base, usedNames);
-    usedNames.insert(name);
-    return name;
-  }
-};
-
-} // anonymous namespace
-
-void WasmBinaryReader::findAndReadNames() {
-  // Find the names section. Skip the magic and version.
-  assert(pos == 0);
-  getInt32();
-  getInt32();
-  Index payloadLen, sectionPos;
-  bool found = false;
-  while (more()) {
-    uint8_t sectionCode = getInt8();
-    payloadLen = getU32LEB();
-    sectionPos = pos;
-    if (sectionCode == BinaryConsts::Section::Custom) {
-      auto sectionName = getInlineString();
-      if (sectionName.equals(BinaryConsts::CustomSections::Name)) {
-        found = true;
-        break;
-      }
-    }
-    pos = sectionPos + payloadLen;
-  }
-  if (!found) {
-    // No names section to read.
-    pos = 0;
-    return;
-  }
-
-  // Read the names.
-  uint32_t lastType = 0;
-  while (pos < sectionPos + payloadLen) {
-    auto nameType = getU32LEB();
-    if (lastType && nameType <= lastType) {
-      std::cerr << "warning: out-of-order name subsection: " << nameType
-                << std::endl;
-    }
-    lastType = nameType;
-    auto subsectionSize = getU32LEB();
-    auto subsectionPos = pos;
-    using Subsection = BinaryConsts::CustomSections::Subsection;
-    if (nameType == Subsection::NameModule) {
-      wasm.name = getInlineString();
-    } else if (nameType == Subsection::NameFunction) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        functionNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameLocal) {
-      auto numFuncs = getU32LEB();
-      for (size_t i = 0; i < numFuncs; i++) {
-        auto funcIndex = getU32LEB();
-        auto numLocals = getU32LEB();
-        NameProcessor processor;
-        for (size_t j = 0; j < numLocals; j++) {
-          auto localIndex = getU32LEB();
-          auto rawName = getInlineString();
-          auto name = processor.process(rawName);
-          localNames[funcIndex][localIndex] = name;
-        }
-      }
-    } else if (nameType == Subsection::NameType) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        typeNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameTable) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        tableNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameElem) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        elemNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameMemory) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        memoryNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameData) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        dataNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameGlobal) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        globalNames[index] = name;
-      }
-    } else if (nameType == Subsection::NameField) {
-      auto numTypes = getU32LEB();
-      for (size_t i = 0; i < numTypes; i++) {
-        auto typeIndex = getU32LEB();
-        auto numFields = getU32LEB();
-        NameProcessor processor;
-        for (size_t i = 0; i < numFields; i++) {
-          auto fieldIndex = getU32LEB();
-          auto rawName = getInlineString();
-          auto name = processor.process(rawName);
-          fieldNames[typeIndex][fieldIndex] = name;
-        }
-      }
-    } else if (nameType == Subsection::NameTag) {
-      auto num = getU32LEB();
-      NameProcessor processor;
-      for (size_t i = 0; i < num; i++) {
-        auto index = getU32LEB();
-        auto rawName = getInlineString();
-        auto name = processor.process(rawName);
-        tagNames[index] = name;
-      }
-    } else {
-      std::cerr << "warning: unknown name subsection with id "
-                << std::to_string(nameType) << " at " << pos << std::endl;
-      pos = subsectionPos + subsectionSize;
-    }
-    if (pos != subsectionPos + subsectionSize) {
-      throwError("bad names subsection position change");
-    }
-  }
-  if (pos != sectionPos + payloadLen) {
-    throwError("bad names section position change");
-  }
-
-  // Reset the position; we were just reading ahead.
-  pos = 0;
-}
-
-void WasmBinaryReader::readFeatures(size_t payloadLen) {
-  wasm.hasFeaturesSection = true;
-
-  auto sectionPos = pos;
-  size_t numFeatures = getU32LEB();
-  for (size_t i = 0; i < numFeatures; ++i) {
-    uint8_t prefix = getInt8();
-
-    bool disallowed = prefix == BinaryConsts::FeatureDisallowed;
-    bool used = prefix == BinaryConsts::FeatureUsed;
-
-    if (!disallowed && !used) {
-      throwError("Unrecognized feature policy prefix");
-    }
-
-    Name name = getInlineString();
-    if (pos > sectionPos + payloadLen) {
-      throwError("ill-formed string extends beyond section");
-    }
-
-    FeatureSet feature;
-    if (name == BinaryConsts::CustomSections::AtomicsFeature) {
-      feature = FeatureSet::Atomics;
-    } else if (name == BinaryConsts::CustomSections::BulkMemoryFeature) {
-      feature = FeatureSet::BulkMemory;
-      if (used) {
-        // For backward compatibility, enable this dependent feature.
-        feature |= FeatureSet::BulkMemoryOpt;
-      }
-    } else if (name == BinaryConsts::CustomSections::BulkMemoryOptFeature) {
-      feature = FeatureSet::BulkMemoryOpt;
-    } else if (name == BinaryConsts::CustomSections::ExceptionHandlingFeature) {
-      feature = FeatureSet::ExceptionHandling;
-    } else if (name == BinaryConsts::CustomSections::MutableGlobalsFeature) {
-      feature = FeatureSet::MutableGlobals;
-    } else if (name == BinaryConsts::CustomSections::TruncSatFeature) {
-      feature = FeatureSet::TruncSat;
-    } else if (name == BinaryConsts::CustomSections::SignExtFeature) {
-      feature = FeatureSet::SignExt;
-    } else if (name == BinaryConsts::CustomSections::SIMD128Feature) {
-      feature = FeatureSet::SIMD;
-    } else if (name == BinaryConsts::CustomSections::TailCallFeature) {
-      feature = FeatureSet::TailCall;
-    } else if (name == BinaryConsts::CustomSections::ReferenceTypesFeature) {
-      feature = FeatureSet::ReferenceTypes;
-    } else if (name == BinaryConsts::CustomSections::MultivalueFeature) {
-      feature = FeatureSet::Multivalue;
-    } else if (name == BinaryConsts::CustomSections::GCFeature) {
-      feature = FeatureSet::GC;
-    } else if (name == BinaryConsts::CustomSections::Memory64Feature) {
-      feature = FeatureSet::Memory64;
-    } else if (name == BinaryConsts::CustomSections::RelaxedSIMDFeature) {
-      feature = FeatureSet::RelaxedSIMD;
-    } else if (name == BinaryConsts::CustomSections::ExtendedConstFeature) {
-      feature = FeatureSet::ExtendedConst;
-    } else if (name == BinaryConsts::CustomSections::StringsFeature) {
-      feature = FeatureSet::Strings;
-    } else if (name == BinaryConsts::CustomSections::MultiMemoryFeature) {
-      feature = FeatureSet::MultiMemory;
-    } else if (name ==
-               BinaryConsts::CustomSections::TypedContinuationsFeature) {
-      feature = FeatureSet::TypedContinuations;
-    } else if (name == BinaryConsts::CustomSections::SharedEverythingFeature) {
-      feature = FeatureSet::SharedEverything;
-    } else if (name == BinaryConsts::CustomSections::FP16Feature) {
-      feature = FeatureSet::FP16;
-    } else {
-      // Silently ignore unknown features (this may be and old binaryen running
-      // on a new wasm).
-    }
-
-    if (disallowed && wasm.features.has(feature)) {
-      std::cerr
-        << "warning: feature " << feature.toString()
-        << " was enabled by the user, but disallowed in the features section.";
-    }
-    if (used) {
-      wasm.features.enable(feature);
-    }
-  }
-  if (pos != sectionPos + payloadLen) {
-    throwError("bad features section size");
-  }
-}
-
-void WasmBinaryReader::readDylink(size_t payloadLen) {
-  wasm.dylinkSection = std::make_unique<DylinkSection>();
-
-  auto sectionPos = pos;
-
-  wasm.dylinkSection->isLegacy = true;
-  wasm.dylinkSection->memorySize = getU32LEB();
-  wasm.dylinkSection->memoryAlignment = getU32LEB();
-  wasm.dylinkSection->tableSize = getU32LEB();
-  wasm.dylinkSection->tableAlignment = getU32LEB();
-
-  size_t numNeededDynlibs = getU32LEB();
-  for (size_t i = 0; i < numNeededDynlibs; ++i) {
-    wasm.dylinkSection->neededDynlibs.push_back(getInlineString());
-  }
-
-  if (pos != sectionPos + payloadLen) {
-    throwError("bad dylink section size");
-  }
-}
-
-void WasmBinaryReader::readDylink0(size_t payloadLen) {
-  auto sectionPos = pos;
-  uint32_t lastType = 0;
-
-  wasm.dylinkSection = std::make_unique<DylinkSection>();
-  while (pos < sectionPos + payloadLen) {
-    auto oldPos = pos;
-    auto dylinkType = getU32LEB();
-    if (lastType && dylinkType <= lastType) {
-      std::cerr << "warning: out-of-order dylink.0 subsection: " << dylinkType
-                << std::endl;
-    }
-    lastType = dylinkType;
-    auto subsectionSize = getU32LEB();
-    auto subsectionPos = pos;
-    if (dylinkType == BinaryConsts::CustomSections::Subsection::DylinkMemInfo) {
-      wasm.dylinkSection->memorySize = getU32LEB();
-      wasm.dylinkSection->memoryAlignment = getU32LEB();
-      wasm.dylinkSection->tableSize = getU32LEB();
-      wasm.dylinkSection->tableAlignment = getU32LEB();
-    } else if (dylinkType ==
-               BinaryConsts::CustomSections::Subsection::DylinkNeeded) {
-      size_t numNeededDynlibs = getU32LEB();
-      for (size_t i = 0; i < numNeededDynlibs; ++i) {
-        wasm.dylinkSection->neededDynlibs.push_back(getInlineString());
-      }
-    } else {
-      // Unknown subsection.  Stop parsing now and store the rest of
-      // the section verbatim.
-      pos = oldPos;
-      size_t remaining = (sectionPos + payloadLen) - pos;
-      auto tail = getByteView(remaining);
-      wasm.dylinkSection->tail = {tail.begin(), tail.end()};
-      break;
-    }
-    if (pos != subsectionPos + subsectionSize) {
-      throwError("bad dylink.0 subsection position change");
-    }
-  }
-}
-
-Index WasmBinaryReader::readMemoryAccess(Address& alignment, Address& offset) {
-  auto rawAlignment = getU32LEB();
-  bool hasMemIdx = false;
-  Index memIdx = 0;
-  // Check bit 6 in the alignment to know whether a memory index is present per:
-  // https://github.com/WebAssembly/multi-memory/blob/main/proposals/multi-memory/Overview.md
-  if (rawAlignment & (1 << (6))) {
-    hasMemIdx = true;
-    // Clear the bit before we parse alignment
-    rawAlignment = rawAlignment & ~(1 << 6);
-  }
-
-  if (rawAlignment > 8) {
-    throwError("Alignment must be of a reasonable size");
-  }
-
-  alignment = Bits::pow2(rawAlignment);
-  if (hasMemIdx) {
-    memIdx = getU32LEB();
-  }
-  if (memIdx >= wasm.memories.size()) {
-    throwError("Memory index out of range while reading memory alignment.");
-  }
-  auto* memory = wasm.memories[memIdx].get();
-  offset = memory->addressType == Type::i32 ? getU32LEB() : getU64LEB();
-
-  return memIdx;
-}
-
-// TODO: make this the only version
-std::tuple<Name, Address, Address> WasmBinaryReader::getMemarg() {
-  Address alignment, offset;
-  auto memIdx = readMemoryAccess(alignment, offset);
-  return {getMemoryName(memIdx), alignment, offset};
-}
+// WasmBinaryReader::WasmBinaryReader(Module& wasm,
+//                                    FeatureSet features,
+//                                    const std::vector<char>& input,
+//                                    const std::vector<char>& sourceMap)
+//   : wasm(wasm), allocator(wasm.allocator), input(input), builder(wasm),
+//     sourceMapReader(sourceMap) {
+//   wasm.features = features;
+// }
+
+// bool WasmBinaryReader::hasDWARFSections() {
+//   assert(pos == 0);
+//   getInt32(); // magic
+//   getInt32(); // version
+//   bool has = false;
+//   while (more()) {
+//     uint8_t sectionCode = getInt8();
+//     uint32_t payloadLen = getU32LEB();
+//     if (uint64_t(pos) + uint64_t(payloadLen) > input.size()) {
+//       throwError("Section extends beyond end of input");
+//     }
+//     auto oldPos = pos;
+//     if (sectionCode == BinaryConsts::Section::Custom) {
+//       auto sectionName = getInlineString();
+//       if (Debug::isDWARFSection(sectionName)) {
+//         has = true;
+//         break;
+//       }
+//     }
+//     pos = oldPos + payloadLen;
+//   }
+//   pos = 0;
+//   return has;
+// }
+
+// void WasmBinaryReader::read() {
+//   if (DWARF) {
+//     // In order to update dwarf, we must store info about each IR node's
+//     // binary position. This has noticeable memory overhead, so we don't do
+//     it
+//     // by default: the user must request it by setting "DWARF", and even if
+//     so
+//     // we scan ahead to see that there actually *are* DWARF sections, so that
+//     // we don't do unnecessary work.
+//     if (!hasDWARFSections()) {
+//       DWARF = false;
+//     }
+//   }
+
+//   // Skip ahead and read the name section so we know what names to use when
+//   we
+//   // construct module elements.
+//   if (debugInfo) {
+//     findAndReadNames();
+//   }
+
+//   readHeader();
+//   sourceMapReader.readHeader(wasm);
+
+//   // Read sections until the end
+//   while (more()) {
+//     uint8_t sectionCode = getInt8();
+//     uint32_t payloadLen = getU32LEB();
+//     if (uint64_t(pos) + uint64_t(payloadLen) > input.size()) {
+//       throwError("Section extends beyond end of input");
+//     }
+
+//     auto oldPos = pos;
+
+//     // Note the section in the list of seen sections, as almost no sections
+//     can
+//     // appear more than once, and verify those that shouldn't do not.
+//     if (sectionCode != BinaryConsts::Section::Custom &&
+//         !seenSections.insert(sectionCode).second) {
+//       throwError("section seen more than once: " +
+//       std::to_string(sectionCode));
+//     }
+
+//     switch (sectionCode) {
+//       case BinaryConsts::Section::Start:
+//         readStart();
+//         break;
+//       case BinaryConsts::Section::Memory:
+//         readMemories();
+//         break;
+//       case BinaryConsts::Section::Type:
+//         readTypes();
+//         break;
+//       case BinaryConsts::Section::Import:
+//         readImports();
+//         break;
+//       case BinaryConsts::Section::Function:
+//         readFunctionSignatures();
+//         break;
+//       case BinaryConsts::Section::Code:
+//         if (DWARF) {
+//           codeSectionLocation = pos;
+//         }
+//         readFunctions();
+//         break;
+//       case BinaryConsts::Section::Export:
+//         readExports();
+//         break;
+//       case BinaryConsts::Section::Element:
+//         readElementSegments();
+//         break;
+//       case BinaryConsts::Section::Strings:
+//         readStrings();
+//         break;
+//       case BinaryConsts::Section::Global:
+//         readGlobals();
+//         break;
+//       case BinaryConsts::Section::Data:
+//         readDataSegments();
+//         break;
+//       case BinaryConsts::Section::DataCount:
+//         readDataSegmentCount();
+//         break;
+//       case BinaryConsts::Section::Table:
+//         readTableDeclarations();
+//         break;
+//       case BinaryConsts::Section::Tag:
+//         readTags();
+//         break;
+//       case BinaryConsts::Section::Custom: {
+//         readCustomSection(payloadLen);
+//         if (pos > oldPos + payloadLen) {
+//           throwError("bad user section size, started at " +
+//                      std::to_string(oldPos) + " plus payload " +
+//                      std::to_string(payloadLen) +
+//                      " not being equal to new position " +
+//                      std::to_string(pos));
+//         }
+//         pos = oldPos + payloadLen;
+//         break;
+//       }
+//       default:
+//         throwError(std::string("unrecognized section ID: ") +
+//                    std::to_string(sectionCode));
+//     }
+
+//     // make sure we advanced exactly past this section
+//     if (pos != oldPos + payloadLen) {
+//       throwError("bad section size, started at " + std::to_string(oldPos) +
+//                  " plus payload " + std::to_string(payloadLen) +
+//                  " not being equal to new position " + std::to_string(pos));
+//     }
+//   }
+
+//   validateBinary();
+// }
+
+// void WasmBinaryReader::readCustomSection(size_t payloadLen) {
+//   auto oldPos = pos;
+//   Name sectionName = getInlineString();
+//   size_t read = pos - oldPos;
+//   if (read > payloadLen) {
+//     throwError("bad user section size");
+//   }
+//   payloadLen -= read;
+//   if (sectionName.equals(BinaryConsts::CustomSections::Name)) {
+//     // We already read the name section before anything else.
+//     pos += payloadLen;
+//   } else if
+//   (sectionName.equals(BinaryConsts::CustomSections::TargetFeatures)) {
+//     readFeatures(payloadLen);
+//   } else if (sectionName.equals(BinaryConsts::CustomSections::Dylink)) {
+//     readDylink(payloadLen);
+//   } else if (sectionName.equals(BinaryConsts::CustomSections::Dylink0)) {
+//     readDylink0(payloadLen);
+//   } else {
+//     // an unfamiliar custom section
+//     if (sectionName.equals(BinaryConsts::CustomSections::Linking)) {
+//       std::cerr
+//         << "warning: linking section is present, so this is not a standard "
+//            "wasm file - binaryen cannot handle this properly!\n";
+//     }
+//     wasm.customSections.resize(wasm.customSections.size() + 1);
+//     auto& section = wasm.customSections.back();
+//     section.name = sectionName.str;
+//     auto data = getByteView(payloadLen);
+//     section.data = {data.begin(), data.end()};
+//   }
+// }
+
+// std::string_view WasmBinaryReader::getByteView(size_t size) {
+//   if (size > input.size() || pos > input.size() - size) {
+//     throwError("unexpected end of input");
+//   }
+//   pos += size;
+//   return {input.data() + (pos - size), size};
+// }
+
+// uint8_t WasmBinaryReader::getInt8() {
+//   if (!more()) {
+//     throwError("unexpected end of input");
+//   }
+//   return input[pos++];
+// }
+
+// uint16_t WasmBinaryReader::getInt16() {
+//   auto ret = uint16_t(getInt8());
+//   ret |= uint16_t(getInt8()) << 8;
+//   return ret;
+// }
+
+// uint32_t WasmBinaryReader::getInt32() {
+//   auto ret = uint32_t(getInt16());
+//   ret |= uint32_t(getInt16()) << 16;
+//   return ret;
+// }
+
+// uint64_t WasmBinaryReader::getInt64() {
+//   auto ret = uint64_t(getInt32());
+//   ret |= uint64_t(getInt32()) << 32;
+//   return ret;
+// }
+
+// uint8_t WasmBinaryReader::getLaneIndex(size_t lanes) {
+//   auto ret = getInt8();
+//   if (ret >= lanes) {
+//     throwError("Illegal lane index");
+//   }
+//   return ret;
+// }
+
+// Literal WasmBinaryReader::getFloat32Literal() {
+//   auto ret = Literal(getInt32());
+//   ret = ret.castToF32();
+//   return ret;
+// }
+
+// Literal WasmBinaryReader::getFloat64Literal() {
+//   auto ret = Literal(getInt64());
+//   ret = ret.castToF64();
+//   return ret;
+// }
+
+// Literal WasmBinaryReader::getVec128Literal() {
+//   std::array<uint8_t, 16> bytes;
+//   for (auto i = 0; i < 16; ++i) {
+//     bytes[i] = getInt8();
+//   }
+//   auto ret = Literal(bytes.data());
+//   return ret;
+// }
+
+// uint32_t WasmBinaryReader::getU32LEB() {
+//   U32LEB ret;
+//   ret.read([&]() { return getInt8(); });
+//   return ret.value;
+// }
+
+// uint64_t WasmBinaryReader::getU64LEB() {
+//   U64LEB ret;
+//   ret.read([&]() { return getInt8(); });
+//   return ret.value;
+// }
+
+// int32_t WasmBinaryReader::getS32LEB() {
+//   S32LEB ret;
+//   ret.read([&]() { return (int8_t)getInt8(); });
+//   return ret.value;
+// }
+
+// int64_t WasmBinaryReader::getS64LEB() {
+//   S64LEB ret;
+//   ret.read([&]() { return (int8_t)getInt8(); });
+//   return ret.value;
+// }
+
+// bool WasmBinaryReader::getBasicType(int32_t code, Type& out) {
+//   switch (code) {
+//     case BinaryConsts::EncodedType::i32:
+//       out = Type::i32;
+//       return true;
+//     case BinaryConsts::EncodedType::i64:
+//       out = Type::i64;
+//       return true;
+//     case BinaryConsts::EncodedType::f32:
+//       out = Type::f32;
+//       return true;
+//     case BinaryConsts::EncodedType::f64:
+//       out = Type::f64;
+//       return true;
+//     case BinaryConsts::EncodedType::v128:
+//       out = Type::v128;
+//       return true;
+//     case BinaryConsts::EncodedType::funcref:
+//       out = Type(HeapType::func, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::contref:
+//       out = Type(HeapType::cont, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::externref:
+//       out = Type(HeapType::ext, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::anyref:
+//       out = Type(HeapType::any, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::eqref:
+//       out = Type(HeapType::eq, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::i31ref:
+//       out = Type(HeapType::i31, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::structref:
+//       out = Type(HeapType::struct_, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::arrayref:
+//       out = Type(HeapType::array, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::exnref:
+//       out = Type(HeapType::exn, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::stringref:
+//       out = Type(HeapType::string, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::nullref:
+//       out = Type(HeapType::none, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::nullexternref:
+//       out = Type(HeapType::noext, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::nullfuncref:
+//       out = Type(HeapType::nofunc, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::nullexnref:
+//       out = Type(HeapType::noexn, Nullable);
+//       return true;
+//     case BinaryConsts::EncodedType::nullcontref:
+//       out = Type(HeapType::nocont, Nullable);
+//       return true;
+//     default:
+//       return false;
+//   }
+// }
+
+// bool WasmBinaryReader::getBasicHeapType(int64_t code, HeapType& out) {
+//   switch (code) {
+//     case BinaryConsts::EncodedHeapType::func:
+//       out = HeapType::func;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::cont:
+//       out = HeapType::cont;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::ext:
+//       out = HeapType::ext;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::any:
+//       out = HeapType::any;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::eq:
+//       out = HeapType::eq;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::i31:
+//       out = HeapType::i31;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::struct_:
+//       out = HeapType::struct_;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::array:
+//       out = HeapType::array;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::exn:
+//       out = HeapType::exn;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::string:
+//       out = HeapType::string;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::none:
+//       out = HeapType::none;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::noext:
+//       out = HeapType::noext;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::nofunc:
+//       out = HeapType::nofunc;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::noexn:
+//       out = HeapType::noexn;
+//       return true;
+//     case BinaryConsts::EncodedHeapType::nocont:
+//       out = HeapType::nocont;
+//       return true;
+//     default:
+//       return false;
+//   }
+// }
+
+// Signature WasmBinaryReader::getBlockType() {
+//   // Single value types are negative; signature indices are non-negative.
+//   auto code = getS32LEB();
+//   if (code >= 0) {
+//     return getSignatureByTypeIndex(code);
+//   }
+//   if (code == BinaryConsts::EncodedType::Empty) {
+//     return Signature();
+//   }
+//   return Signature(Type::none, getType(code));
+// }
+
+// Type WasmBinaryReader::getType(int code) {
+//   Type type;
+//   if (getBasicType(code, type)) {
+//     return type;
+//   }
+//   switch (code) {
+//     case BinaryConsts::EncodedType::nullable:
+//       return Type(getHeapType(), Nullable);
+//     case BinaryConsts::EncodedType::nonnullable:
+//       return Type(getHeapType(), NonNullable);
+//     default:
+//       throwError("invalid wasm type: " + std::to_string(code));
+//   }
+//   WASM_UNREACHABLE("unexpected type");
+// }
+
+// Type WasmBinaryReader::getType() { return getType(getS32LEB()); }
+
+// HeapType WasmBinaryReader::getHeapType() {
+//   auto type = getS64LEB(); // TODO: Actually s33
+//   // Single heap types are negative; heap type indices are non-negative
+//   if (type >= 0) {
+//     if (size_t(type) >= types.size()) {
+//       throwError("invalid signature index: " + std::to_string(type));
+//     }
+//     return types[type];
+//   }
+//   auto share = Unshared;
+//   if (type == BinaryConsts::EncodedType::Shared) {
+//     share = Shared;
+//     type = getS64LEB(); // TODO: Actually s33
+//   }
+//   HeapType ht;
+//   if (getBasicHeapType(type, ht)) {
+//     return ht.getBasic(share);
+//   } else {
+//     throwError("invalid wasm heap type: " + std::to_string(type));
+//   }
+//   WASM_UNREACHABLE("unexpected type");
+// }
+
+// HeapType WasmBinaryReader::getIndexedHeapType() {
+//   auto index = getU32LEB();
+//   if (index >= types.size()) {
+//     throwError("invalid heap type index: " + std::to_string(index));
+//   }
+//   return types[index];
+// }
+
+// Type WasmBinaryReader::getConcreteType() {
+//   auto type = getType();
+//   if (!type.isConcrete()) {
+//     throwError("non-concrete type when one expected");
+//   }
+//   return type;
+// }
+
+// Name WasmBinaryReader::getInlineString(bool requireValid) {
+//   auto len = getU32LEB();
+//   auto data = getByteView(len);
+//   if (requireValid && !String::isUTF8(data)) {
+//     throwError("invalid UTF-8 string");
+//   }
+//   return Name(data);
+// }
+
+// void WasmBinaryReader::verifyInt8(int8_t x) {
+//   int8_t y = getInt8();
+//   if (x != y) {
+//     throwError("surprising value");
+//   }
+// }
+
+// void WasmBinaryReader::verifyInt16(int16_t x) {
+//   int16_t y = getInt16();
+//   if (x != y) {
+//     throwError("surprising value");
+//   }
+// }
+
+// void WasmBinaryReader::verifyInt32(int32_t x) {
+//   int32_t y = getInt32();
+//   if (x != y) {
+//     throwError("surprising value");
+//   }
+// }
+
+// void WasmBinaryReader::verifyInt64(int64_t x) {
+//   int64_t y = getInt64();
+//   if (x != y) {
+//     throwError("surprising value");
+//   }
+// }
+
+// void WasmBinaryReader::readHeader() {
+//   verifyInt32(BinaryConsts::Magic);
+//   auto version = getInt32();
+//   if (version != BinaryConsts::Version) {
+//     if (version == 0x1000d) {
+//       throwError("this looks like a wasm component, which Binaryen does not "
+//                  "support yet (see "
+//                  "https://github.com/WebAssembly/binaryen/issues/6728)");
+//     }
+//     throwError("invalid version");
+//   }
+// }
+
+// void WasmBinaryReader::readStart() {
+//   startIndex = getU32LEB();
+//   wasm.start = getFunctionName(startIndex);
+// }
+
+// static Name makeName(std::string prefix, size_t counter) {
+//   return Name(prefix + std::to_string(counter));
+// }
+
+// // Look up a name from the names section or use a validated version of the
+// // provided name. Return the name and whether it is explicit in the input.
+// static std::pair<Name, bool>
+// getOrMakeName(const std::unordered_map<Index, Name>& nameMap,
+//               Index i,
+//               Name name,
+//               std::unordered_set<Name>& usedNames) {
+//   if (auto it = nameMap.find(i); it != nameMap.end()) {
+//     return {it->second, true};
+//   } else {
+//     auto valid = Names::getValidNameGivenExisting(name, usedNames);
+//     usedNames.insert(valid);
+//     return {valid, false};
+//   }
+// }
+
+// void WasmBinaryReader::readMemories() {
+//   auto num = getU32LEB();
+//   auto numImports = wasm.memories.size();
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : memoryNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: memory index out of bounds in name section: "
+//                 << name << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     auto [name, isExplicit] =
+//       getOrMakeName(memoryNames, numImports + i, makeName("", i), usedNames);
+//     auto memory = Builder::makeMemory(name);
+//     memory->hasExplicitName = isExplicit;
+//     getResizableLimits(memory->initial,
+//                        memory->max,
+//                        memory->shared,
+//                        memory->addressType,
+//                        Memory::kUnlimitedSize);
+//     wasm.addMemory(std::move(memory));
+//   }
+// }
+
+// void WasmBinaryReader::readTypes() {
+//   TypeBuilder builder(getU32LEB());
+
+//   auto readHeapType = [&]() -> HeapType {
+//     int64_t htCode = getS64LEB(); // TODO: Actually s33
+//     auto share = Unshared;
+//     if (htCode == BinaryConsts::EncodedType::Shared) {
+//       share = Shared;
+//       htCode = getS64LEB(); // TODO: Actually s33
+//     }
+//     HeapType ht;
+//     if (getBasicHeapType(htCode, ht)) {
+//       return ht.getBasic(share);
+//     }
+//     if (size_t(htCode) >= builder.size()) {
+//       throwError("invalid type index: " + std::to_string(htCode));
+//     }
+//     return builder.getTempHeapType(size_t(htCode));
+//   };
+//   auto makeType = [&](int32_t typeCode) {
+//     Type type;
+//     if (getBasicType(typeCode, type)) {
+//       return type;
+//     }
+
+//     switch (typeCode) {
+//       case BinaryConsts::EncodedType::nullable:
+//       case BinaryConsts::EncodedType::nonnullable: {
+//         auto nullability = typeCode == BinaryConsts::EncodedType::nullable
+//                              ? Nullable
+//                              : NonNullable;
+
+//         HeapType ht = readHeapType();
+//         if (ht.isBasic()) {
+//           return Type(ht, nullability);
+//         }
+
+//         return builder.getTempRefType(ht, nullability);
+//       }
+//       default:
+//         throwError("unexpected type index: " + std::to_string(typeCode));
+//     }
+//     WASM_UNREACHABLE("unexpected type");
+//   };
+//   auto readType = [&]() { return makeType(getS32LEB()); };
+
+//   auto readSignatureDef = [&]() {
+//     std::vector<Type> params;
+//     std::vector<Type> results;
+//     size_t numParams = getU32LEB();
+//     for (size_t j = 0; j < numParams; j++) {
+//       params.push_back(readType());
+//     }
+//     auto numResults = getU32LEB();
+//     for (size_t j = 0; j < numResults; j++) {
+//       results.push_back(readType());
+//     }
+//     return Signature(builder.getTempTupleType(params),
+//                      builder.getTempTupleType(results));
+//   };
+
+//   auto readContinuationDef = [&]() {
+//     HeapType ht = readHeapType();
+//     if (!ht.isSignature()) {
+//       throw ParseException("cont types must be built from function types");
+//     }
+//     return Continuation(ht);
+//   };
+
+//   auto readMutability = [&]() {
+//     switch (getU32LEB()) {
+//       case 0:
+//         return Immutable;
+//       case 1:
+//         return Mutable;
+//       default:
+//         throw ParseException("Expected 0 or 1 for mutability");
+//     }
+//   };
+
+//   auto readFieldDef = [&]() {
+//     // The value may be a general wasm type, or one of the types only
+//     possible
+//     // in a field.
+//     auto typeCode = getS32LEB();
+//     if (typeCode == BinaryConsts::EncodedType::i8) {
+//       auto mutable_ = readMutability();
+//       return Field(Field::i8, mutable_);
+//     }
+//     if (typeCode == BinaryConsts::EncodedType::i16) {
+//       auto mutable_ = readMutability();
+//       return Field(Field::i16, mutable_);
+//     }
+//     // It's a regular wasm value.
+//     auto type = makeType(typeCode);
+//     auto mutable_ = readMutability();
+//     return Field(type, mutable_);
+//   };
+
+//   auto readStructDef = [&]() {
+//     FieldList fields;
+//     size_t numFields = getU32LEB();
+//     for (size_t j = 0; j < numFields; j++) {
+//       fields.push_back(readFieldDef());
+//     }
+//     return Struct(std::move(fields));
+//   };
+
+//   for (size_t i = 0; i < builder.size(); i++) {
+//     auto form = getInt8();
+//     if (form == BinaryConsts::EncodedType::Rec) {
+//       uint32_t groupSize = getU32LEB();
+//       if (groupSize == 0u) {
+//         // TODO: Support groups of size zero by shrinking the builder.
+//         throwError("Recursion groups of size zero not supported");
+//       }
+//       // The group counts as one element in the type section, so we have to
+//       // allocate space for the extra types.
+//       builder.grow(groupSize - 1);
+//       builder.createRecGroup(i, groupSize);
+//       form = getInt8();
+//     }
+//     std::optional<uint32_t> superIndex;
+//     if (form == BinaryConsts::EncodedType::Sub ||
+//         form == BinaryConsts::EncodedType::SubFinal) {
+//       if (form == BinaryConsts::EncodedType::Sub) {
+//         builder[i].setOpen();
+//       }
+//       uint32_t supers = getU32LEB();
+//       if (supers > 0) {
+//         if (supers != 1) {
+//           throwError("Invalid type definition with " + std::to_string(supers)
+//           +
+//                      " supertypes");
+//         }
+//         superIndex = getU32LEB();
+//       }
+//       form = getInt8();
+//     }
+//     if (form == BinaryConsts::SharedDef) {
+//       builder[i].setShared();
+//       form = getInt8();
+//     }
+//     if (form == BinaryConsts::EncodedType::Func) {
+//       builder[i] = readSignatureDef();
+//     } else if (form == BinaryConsts::EncodedType::Cont) {
+//       builder[i] = readContinuationDef();
+//     } else if (form == BinaryConsts::EncodedType::Struct) {
+//       builder[i] = readStructDef();
+//     } else if (form == BinaryConsts::EncodedType::Array) {
+//       builder[i] = Array(readFieldDef());
+//     } else {
+//       throwError("Bad type form " + std::to_string(form));
+//     }
+//     if (superIndex) {
+//       if (*superIndex > builder.size()) {
+//         throwError("Out of bounds supertype index " +
+//                    std::to_string(*superIndex));
+//       }
+//       builder[i].subTypeOf(builder[*superIndex]);
+//     }
+//   }
+
+//   auto result = builder.build();
+//   if (auto* err = result.getError()) {
+//     Fatal() << "Invalid type: " << err->reason << " at index " << err->index;
+//   }
+//   types = std::move(*result);
+
+//   // Record the type indices.
+//   for (Index i = 0; i < types.size(); ++i) {
+//     wasm.typeIndices.insert({types[i], i});
+//   }
+
+//   // Assign names from the names section.
+//   for (auto& [index, name] : typeNames) {
+//     if (index >= types.size()) {
+//       std::cerr << "warning: type index out of bounds in name section: " <<
+//       name
+//                 << " at index " << index << '\n';
+//       continue;
+//     }
+//     wasm.typeNames[types[index]].name = name;
+//   }
+//   for (auto& [index, fields] : fieldNames) {
+//     if (index >= types.size()) {
+//       std::cerr
+//         << "warning: type index out of bounds in name section: fields at
+//         index "
+//         << index << '\n';
+//       continue;
+//     }
+//     if (!types[index].isStruct()) {
+//       std::cerr << "warning: field names applied to non-struct type at index
+//       "
+//                 << index << '\n';
+//       continue;
+//     }
+//     auto& names = wasm.typeNames[types[index]].fieldNames;
+//     for (auto& [field, name] : fields) {
+//       if (field >= types[index].getStruct().fields.size()) {
+//         std::cerr << "warning: field index out of bounds in name section: "
+//                   << name << " at index " << field << " in type " << index
+//                   << '\n';
+//         continue;
+//       }
+//       names[field] = name;
+//     }
+//   }
+// }
+
+// Name WasmBinaryReader::getFunctionName(Index index) {
+//   if (index >= wasm.functions.size()) {
+//     throwError("invalid function index");
+//   }
+//   return wasm.functions[index]->name;
+// }
+
+// Name WasmBinaryReader::getTableName(Index index) {
+//   if (index >= wasm.tables.size()) {
+//     throwError("invalid table index");
+//   }
+//   return wasm.tables[index]->name;
+// }
+
+// Name WasmBinaryReader::getMemoryName(Index index) {
+//   if (index >= wasm.memories.size()) {
+//     throwError("invalid memory index");
+//   }
+//   return wasm.memories[index]->name;
+// }
+
+// Name WasmBinaryReader::getGlobalName(Index index) {
+//   if (index >= wasm.globals.size()) {
+//     throwError("invalid global index");
+//   }
+//   return wasm.globals[index]->name;
+// }
+
+// Table* WasmBinaryReader::getTable(Index index) {
+//   if (index < wasm.tables.size()) {
+//     return wasm.tables[index].get();
+//   }
+//   throwError("Table index out of range.");
+// }
+
+// Name WasmBinaryReader::getTagName(Index index) {
+//   if (index >= wasm.tags.size()) {
+//     throwError("invalid tag index");
+//   }
+//   return wasm.tags[index]->name;
+// }
+
+// Name WasmBinaryReader::getDataName(Index index) {
+//   if (index >= wasm.dataSegments.size()) {
+//     throwError("invalid data segment index");
+//   }
+//   return wasm.dataSegments[index]->name;
+// }
+
+// Name WasmBinaryReader::getElemName(Index index) {
+//   if (index >= wasm.elementSegments.size()) {
+//     throwError("invalid element segment index");
+//   }
+//   return wasm.elementSegments[index]->name;
+// }
+
+// Memory* WasmBinaryReader::getMemory(Index index) {
+//   if (index < wasm.memories.size()) {
+//     return wasm.memories[index].get();
+//   }
+//   throwError("Memory index out of range.");
+// }
+
+// void WasmBinaryReader::getResizableLimits(Address& initial,
+//                                           Address& max,
+//                                           bool& shared,
+//                                           Type& addressType,
+//                                           Address defaultIfNoMax) {
+//   auto flags = getU32LEB();
+//   bool hasMax = (flags & BinaryConsts::HasMaximum) != 0;
+//   bool isShared = (flags & BinaryConsts::IsShared) != 0;
+//   bool is64 = (flags & BinaryConsts::Is64) != 0;
+//   initial = is64 ? getU64LEB() : getU32LEB();
+//   if (isShared && !hasMax) {
+//     throwError("shared memory must have max size");
+//   }
+//   shared = isShared;
+//   addressType = is64 ? Type::i64 : Type::i32;
+//   if (hasMax) {
+//     max = is64 ? getU64LEB() : getU32LEB();
+//   } else {
+//     max = defaultIfNoMax;
+//   }
+// }
+
+// void WasmBinaryReader::readImports() {
+//   size_t num = getU32LEB();
+//   Builder builder(wasm);
+//   std::unordered_set<Name> usedFunctionNames, usedTableNames,
+//   usedMemoryNames,
+//     usedGlobalNames, usedTagNames;
+//   for (size_t i = 0; i < num; i++) {
+//     auto module = getInlineString();
+//     auto base = getInlineString();
+//     auto kind = (ExternalKind)getU32LEB();
+//     // We set a unique prefix for the name based on the kind. This ensures no
+//     // collisions between them, which can't occur here (due to the index i)
+//     but
+//     // could occur later due to the names section.
+//     switch (kind) {
+//       case ExternalKind::Function: {
+//         auto [name, isExplicit] =
+//           getOrMakeName(functionNames,
+//                         wasm.functions.size(),
+//                         makeName("fimport$", wasm.functions.size()),
+//                         usedFunctionNames);
+//         auto index = getU32LEB();
+//         functionTypes.push_back(getTypeByIndex(index));
+//         auto type = getTypeByIndex(index);
+//         if (!type.isSignature()) {
+//           throwError(std::string("Imported function ") + module.toString() +
+//                      '.' + base.toString() +
+//                      "'s type must be a signature. Given: " +
+//                      type.toString());
+//         }
+//         auto curr = builder.makeFunction(name, type, {});
+//         curr->hasExplicitName = isExplicit;
+//         curr->module = module;
+//         curr->base = base;
+//         setLocalNames(*curr, wasm.functions.size());
+//         wasm.addFunction(std::move(curr));
+//         break;
+//       }
+//       case ExternalKind::Table: {
+//         auto [name, isExplicit] =
+//           getOrMakeName(tableNames,
+//                         wasm.tables.size(),
+//                         makeName("timport$", wasm.tables.size()),
+//                         usedTableNames);
+//         auto table = builder.makeTable(name);
+//         table->hasExplicitName = isExplicit;
+//         table->module = module;
+//         table->base = base;
+//         table->type = getType();
+
+//         bool is_shared;
+//         getResizableLimits(table->initial,
+//                            table->max,
+//                            is_shared,
+//                            table->addressType,
+//                            Table::kUnlimitedSize);
+//         if (is_shared) {
+//           throwError("Tables may not be shared");
+//         }
+//         wasm.addTable(std::move(table));
+//         break;
+//       }
+//       case ExternalKind::Memory: {
+//         auto [name, isExplicit] =
+//           getOrMakeName(memoryNames,
+//                         wasm.memories.size(),
+//                         makeName("mimport$", wasm.memories.size()),
+//                         usedMemoryNames);
+//         auto memory = builder.makeMemory(name);
+//         memory->hasExplicitName = isExplicit;
+//         memory->module = module;
+//         memory->base = base;
+//         getResizableLimits(memory->initial,
+//                            memory->max,
+//                            memory->shared,
+//                            memory->addressType,
+//                            Memory::kUnlimitedSize);
+//         wasm.addMemory(std::move(memory));
+//         break;
+//       }
+//       case ExternalKind::Global: {
+//         auto [name, isExplicit] =
+//           getOrMakeName(globalNames,
+//                         wasm.globals.size(),
+//                         makeName("gimport$", wasm.globals.size()),
+//                         usedGlobalNames);
+//         auto type = getConcreteType();
+//         auto mutable_ = getU32LEB();
+//         if (mutable_ & ~1) {
+//           throwError("Global mutability must be 0 or 1");
+//         }
+//         auto curr =
+//           builder.makeGlobal(name,
+//                              type,
+//                              nullptr,
+//                              mutable_ ? Builder::Mutable :
+//                              Builder::Immutable);
+//         curr->hasExplicitName = isExplicit;
+//         curr->module = module;
+//         curr->base = base;
+//         wasm.addGlobal(std::move(curr));
+//         break;
+//       }
+//       case ExternalKind::Tag: {
+//         auto [name, isExplicit] =
+//           getOrMakeName(tagNames,
+//                         wasm.tags.size(),
+//                         makeName("eimport$", wasm.tags.size()),
+//                         usedTagNames);
+//         getInt8(); // Reserved 'attribute' field
+//         auto index = getU32LEB();
+//         auto curr = builder.makeTag(name, getSignatureByTypeIndex(index));
+//         curr->hasExplicitName = isExplicit;
+//         curr->module = module;
+//         curr->base = base;
+//         wasm.addTag(std::move(curr));
+//         break;
+//       }
+//       default: {
+//         throwError("bad import kind");
+//       }
+//     }
+//   }
+//   numFuncImports = wasm.functions.size();
+// }
+
+// void WasmBinaryReader::setLocalNames(Function& func, Index i) {
+//   if (auto it = localNames.find(i); it != localNames.end()) {
+//     for (auto& [local, name] : it->second) {
+//       if (local >= func.getNumLocals()) {
+//         std::cerr << "warning: local index out of bounds in name section: "
+//                   << name << " at index " << local << " in function " << i
+//                   << '\n';
+//         continue;
+//       }
+//       func.setLocalName(local, name);
+//     }
+//   }
+// }
+
+// void WasmBinaryReader::readFunctionSignatures() {
+//   size_t num = getU32LEB();
+//   auto numImports = wasm.functions.size();
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : functionNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: function index out of bounds in name section: "
+//                 << name << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   // Also check that the function indices in the local names subsection are
+//   // in-bounds, even though we don't use them here.
+//   for (auto& [index, locals] : localNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: function index out of bounds in name section: "
+//                    "locals at index "
+//                 << index << '\n';
+//     }
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     auto [name, isExplicit] =
+//       getOrMakeName(functionNames, numImports + i, makeName("", i),
+//       usedNames);
+//     auto index = getU32LEB();
+//     HeapType type = getTypeByIndex(index);
+//     functionTypes.push_back(type);
+//     // Check that the type is a signature.
+//     getSignatureByTypeIndex(index);
+//     auto func = Builder(wasm).makeFunction(name, type, {}, nullptr);
+//     func->hasExplicitName = isExplicit;
+//     wasm.addFunction(std::move(func));
+//   }
+// }
+
+// HeapType WasmBinaryReader::getTypeByIndex(Index index) {
+//   if (index >= types.size()) {
+//     throwError("invalid type index " + std::to_string(index) + " / " +
+//                std::to_string(types.size()));
+//   }
+//   return types[index];
+// }
+
+// HeapType WasmBinaryReader::getTypeByFunctionIndex(Index index) {
+//   if (index >= functionTypes.size()) {
+//     throwError("invalid function index");
+//   }
+//   return functionTypes[index];
+// }
+
+// Signature WasmBinaryReader::getSignatureByTypeIndex(Index index) {
+//   auto heapType = getTypeByIndex(index);
+//   if (!heapType.isSignature()) {
+//     throwError("invalid signature type " + heapType.toString());
+//   }
+//   return heapType.getSignature();
+// }
+
+// Signature WasmBinaryReader::getSignatureByFunctionIndex(Index index) {
+//   auto heapType = getTypeByFunctionIndex(index);
+//   if (!heapType.isSignature()) {
+//     throwError("invalid signature type " + heapType.toString());
+//   }
+//   return heapType.getSignature();
+// }
+
+// void WasmBinaryReader::readFunctions() {
+//   numFuncBodies = getU32LEB();
+//   if (numFuncBodies + numFuncImports != wasm.functions.size()) {
+//     throwError("invalid function section size, must equal types");
+//   }
+//   if (DWARF) {
+//     builder.setBinaryLocation(&pos, codeSectionLocation);
+//   }
+//   for (size_t i = 0; i < numFuncBodies; i++) {
+//     auto sizePos = pos;
+//     size_t size = getU32LEB();
+//     if (size == 0) {
+//       throwError("empty function size");
+//     }
+//     Index endOfFunction = pos + size;
+
+//     auto& func = wasm.functions[numFuncImports + i];
+//     currFunction = func.get();
+
+//     if (DWARF) {
+//       func->funcLocation = BinaryLocations::FunctionLocations{
+//         BinaryLocation(sizePos - codeSectionLocation),
+//         BinaryLocation(pos - codeSectionLocation),
+//         BinaryLocation(pos - codeSectionLocation + size)};
+//     }
+
+//     func->prologLocation = sourceMapReader.readDebugLocationAt(pos);
+
+//     readVars();
+//     setLocalNames(*func, numFuncImports + i);
+//     {
+//       // Process the function body. Even if we are skipping function bodies
+//       we
+//       // need to not skip the start function. That contains important code
+//       for
+//       // wasm-emscripten-finalize in the form of pthread-related segment
+//       // initializations. As this is just one function, it doesn't add
+//       // significant time, so the optimization of skipping bodies is still
+//       very
+//       // useful.
+//       auto currFunctionIndex = wasm.functions.size();
+//       bool isStart = startIndex == currFunctionIndex;
+//       if (skipFunctionBodies && !isStart) {
+//         // When skipping the function body we need to put something valid in
+//         // their place so we validate. An unreachable is always acceptable
+//         // there.
+//         func->body = Builder(wasm).makeUnreachable();
+//         // Skip reading the contents.
+//         pos = endOfFunction;
+//       } else {
+//         auto start = builder.visitFunctionStart(func.get());
+//         if (auto* err = start.getErr()) {
+//           throwError(err->msg);
+//         }
+//         while (pos < endOfFunction) {
+//           auto inst = readInst();
+//           if (auto* err = inst.getErr()) {
+//             throwError(err->msg);
+//           }
+//         }
+//         if (pos != endOfFunction) {
+//           throwError("function overflowed its bounds");
+//         }
+//         if (!builder.empty()) {
+//           throwError("expected function end");
+//         }
+//       }
+//     }
+
+//     sourceMapReader.finishFunction();
+//     TypeUpdating::handleNonDefaultableLocals(func.get(), wasm);
+//     currFunction = nullptr;
+//   }
+// }
+
+// void WasmBinaryReader::readVars() {
+//   uint32_t totalVars = 0;
+//   size_t numLocalTypes = getU32LEB();
+//   // Use a SmallVector as in the common (MVP) case there are only 4 possible
+//   // types.
+//   SmallVector<std::pair<uint32_t, Type>, 4> decodedVars;
+//   decodedVars.reserve(numLocalTypes);
+//   for (size_t t = 0; t < numLocalTypes; t++) {
+//     auto num = getU32LEB();
+//     if (std::ckd_add(&totalVars, totalVars, num)) {
+//       throwError("unaddressable number of locals");
+//     }
+//     auto type = getConcreteType();
+//     decodedVars.emplace_back(num, type);
+//   }
+//   currFunction->vars.reserve(totalVars);
+//   for (auto [num, type] : decodedVars) {
+//     while (num > 0) {
+//       currFunction->vars.push_back(type);
+//       num--;
+//     }
+//   }
+// }
+
+// Result<> WasmBinaryReader::readInst() {
+//   if (auto loc = sourceMapReader.readDebugLocationAt(pos)) {
+//     builder.setDebugLocation(loc);
+//   }
+//   uint8_t code = getInt8();
+//   switch (code) {
+//     case BinaryConsts::Block:
+//       return builder.makeBlock(Name(), getBlockType());
+//     case BinaryConsts::If:
+//       return builder.makeIf(Name(), getBlockType());
+//     case BinaryConsts::Loop:
+//       return builder.makeLoop(Name(), getBlockType());
+//     case BinaryConsts::Br:
+//       return builder.makeBreak(getU32LEB(), false);
+//     case BinaryConsts::BrIf:
+//       return builder.makeBreak(getU32LEB(), true);
+//     case BinaryConsts::BrTable: {
+//       auto numTargets = getU32LEB();
+//       std::vector<Index> labels(numTargets);
+//       for (Index i = 0; i < numTargets; ++i) {
+//         labels[i] = getU32LEB();
+//       }
+//       return builder.makeSwitch(labels, getU32LEB());
+//     }
+//     case BinaryConsts::CallFunction:
+//     case BinaryConsts::RetCallFunction:
+//       return builder.makeCall(getFunctionName(getU32LEB()),
+//                               code == BinaryConsts::RetCallFunction);
+//     case BinaryConsts::CallIndirect:
+//     case BinaryConsts::RetCallIndirect: {
+//       auto type = getIndexedHeapType();
+//       auto table = getTableName(getU32LEB());
+//       return builder.makeCallIndirect(
+//         table, type, code == BinaryConsts::RetCallIndirect);
+//     }
+//     case BinaryConsts::LocalGet:
+//       return builder.makeLocalGet(getU32LEB());
+//     case BinaryConsts::LocalSet:
+//       return builder.makeLocalSet(getU32LEB());
+//     case BinaryConsts::LocalTee:
+//       return builder.makeLocalTee(getU32LEB());
+//     case BinaryConsts::GlobalGet:
+//       return builder.makeGlobalGet(getGlobalName(getU32LEB()));
+//     case BinaryConsts::GlobalSet:
+//       return builder.makeGlobalSet(getGlobalName(getU32LEB()));
+//     case BinaryConsts::Select:
+//       return builder.makeSelect(std::nullopt);
+//     case BinaryConsts::SelectWithType: {
+//       auto numTypes = getU32LEB();
+//       std::vector<Type> types;
+//       for (Index i = 0; i < numTypes; ++i) {
+//         auto t = getType();
+//         if (!t.isConcrete()) {
+//           return Err{"bad select type"};
+//         }
+//         types.push_back(t);
+//       }
+//       return builder.makeSelect(Type(types));
+//     }
+//     case BinaryConsts::Return:
+//       return builder.makeReturn();
+//     case BinaryConsts::Nop:
+//       return builder.makeNop();
+//     case BinaryConsts::Unreachable:
+//       return builder.makeUnreachable();
+//     case BinaryConsts::Drop:
+//       return builder.makeDrop();
+//     case BinaryConsts::End:
+//       return builder.visitEnd();
+//     case BinaryConsts::Else:
+//       return builder.visitElse();
+//     case BinaryConsts::Catch_Legacy:
+//       return builder.visitCatch(getTagName(getU32LEB()));
+//     case BinaryConsts::CatchAll_Legacy:
+//       return builder.visitCatchAll();
+//     case BinaryConsts::Delegate:
+//       return builder.visitDelegate(getU32LEB());
+//     case BinaryConsts::RefNull:
+//       return builder.makeRefNull(getHeapType());
+//     case BinaryConsts::RefIsNull:
+//       return builder.makeRefIsNull();
+//     case BinaryConsts::RefFunc:
+//       return builder.makeRefFunc(getFunctionName(getU32LEB()));
+//     case BinaryConsts::RefEq:
+//       return builder.makeRefEq();
+//     case BinaryConsts::RefAsNonNull:
+//       return builder.makeRefAs(RefAsNonNull);
+//     case BinaryConsts::BrOnNull:
+//       return builder.makeBrOn(getU32LEB(), BrOnNull);
+//     case BinaryConsts::BrOnNonNull:
+//       return builder.makeBrOn(getU32LEB(), BrOnNonNull);
+//     case BinaryConsts::TableGet:
+//       return builder.makeTableGet(getTableName(getU32LEB()));
+//     case BinaryConsts::TableSet:
+//       return builder.makeTableSet(getTableName(getU32LEB()));
+//     case BinaryConsts::Try:
+//       return builder.makeTry(Name(), getBlockType());
+//     case BinaryConsts::TryTable: {
+//       auto type = getBlockType();
+//       std::vector<Name> tags;
+//       std::vector<Index> labels;
+//       std::vector<bool> isRefs;
+//       auto numHandlers = getU32LEB();
+//       for (Index i = 0; i < numHandlers; ++i) {
+//         uint8_t code = getInt8();
+//         if (code == BinaryConsts::Catch || code == BinaryConsts::CatchRef) {
+//           tags.push_back(getTagName(getU32LEB()));
+//         } else {
+//           tags.push_back(Name());
+//         }
+//         labels.push_back(getU32LEB());
+//         isRefs.push_back(code == BinaryConsts::CatchRef ||
+//                          code == BinaryConsts::CatchAllRef);
+//       }
+//       return builder.makeTryTable(Name(), type, tags, labels, isRefs);
+//     }
+//     case BinaryConsts::Throw:
+//       return builder.makeThrow(getTagName(getU32LEB()));
+//     case BinaryConsts::Rethrow:
+//       return builder.makeRethrow(getU32LEB());
+//     case BinaryConsts::ThrowRef:
+//       return builder.makeThrowRef();
+//     case BinaryConsts::MemorySize:
+//       return builder.makeMemorySize(getMemoryName(getU32LEB()));
+//     case BinaryConsts::MemoryGrow:
+//       return builder.makeMemoryGrow(getMemoryName(getU32LEB()));
+//     case BinaryConsts::CallRef:
+//     case BinaryConsts::RetCallRef:
+//       return builder.makeCallRef(getIndexedHeapType(),
+//                                  code == BinaryConsts::RetCallRef);
+//     case BinaryConsts::ContBind: {
+//       auto before = getIndexedHeapType();
+//       auto after = getIndexedHeapType();
+//       return builder.makeContBind(before, after);
+//     }
+//     case BinaryConsts::ContNew:
+//       return builder.makeContNew(getIndexedHeapType());
+//     case BinaryConsts::Resume: {
+//       auto type = getIndexedHeapType();
+//       std::vector<Name> tags;
+//       std::vector<Index> labels;
+//       auto numHandlers = getU32LEB();
+//       for (Index i = 0; i < numHandlers; ++i) {
+//         tags.push_back(getTagName(getU32LEB()));
+//         labels.push_back(getU32LEB());
+//       }
+//       return builder.makeResume(type, tags, labels);
+//     }
+//     case BinaryConsts::Suspend:
+//       return builder.makeSuspend(getTagName(getU32LEB()));
+
+// #define BINARY_INT(code) \
+//   case BinaryConsts::I32##code: \
+//     return builder.makeBinary(code##Int32); \
+//   case BinaryConsts::I64##code: \
+//     return builder.makeBinary(code##Int64);
+// #define BINARY_FLOAT(code) \
+//   case BinaryConsts::F32##code: \
+//     return builder.makeBinary(code##Float32); \
+//   case BinaryConsts::F64##code: \
+//     return builder.makeBinary(code##Float64);
+// #define BINARY_NUM(code) \
+//   BINARY_INT(code) \ BINARY_FLOAT(code)
+
+//       BINARY_NUM(Add);
+//       BINARY_NUM(Sub);
+//       BINARY_NUM(Mul);
+//       BINARY_INT(DivS);
+//       BINARY_INT(DivU);
+//       BINARY_INT(RemS);
+//       BINARY_INT(RemU);
+//       BINARY_INT(And);
+//       BINARY_INT(Or);
+//       BINARY_INT(Xor);
+//       BINARY_INT(Shl);
+//       BINARY_INT(ShrU);
+//       BINARY_INT(ShrS);
+//       BINARY_INT(RotL);
+//       BINARY_INT(RotR);
+//       BINARY_FLOAT(Div);
+//       BINARY_FLOAT(CopySign);
+//       BINARY_FLOAT(Min);
+//       BINARY_FLOAT(Max);
+//       BINARY_NUM(Eq);
+//       BINARY_NUM(Ne);
+//       BINARY_INT(LtS);
+//       BINARY_INT(LtU);
+//       BINARY_INT(LeS);
+//       BINARY_INT(LeU);
+//       BINARY_INT(GtS);
+//       BINARY_INT(GtU);
+//       BINARY_INT(GeS);
+//       BINARY_INT(GeU);
+//       BINARY_FLOAT(Lt);
+//       BINARY_FLOAT(Le);
+//       BINARY_FLOAT(Gt);
+//       BINARY_FLOAT(Ge);
+
+// #define UNARY_INT(code) \
+//   case BinaryConsts::I32##code: \
+//     return builder.makeUnary(code##Int32); \
+//   case BinaryConsts::I64##code: \
+//     return builder.makeUnary(code##Int64);
+// #define UNARY_FLOAT(code) \
+//   case BinaryConsts::F32##code: \
+//     return builder.makeUnary(code##Float32); \
+//   case BinaryConsts::F64##code: \
+//     return builder.makeUnary(code##Float64);
+
+//       UNARY_INT(Clz);
+//       UNARY_INT(Ctz);
+//       UNARY_INT(Popcnt);
+//       UNARY_INT(EqZ);
+//       UNARY_FLOAT(Neg);
+//       UNARY_FLOAT(Abs);
+//       UNARY_FLOAT(Ceil);
+//       UNARY_FLOAT(Floor);
+//       UNARY_FLOAT(Nearest);
+//       UNARY_FLOAT(Sqrt);
+
+//     case BinaryConsts::F32UConvertI32:
+//       return builder.makeUnary(ConvertUInt32ToFloat32);
+//     case BinaryConsts::F64UConvertI32:
+//       return builder.makeUnary(ConvertUInt32ToFloat64);
+//     case BinaryConsts::F32SConvertI32:
+//       return builder.makeUnary(ConvertSInt32ToFloat32);
+//     case BinaryConsts::F64SConvertI32:
+//       return builder.makeUnary(ConvertSInt32ToFloat64);
+//     case BinaryConsts::F32UConvertI64:
+//       return builder.makeUnary(ConvertUInt64ToFloat32);
+//     case BinaryConsts::F64UConvertI64:
+//       return builder.makeUnary(ConvertUInt64ToFloat64);
+//     case BinaryConsts::F32SConvertI64:
+//       return builder.makeUnary(ConvertSInt64ToFloat32);
+//     case BinaryConsts::F64SConvertI64:
+//       return builder.makeUnary(ConvertSInt64ToFloat64);
+//     case BinaryConsts::I64SExtendI32:
+//       return builder.makeUnary(ExtendSInt32);
+//     case BinaryConsts::I64UExtendI32:
+//       return builder.makeUnary(ExtendUInt32);
+//     case BinaryConsts::I32WrapI64:
+//       return builder.makeUnary(WrapInt64);
+//     case BinaryConsts::I32UTruncF32:
+//       return builder.makeUnary(TruncUFloat32ToInt32);
+//     case BinaryConsts::I32UTruncF64:
+//       return builder.makeUnary(TruncUFloat64ToInt32);
+//     case BinaryConsts::I32STruncF32:
+//       return builder.makeUnary(TruncSFloat32ToInt32);
+//     case BinaryConsts::I32STruncF64:
+//       return builder.makeUnary(TruncSFloat64ToInt32);
+//     case BinaryConsts::I64UTruncF32:
+//       return builder.makeUnary(TruncUFloat32ToInt64);
+//     case BinaryConsts::I64UTruncF64:
+//       return builder.makeUnary(TruncUFloat64ToInt64);
+//     case BinaryConsts::I64STruncF32:
+//       return builder.makeUnary(TruncSFloat32ToInt64);
+//     case BinaryConsts::I64STruncF64:
+//       return builder.makeUnary(TruncSFloat64ToInt64);
+//     case BinaryConsts::F32Trunc:
+//       return builder.makeUnary(TruncFloat32);
+//     case BinaryConsts::F64Trunc:
+//       return builder.makeUnary(TruncFloat64);
+//     case BinaryConsts::F32DemoteI64:
+//       return builder.makeUnary(DemoteFloat64);
+//     case BinaryConsts::F64PromoteF32:
+//       return builder.makeUnary(PromoteFloat32);
+//     case BinaryConsts::I32ReinterpretF32:
+//       return builder.makeUnary(ReinterpretFloat32);
+//     case BinaryConsts::I64ReinterpretF64:
+//       return builder.makeUnary(ReinterpretFloat64);
+//     case BinaryConsts::F32ReinterpretI32:
+//       return builder.makeUnary(ReinterpretInt32);
+//     case BinaryConsts::F64ReinterpretI64:
+//       return builder.makeUnary(ReinterpretInt64);
+//     case BinaryConsts::I32ExtendS8:
+//       return builder.makeUnary(ExtendS8Int32);
+//     case BinaryConsts::I32ExtendS16:
+//       return builder.makeUnary(ExtendS16Int32);
+//     case BinaryConsts::I64ExtendS8:
+//       return builder.makeUnary(ExtendS8Int64);
+//     case BinaryConsts::I64ExtendS16:
+//       return builder.makeUnary(ExtendS16Int64);
+//     case BinaryConsts::I64ExtendS32:
+//       return builder.makeUnary(ExtendS32Int64);
+//     case BinaryConsts::I32Const:
+//       return builder.makeConst(Literal(getS32LEB()));
+//     case BinaryConsts::I64Const:
+//       return builder.makeConst(Literal(getS64LEB()));
+//     case BinaryConsts::F32Const:
+//       return builder.makeConst(getFloat32Literal());
+//     case BinaryConsts::F64Const:
+//       return builder.makeConst(getFloat64Literal());
+//     case BinaryConsts::I32LoadMem8S: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(1, true, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32LoadMem8U: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(1, false, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32LoadMem16S: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(2, true, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32LoadMem16U: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(2, false, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32LoadMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(4, false, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I64LoadMem8S: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(1, true, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem8U: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(1, false, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem16S: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(2, true, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem16U: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(2, false, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem32S: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(4, true, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem32U: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(4, false, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64LoadMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(8, false, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::F32LoadMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(4, false, offset, align, Type::f32, mem);
+//     }
+//     case BinaryConsts::F64LoadMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeLoad(8, false, offset, align, Type::f64, mem);
+//     }
+//     case BinaryConsts::I32StoreMem8: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(1, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32StoreMem16: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(2, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I32StoreMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(4, offset, align, Type::i32, mem);
+//     }
+//     case BinaryConsts::I64StoreMem8: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(1, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64StoreMem16: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(2, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64StoreMem32: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(4, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::I64StoreMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(8, offset, align, Type::i64, mem);
+//     }
+//     case BinaryConsts::F32StoreMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(4, offset, align, Type::f32, mem);
+//     }
+//     case BinaryConsts::F64StoreMem: {
+//       auto [mem, align, offset] = getMemarg();
+//       return builder.makeStore(8, offset, align, Type::f64, mem);
+//     }
+//     case BinaryConsts::AtomicPrefix: {
+//       auto op = getU32LEB();
+//       switch (op) {
+//         case BinaryConsts::I32AtomicLoad8U: {
+//           // TODO: pass align through for validation.
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(1, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicLoad16U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(2, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicLoad: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(4, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I64AtomicLoad8U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(1, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicLoad16U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(2, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicLoad32U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(4, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicLoad: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicLoad(8, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I32AtomicStore8: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(1, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicStore16: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(2, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicStore: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(4, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I64AtomicStore8: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(1, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicStore16: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(2, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicStore32: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(4, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicStore: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicStore(8, offset, Type::i64, mem);
+//         }
+
+// #define RMW(op) \
+//   case BinaryConsts::I32AtomicRMW##op: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 4, offset, Type::i32, mem); \
+//   } \
+//   case BinaryConsts::I32AtomicRMW##op##8U: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 1, offset, Type::i32, mem); \
+//   } \
+//   case BinaryConsts::I32AtomicRMW##op##16U: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 2, offset, Type::i32, mem); \
+//   } \
+//   case BinaryConsts::I64AtomicRMW##op: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 8, offset, Type::i64, mem); \
+//   } \
+//   case BinaryConsts::I64AtomicRMW##op##8U: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 1, offset, Type::i64, mem); \
+//   } \
+//   case BinaryConsts::I64AtomicRMW##op##16U: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 2, offset, Type::i64, mem); \
+//   } \
+//   case BinaryConsts::I64AtomicRMW##op##32U: { \
+//     auto [mem, align, offset] = getMemarg(); \
+//     return builder.makeAtomicRMW(RMW##op, 4, offset, Type::i64, mem); \
+//   }
+
+//           RMW(Add);
+//           RMW(Sub);
+//           RMW(And);
+//           RMW(Or);
+//           RMW(Xor);
+//           RMW(Xchg);
+
+//         case BinaryConsts::I32AtomicCmpxchg: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(4, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicCmpxchg8U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(1, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I32AtomicCmpxchg16U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(2, offset, Type::i32, mem);
+//         }
+//         case BinaryConsts::I64AtomicCmpxchg: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(8, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicCmpxchg8U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(1, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicCmpxchg16U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(2, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I64AtomicCmpxchg32U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicCmpxchg(4, offset, Type::i64, mem);
+//         }
+//         case BinaryConsts::I32AtomicWait: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicWait(Type::i32, offset, mem);
+//         }
+//         case BinaryConsts::I64AtomicWait: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicWait(Type::i64, offset, mem);
+//         }
+//         case BinaryConsts::AtomicNotify: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeAtomicNotify(offset, mem);
+//         }
+//         case BinaryConsts::AtomicFence:
+//           if (getInt8() != 0) {
+//             return Err{"expected 0x00 byte immediate on atomic.fence"};
+//           }
+//           return builder.makeAtomicFence();
+//       }
+//       return Err{"unknown atomic operation"};
+//     }
+//     case BinaryConsts::MiscPrefix: {
+//       auto op = getU32LEB();
+//       switch (op) {
+//         case BinaryConsts::I32STruncSatF32:
+//           return builder.makeUnary(TruncSatSFloat32ToInt32);
+//         case BinaryConsts::I32UTruncSatF32:
+//           return builder.makeUnary(TruncSatUFloat32ToInt32);
+//         case BinaryConsts::I32STruncSatF64:
+//           return builder.makeUnary(TruncSatSFloat64ToInt32);
+//         case BinaryConsts::I32UTruncSatF64:
+//           return builder.makeUnary(TruncSatUFloat64ToInt32);
+//         case BinaryConsts::I64STruncSatF32:
+//           return builder.makeUnary(TruncSatSFloat32ToInt64);
+//         case BinaryConsts::I64UTruncSatF32:
+//           return builder.makeUnary(TruncSatUFloat32ToInt64);
+//         case BinaryConsts::I64STruncSatF64:
+//           return builder.makeUnary(TruncSatSFloat64ToInt64);
+//         case BinaryConsts::I64UTruncSatF64:
+//           return builder.makeUnary(TruncSatUFloat64ToInt64);
+//         case BinaryConsts::MemoryInit: {
+//           auto data = getDataName(getU32LEB());
+//           auto mem = getMemoryName(getU32LEB());
+//           return builder.makeMemoryInit(data, mem);
+//         }
+//         case BinaryConsts::DataDrop:
+//           return builder.makeDataDrop(getDataName(getU32LEB()));
+//         case BinaryConsts::MemoryCopy: {
+//           auto dest = getMemoryName(getU32LEB());
+//           auto src = getMemoryName(getU32LEB());
+//           return builder.makeMemoryCopy(dest, src);
+//         }
+//         case BinaryConsts::MemoryFill:
+//           return builder.makeMemoryFill(getMemoryName(getU32LEB()));
+//         case BinaryConsts::TableSize:
+//           return builder.makeTableSize(getTableName(getU32LEB()));
+//         case BinaryConsts::TableGrow:
+//           return builder.makeTableGrow(getTableName(getU32LEB()));
+//         case BinaryConsts::TableFill:
+//           return builder.makeTableFill(getTableName(getU32LEB()));
+//         case BinaryConsts::TableCopy: {
+//           auto dest = getTableName(getU32LEB());
+//           auto src = getTableName(getU32LEB());
+//           return builder.makeTableCopy(dest, src);
+//         }
+//         case BinaryConsts::TableInit: {
+//           auto elem = getElemName(getU32LEB());
+//           auto table = getTableName(getU32LEB());
+//           return builder.makeTableInit(elem, table);
+//         }
+//         case BinaryConsts::F32_F16LoadMem: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeLoad(2, false, offset, align, Type::f32, mem);
+//         }
+//         case BinaryConsts::F32_F16StoreMem: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeStore(2, offset, align, Type::f32, mem);
+//         }
+//       }
+//       return Err{"unknown misc operation"};
+//     }
+//     case BinaryConsts::SIMDPrefix: {
+//       auto op = getU32LEB();
+//       switch (op) {
+//         case BinaryConsts::I8x16Eq:
+//           return builder.makeBinary(EqVecI8x16);
+//         case BinaryConsts::I8x16Ne:
+//           return builder.makeBinary(NeVecI8x16);
+//         case BinaryConsts::I8x16LtS:
+//           return builder.makeBinary(LtSVecI8x16);
+//         case BinaryConsts::I8x16LtU:
+//           return builder.makeBinary(LtUVecI8x16);
+//         case BinaryConsts::I8x16GtS:
+//           return builder.makeBinary(GtSVecI8x16);
+//         case BinaryConsts::I8x16GtU:
+//           return builder.makeBinary(GtUVecI8x16);
+//         case BinaryConsts::I8x16LeS:
+//           return builder.makeBinary(LeSVecI8x16);
+//         case BinaryConsts::I8x16LeU:
+//           return builder.makeBinary(LeUVecI8x16);
+//         case BinaryConsts::I8x16GeS:
+//           return builder.makeBinary(GeSVecI8x16);
+//         case BinaryConsts::I8x16GeU:
+//           return builder.makeBinary(GeUVecI8x16);
+//         case BinaryConsts::I16x8Eq:
+//           return builder.makeBinary(EqVecI16x8);
+//         case BinaryConsts::I16x8Ne:
+//           return builder.makeBinary(NeVecI16x8);
+//         case BinaryConsts::I16x8LtS:
+//           return builder.makeBinary(LtSVecI16x8);
+//         case BinaryConsts::I16x8LtU:
+//           return builder.makeBinary(LtUVecI16x8);
+//         case BinaryConsts::I16x8GtS:
+//           return builder.makeBinary(GtSVecI16x8);
+//         case BinaryConsts::I16x8GtU:
+//           return builder.makeBinary(GtUVecI16x8);
+//         case BinaryConsts::I16x8LeS:
+//           return builder.makeBinary(LeSVecI16x8);
+//         case BinaryConsts::I16x8LeU:
+//           return builder.makeBinary(LeUVecI16x8);
+//         case BinaryConsts::I16x8GeS:
+//           return builder.makeBinary(GeSVecI16x8);
+//         case BinaryConsts::I16x8GeU:
+//           return builder.makeBinary(GeUVecI16x8);
+//         case BinaryConsts::I32x4Eq:
+//           return builder.makeBinary(EqVecI32x4);
+//         case BinaryConsts::I32x4Ne:
+//           return builder.makeBinary(NeVecI32x4);
+//         case BinaryConsts::I32x4LtS:
+//           return builder.makeBinary(LtSVecI32x4);
+//         case BinaryConsts::I32x4LtU:
+//           return builder.makeBinary(LtUVecI32x4);
+//         case BinaryConsts::I32x4GtS:
+//           return builder.makeBinary(GtSVecI32x4);
+//         case BinaryConsts::I32x4GtU:
+//           return builder.makeBinary(GtUVecI32x4);
+//         case BinaryConsts::I32x4LeS:
+//           return builder.makeBinary(LeSVecI32x4);
+//         case BinaryConsts::I32x4LeU:
+//           return builder.makeBinary(LeUVecI32x4);
+//         case BinaryConsts::I32x4GeS:
+//           return builder.makeBinary(GeSVecI32x4);
+//         case BinaryConsts::I32x4GeU:
+//           return builder.makeBinary(GeUVecI32x4);
+//         case BinaryConsts::I64x2Eq:
+//           return builder.makeBinary(EqVecI64x2);
+//         case BinaryConsts::I64x2Ne:
+//           return builder.makeBinary(NeVecI64x2);
+//         case BinaryConsts::I64x2LtS:
+//           return builder.makeBinary(LtSVecI64x2);
+//         case BinaryConsts::I64x2GtS:
+//           return builder.makeBinary(GtSVecI64x2);
+//         case BinaryConsts::I64x2LeS:
+//           return builder.makeBinary(LeSVecI64x2);
+//         case BinaryConsts::I64x2GeS:
+//           return builder.makeBinary(GeSVecI64x2);
+//         case BinaryConsts::F16x8Eq:
+//           return builder.makeBinary(EqVecF16x8);
+//         case BinaryConsts::F16x8Ne:
+//           return builder.makeBinary(NeVecF16x8);
+//         case BinaryConsts::F16x8Lt:
+//           return builder.makeBinary(LtVecF16x8);
+//         case BinaryConsts::F16x8Gt:
+//           return builder.makeBinary(GtVecF16x8);
+//         case BinaryConsts::F16x8Le:
+//           return builder.makeBinary(LeVecF16x8);
+//         case BinaryConsts::F16x8Ge:
+//           return builder.makeBinary(GeVecF16x8);
+//         case BinaryConsts::F32x4Eq:
+//           return builder.makeBinary(EqVecF32x4);
+//         case BinaryConsts::F32x4Ne:
+//           return builder.makeBinary(NeVecF32x4);
+//         case BinaryConsts::F32x4Lt:
+//           return builder.makeBinary(LtVecF32x4);
+//         case BinaryConsts::F32x4Gt:
+//           return builder.makeBinary(GtVecF32x4);
+//         case BinaryConsts::F32x4Le:
+//           return builder.makeBinary(LeVecF32x4);
+//         case BinaryConsts::F32x4Ge:
+//           return builder.makeBinary(GeVecF32x4);
+//         case BinaryConsts::F64x2Eq:
+//           return builder.makeBinary(EqVecF64x2);
+//         case BinaryConsts::F64x2Ne:
+//           return builder.makeBinary(NeVecF64x2);
+//         case BinaryConsts::F64x2Lt:
+//           return builder.makeBinary(LtVecF64x2);
+//         case BinaryConsts::F64x2Gt:
+//           return builder.makeBinary(GtVecF64x2);
+//         case BinaryConsts::F64x2Le:
+//           return builder.makeBinary(LeVecF64x2);
+//         case BinaryConsts::F64x2Ge:
+//           return builder.makeBinary(GeVecF64x2);
+//         case BinaryConsts::V128And:
+//           return builder.makeBinary(AndVec128);
+//         case BinaryConsts::V128Or:
+//           return builder.makeBinary(OrVec128);
+//         case BinaryConsts::V128Xor:
+//           return builder.makeBinary(XorVec128);
+//         case BinaryConsts::V128Andnot:
+//           return builder.makeBinary(AndNotVec128);
+//         case BinaryConsts::I8x16Add:
+//           return builder.makeBinary(AddVecI8x16);
+//         case BinaryConsts::I8x16AddSatS:
+//           return builder.makeBinary(AddSatSVecI8x16);
+//         case BinaryConsts::I8x16AddSatU:
+//           return builder.makeBinary(AddSatUVecI8x16);
+//         case BinaryConsts::I8x16Sub:
+//           return builder.makeBinary(SubVecI8x16);
+//         case BinaryConsts::I8x16SubSatS:
+//           return builder.makeBinary(SubSatSVecI8x16);
+//         case BinaryConsts::I8x16SubSatU:
+//           return builder.makeBinary(SubSatUVecI8x16);
+//         case BinaryConsts::I8x16MinS:
+//           return builder.makeBinary(MinSVecI8x16);
+//         case BinaryConsts::I8x16MinU:
+//           return builder.makeBinary(MinUVecI8x16);
+//         case BinaryConsts::I8x16MaxS:
+//           return builder.makeBinary(MaxSVecI8x16);
+//         case BinaryConsts::I8x16MaxU:
+//           return builder.makeBinary(MaxUVecI8x16);
+//         case BinaryConsts::I8x16AvgrU:
+//           return builder.makeBinary(AvgrUVecI8x16);
+//         case BinaryConsts::I16x8Add:
+//           return builder.makeBinary(AddVecI16x8);
+//         case BinaryConsts::I16x8AddSatS:
+//           return builder.makeBinary(AddSatSVecI16x8);
+//         case BinaryConsts::I16x8AddSatU:
+//           return builder.makeBinary(AddSatUVecI16x8);
+//         case BinaryConsts::I16x8Sub:
+//           return builder.makeBinary(SubVecI16x8);
+//         case BinaryConsts::I16x8SubSatS:
+//           return builder.makeBinary(SubSatSVecI16x8);
+//         case BinaryConsts::I16x8SubSatU:
+//           return builder.makeBinary(SubSatUVecI16x8);
+//         case BinaryConsts::I16x8Mul:
+//           return builder.makeBinary(MulVecI16x8);
+//         case BinaryConsts::I16x8MinS:
+//           return builder.makeBinary(MinSVecI16x8);
+//         case BinaryConsts::I16x8MinU:
+//           return builder.makeBinary(MinUVecI16x8);
+//         case BinaryConsts::I16x8MaxS:
+//           return builder.makeBinary(MaxSVecI16x8);
+//         case BinaryConsts::I16x8MaxU:
+//           return builder.makeBinary(MaxUVecI16x8);
+//         case BinaryConsts::I16x8AvgrU:
+//           return builder.makeBinary(AvgrUVecI16x8);
+//         case BinaryConsts::I16x8Q15MulrSatS:
+//           return builder.makeBinary(Q15MulrSatSVecI16x8);
+//         case BinaryConsts::I16x8ExtmulLowI8x16S:
+//           return builder.makeBinary(ExtMulLowSVecI16x8);
+//         case BinaryConsts::I16x8ExtmulHighI8x16S:
+//           return builder.makeBinary(ExtMulHighSVecI16x8);
+//         case BinaryConsts::I16x8ExtmulLowI8x16U:
+//           return builder.makeBinary(ExtMulLowUVecI16x8);
+//         case BinaryConsts::I16x8ExtmulHighI8x16U:
+//           return builder.makeBinary(ExtMulHighUVecI16x8);
+//         case BinaryConsts::I32x4Add:
+//           return builder.makeBinary(AddVecI32x4);
+//         case BinaryConsts::I32x4Sub:
+//           return builder.makeBinary(SubVecI32x4);
+//         case BinaryConsts::I32x4Mul:
+//           return builder.makeBinary(MulVecI32x4);
+//         case BinaryConsts::I32x4MinS:
+//           return builder.makeBinary(MinSVecI32x4);
+//         case BinaryConsts::I32x4MinU:
+//           return builder.makeBinary(MinUVecI32x4);
+//         case BinaryConsts::I32x4MaxS:
+//           return builder.makeBinary(MaxSVecI32x4);
+//         case BinaryConsts::I32x4MaxU:
+//           return builder.makeBinary(MaxUVecI32x4);
+//         case BinaryConsts::I32x4DotI16x8S:
+//           return builder.makeBinary(DotSVecI16x8ToVecI32x4);
+//         case BinaryConsts::I32x4ExtmulLowI16x8S:
+//           return builder.makeBinary(ExtMulLowSVecI32x4);
+//         case BinaryConsts::I32x4ExtmulHighI16x8S:
+//           return builder.makeBinary(ExtMulHighSVecI32x4);
+//         case BinaryConsts::I32x4ExtmulLowI16x8U:
+//           return builder.makeBinary(ExtMulLowUVecI32x4);
+//         case BinaryConsts::I32x4ExtmulHighI16x8U:
+//           return builder.makeBinary(ExtMulHighUVecI32x4);
+//         case BinaryConsts::I64x2Add:
+//           return builder.makeBinary(AddVecI64x2);
+//         case BinaryConsts::I64x2Sub:
+//           return builder.makeBinary(SubVecI64x2);
+//         case BinaryConsts::I64x2Mul:
+//           return builder.makeBinary(MulVecI64x2);
+//         case BinaryConsts::I64x2ExtmulLowI32x4S:
+//           return builder.makeBinary(ExtMulLowSVecI64x2);
+//         case BinaryConsts::I64x2ExtmulHighI32x4S:
+//           return builder.makeBinary(ExtMulHighSVecI64x2);
+//         case BinaryConsts::I64x2ExtmulLowI32x4U:
+//           return builder.makeBinary(ExtMulLowUVecI64x2);
+//         case BinaryConsts::I64x2ExtmulHighI32x4U:
+//           return builder.makeBinary(ExtMulHighUVecI64x2);
+//         case BinaryConsts::F16x8Add:
+//           return builder.makeBinary(AddVecF16x8);
+//         case BinaryConsts::F16x8Sub:
+//           return builder.makeBinary(SubVecF16x8);
+//         case BinaryConsts::F16x8Mul:
+//           return builder.makeBinary(MulVecF16x8);
+//         case BinaryConsts::F16x8Div:
+//           return builder.makeBinary(DivVecF16x8);
+//         case BinaryConsts::F16x8Min:
+//           return builder.makeBinary(MinVecF16x8);
+//         case BinaryConsts::F16x8Max:
+//           return builder.makeBinary(MaxVecF16x8);
+//         case BinaryConsts::F16x8Pmin:
+//           return builder.makeBinary(PMinVecF16x8);
+//         case BinaryConsts::F16x8Pmax:
+//           return builder.makeBinary(PMaxVecF16x8);
+//         case BinaryConsts::F32x4Add:
+//           return builder.makeBinary(AddVecF32x4);
+//         case BinaryConsts::F32x4Sub:
+//           return builder.makeBinary(SubVecF32x4);
+//         case BinaryConsts::F32x4Mul:
+//           return builder.makeBinary(MulVecF32x4);
+//         case BinaryConsts::F32x4Div:
+//           return builder.makeBinary(DivVecF32x4);
+//         case BinaryConsts::F32x4Min:
+//           return builder.makeBinary(MinVecF32x4);
+//         case BinaryConsts::F32x4Max:
+//           return builder.makeBinary(MaxVecF32x4);
+//         case BinaryConsts::F32x4Pmin:
+//           return builder.makeBinary(PMinVecF32x4);
+//         case BinaryConsts::F32x4Pmax:
+//           return builder.makeBinary(PMaxVecF32x4);
+//         case BinaryConsts::F64x2Add:
+//           return builder.makeBinary(AddVecF64x2);
+//         case BinaryConsts::F64x2Sub:
+//           return builder.makeBinary(SubVecF64x2);
+//         case BinaryConsts::F64x2Mul:
+//           return builder.makeBinary(MulVecF64x2);
+//         case BinaryConsts::F64x2Div:
+//           return builder.makeBinary(DivVecF64x2);
+//         case BinaryConsts::F64x2Min:
+//           return builder.makeBinary(MinVecF64x2);
+//         case BinaryConsts::F64x2Max:
+//           return builder.makeBinary(MaxVecF64x2);
+//         case BinaryConsts::F64x2Pmin:
+//           return builder.makeBinary(PMinVecF64x2);
+//         case BinaryConsts::F64x2Pmax:
+//           return builder.makeBinary(PMaxVecF64x2);
+//         case BinaryConsts::I8x16NarrowI16x8S:
+//           return builder.makeBinary(NarrowSVecI16x8ToVecI8x16);
+//         case BinaryConsts::I8x16NarrowI16x8U:
+//           return builder.makeBinary(NarrowUVecI16x8ToVecI8x16);
+//         case BinaryConsts::I16x8NarrowI32x4S:
+//           return builder.makeBinary(NarrowSVecI32x4ToVecI16x8);
+//         case BinaryConsts::I16x8NarrowI32x4U:
+//           return builder.makeBinary(NarrowUVecI32x4ToVecI16x8);
+//         case BinaryConsts::I8x16Swizzle:
+//           return builder.makeBinary(SwizzleVecI8x16);
+//         case BinaryConsts::I8x16RelaxedSwizzle:
+//           return builder.makeBinary(RelaxedSwizzleVecI8x16);
+//         case BinaryConsts::F32x4RelaxedMin:
+//           return builder.makeBinary(RelaxedMinVecF32x4);
+//         case BinaryConsts::F32x4RelaxedMax:
+//           return builder.makeBinary(RelaxedMaxVecF32x4);
+//         case BinaryConsts::F64x2RelaxedMin:
+//           return builder.makeBinary(RelaxedMinVecF64x2);
+//         case BinaryConsts::F64x2RelaxedMax:
+//           return builder.makeBinary(RelaxedMaxVecF64x2);
+//         case BinaryConsts::I16x8RelaxedQ15MulrS:
+//           return builder.makeBinary(RelaxedQ15MulrSVecI16x8);
+//         case BinaryConsts::I16x8DotI8x16I7x16S:
+//           return builder.makeBinary(DotI8x16I7x16SToVecI16x8);
+//         case BinaryConsts::I8x16Splat:
+//           return builder.makeUnary(SplatVecI8x16);
+//         case BinaryConsts::I16x8Splat:
+//           return builder.makeUnary(SplatVecI16x8);
+//         case BinaryConsts::I32x4Splat:
+//           return builder.makeUnary(SplatVecI32x4);
+//         case BinaryConsts::I64x2Splat:
+//           return builder.makeUnary(SplatVecI64x2);
+//         case BinaryConsts::F16x8Splat:
+//           return builder.makeUnary(SplatVecF16x8);
+//         case BinaryConsts::F32x4Splat:
+//           return builder.makeUnary(SplatVecF32x4);
+//         case BinaryConsts::F64x2Splat:
+//           return builder.makeUnary(SplatVecF64x2);
+//         case BinaryConsts::V128Not:
+//           return builder.makeUnary(NotVec128);
+//         case BinaryConsts::V128AnyTrue:
+//           return builder.makeUnary(AnyTrueVec128);
+//         case BinaryConsts::I8x16Popcnt:
+//           return builder.makeUnary(PopcntVecI8x16);
+//         case BinaryConsts::I8x16Abs:
+//           return builder.makeUnary(AbsVecI8x16);
+//         case BinaryConsts::I8x16Neg:
+//           return builder.makeUnary(NegVecI8x16);
+//         case BinaryConsts::I8x16AllTrue:
+//           return builder.makeUnary(AllTrueVecI8x16);
+//         case BinaryConsts::I8x16Bitmask:
+//           return builder.makeUnary(BitmaskVecI8x16);
+//         case BinaryConsts::I16x8Abs:
+//           return builder.makeUnary(AbsVecI16x8);
+//         case BinaryConsts::I16x8Neg:
+//           return builder.makeUnary(NegVecI16x8);
+//         case BinaryConsts::I16x8AllTrue:
+//           return builder.makeUnary(AllTrueVecI16x8);
+//         case BinaryConsts::I16x8Bitmask:
+//           return builder.makeUnary(BitmaskVecI16x8);
+//         case BinaryConsts::I32x4Abs:
+//           return builder.makeUnary(AbsVecI32x4);
+//         case BinaryConsts::I32x4Neg:
+//           return builder.makeUnary(NegVecI32x4);
+//         case BinaryConsts::I32x4AllTrue:
+//           return builder.makeUnary(AllTrueVecI32x4);
+//         case BinaryConsts::I32x4Bitmask:
+//           return builder.makeUnary(BitmaskVecI32x4);
+//         case BinaryConsts::I64x2Abs:
+//           return builder.makeUnary(AbsVecI64x2);
+//         case BinaryConsts::I64x2Neg:
+//           return builder.makeUnary(NegVecI64x2);
+//         case BinaryConsts::I64x2AllTrue:
+//           return builder.makeUnary(AllTrueVecI64x2);
+//         case BinaryConsts::I64x2Bitmask:
+//           return builder.makeUnary(BitmaskVecI64x2);
+//         case BinaryConsts::F16x8Abs:
+//           return builder.makeUnary(AbsVecF16x8);
+//         case BinaryConsts::F16x8Neg:
+//           return builder.makeUnary(NegVecF16x8);
+//         case BinaryConsts::F16x8Sqrt:
+//           return builder.makeUnary(SqrtVecF16x8);
+//         case BinaryConsts::F16x8Ceil:
+//           return builder.makeUnary(CeilVecF16x8);
+//         case BinaryConsts::F16x8Floor:
+//           return builder.makeUnary(FloorVecF16x8);
+//         case BinaryConsts::F16x8Trunc:
+//           return builder.makeUnary(TruncVecF16x8);
+//         case BinaryConsts::F16x8Nearest:
+//           return builder.makeUnary(NearestVecF16x8);
+//         case BinaryConsts::F32x4Abs:
+//           return builder.makeUnary(AbsVecF32x4);
+//         case BinaryConsts::F32x4Neg:
+//           return builder.makeUnary(NegVecF32x4);
+//         case BinaryConsts::F32x4Sqrt:
+//           return builder.makeUnary(SqrtVecF32x4);
+//         case BinaryConsts::F32x4Ceil:
+//           return builder.makeUnary(CeilVecF32x4);
+//         case BinaryConsts::F32x4Floor:
+//           return builder.makeUnary(FloorVecF32x4);
+//         case BinaryConsts::F32x4Trunc:
+//           return builder.makeUnary(TruncVecF32x4);
+//         case BinaryConsts::F32x4Nearest:
+//           return builder.makeUnary(NearestVecF32x4);
+//         case BinaryConsts::F64x2Abs:
+//           return builder.makeUnary(AbsVecF64x2);
+//         case BinaryConsts::F64x2Neg:
+//           return builder.makeUnary(NegVecF64x2);
+//         case BinaryConsts::F64x2Sqrt:
+//           return builder.makeUnary(SqrtVecF64x2);
+//         case BinaryConsts::F64x2Ceil:
+//           return builder.makeUnary(CeilVecF64x2);
+//         case BinaryConsts::F64x2Floor:
+//           return builder.makeUnary(FloorVecF64x2);
+//         case BinaryConsts::F64x2Trunc:
+//           return builder.makeUnary(TruncVecF64x2);
+//         case BinaryConsts::F64x2Nearest:
+//           return builder.makeUnary(NearestVecF64x2);
+//         case BinaryConsts::I16x8ExtaddPairwiseI8x16S:
+//           return builder.makeUnary(ExtAddPairwiseSVecI8x16ToI16x8);
+//         case BinaryConsts::I16x8ExtaddPairwiseI8x16U:
+//           return builder.makeUnary(ExtAddPairwiseUVecI8x16ToI16x8);
+//         case BinaryConsts::I32x4ExtaddPairwiseI16x8S:
+//           return builder.makeUnary(ExtAddPairwiseSVecI16x8ToI32x4);
+//         case BinaryConsts::I32x4ExtaddPairwiseI16x8U:
+//           return builder.makeUnary(ExtAddPairwiseUVecI16x8ToI32x4);
+//         case BinaryConsts::I32x4TruncSatF32x4S:
+//           return builder.makeUnary(TruncSatSVecF32x4ToVecI32x4);
+//         case BinaryConsts::I32x4TruncSatF32x4U:
+//           return builder.makeUnary(TruncSatUVecF32x4ToVecI32x4);
+//         case BinaryConsts::F32x4ConvertI32x4S:
+//           return builder.makeUnary(ConvertSVecI32x4ToVecF32x4);
+//         case BinaryConsts::F32x4ConvertI32x4U:
+//           return builder.makeUnary(ConvertUVecI32x4ToVecF32x4);
+//         case BinaryConsts::I16x8ExtendLowI8x16S:
+//           return builder.makeUnary(ExtendLowSVecI8x16ToVecI16x8);
+//         case BinaryConsts::I16x8ExtendHighI8x16S:
+//           return builder.makeUnary(ExtendHighSVecI8x16ToVecI16x8);
+//         case BinaryConsts::I16x8ExtendLowI8x16U:
+//           return builder.makeUnary(ExtendLowUVecI8x16ToVecI16x8);
+//         case BinaryConsts::I16x8ExtendHighI8x16U:
+//           return builder.makeUnary(ExtendHighUVecI8x16ToVecI16x8);
+//         case BinaryConsts::I32x4ExtendLowI16x8S:
+//           return builder.makeUnary(ExtendLowSVecI16x8ToVecI32x4);
+//         case BinaryConsts::I32x4ExtendHighI16x8S:
+//           return builder.makeUnary(ExtendHighSVecI16x8ToVecI32x4);
+//         case BinaryConsts::I32x4ExtendLowI16x8U:
+//           return builder.makeUnary(ExtendLowUVecI16x8ToVecI32x4);
+//         case BinaryConsts::I32x4ExtendHighI16x8U:
+//           return builder.makeUnary(ExtendHighUVecI16x8ToVecI32x4);
+//         case BinaryConsts::I64x2ExtendLowI32x4S:
+//           return builder.makeUnary(ExtendLowSVecI32x4ToVecI64x2);
+//         case BinaryConsts::I64x2ExtendHighI32x4S:
+//           return builder.makeUnary(ExtendHighSVecI32x4ToVecI64x2);
+//         case BinaryConsts::I64x2ExtendLowI32x4U:
+//           return builder.makeUnary(ExtendLowUVecI32x4ToVecI64x2);
+//         case BinaryConsts::I64x2ExtendHighI32x4U:
+//           return builder.makeUnary(ExtendHighUVecI32x4ToVecI64x2);
+//         case BinaryConsts::F64x2ConvertLowI32x4S:
+//           return builder.makeUnary(ConvertLowSVecI32x4ToVecF64x2);
+//         case BinaryConsts::F64x2ConvertLowI32x4U:
+//           return builder.makeUnary(ConvertLowUVecI32x4ToVecF64x2);
+//         case BinaryConsts::I32x4TruncSatF64x2SZero:
+//           return builder.makeUnary(TruncSatZeroSVecF64x2ToVecI32x4);
+//         case BinaryConsts::I32x4TruncSatF64x2UZero:
+//           return builder.makeUnary(TruncSatZeroUVecF64x2ToVecI32x4);
+//         case BinaryConsts::F32x4DemoteF64x2Zero:
+//           return builder.makeUnary(DemoteZeroVecF64x2ToVecF32x4);
+//         case BinaryConsts::F64x2PromoteLowF32x4:
+//           return builder.makeUnary(PromoteLowVecF32x4ToVecF64x2);
+//         case BinaryConsts::I32x4RelaxedTruncF32x4S:
+//           return builder.makeUnary(RelaxedTruncSVecF32x4ToVecI32x4);
+//         case BinaryConsts::I32x4RelaxedTruncF32x4U:
+//           return builder.makeUnary(RelaxedTruncUVecF32x4ToVecI32x4);
+//         case BinaryConsts::I32x4RelaxedTruncF64x2SZero:
+//           return builder.makeUnary(RelaxedTruncZeroSVecF64x2ToVecI32x4);
+//         case BinaryConsts::I32x4RelaxedTruncF64x2UZero:
+//           return builder.makeUnary(RelaxedTruncZeroUVecF64x2ToVecI32x4);
+//         case BinaryConsts::I16x8TruncSatF16x8S:
+//           return builder.makeUnary(TruncSatSVecF16x8ToVecI16x8);
+//         case BinaryConsts::I16x8TruncSatF16x8U:
+//           return builder.makeUnary(TruncSatUVecF16x8ToVecI16x8);
+//         case BinaryConsts::F16x8ConvertI16x8S:
+//           return builder.makeUnary(ConvertSVecI16x8ToVecF16x8);
+//         case BinaryConsts::F16x8ConvertI16x8U:
+//           return builder.makeUnary(ConvertUVecI16x8ToVecF16x8);
+//         case BinaryConsts::I8x16ExtractLaneS:
+//           return builder.makeSIMDExtract(ExtractLaneSVecI8x16,
+//                                          getLaneIndex(16));
+//         case BinaryConsts::I8x16ExtractLaneU:
+//           return builder.makeSIMDExtract(ExtractLaneUVecI8x16,
+//                                          getLaneIndex(16));
+//         case BinaryConsts::I16x8ExtractLaneS:
+//           return builder.makeSIMDExtract(ExtractLaneSVecI16x8,
+//           getLaneIndex(8));
+//         case BinaryConsts::I16x8ExtractLaneU:
+//           return builder.makeSIMDExtract(ExtractLaneUVecI16x8,
+//           getLaneIndex(8));
+//         case BinaryConsts::I32x4ExtractLane:
+//           return builder.makeSIMDExtract(ExtractLaneVecI32x4,
+//           getLaneIndex(4));
+//         case BinaryConsts::I64x2ExtractLane:
+//           return builder.makeSIMDExtract(ExtractLaneVecI64x2,
+//           getLaneIndex(2));
+//         case BinaryConsts::F16x8ExtractLane:
+//           return builder.makeSIMDExtract(ExtractLaneVecF16x8,
+//           getLaneIndex(8));
+//         case BinaryConsts::F32x4ExtractLane:
+//           return builder.makeSIMDExtract(ExtractLaneVecF32x4,
+//           getLaneIndex(4));
+//         case BinaryConsts::F64x2ExtractLane:
+//           return builder.makeSIMDExtract(ExtractLaneVecF64x2,
+//           getLaneIndex(2));
+//         case BinaryConsts::I8x16ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecI8x16,
+//           getLaneIndex(16));
+//         case BinaryConsts::I16x8ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecI16x8,
+//           getLaneIndex(8));
+//         case BinaryConsts::I32x4ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecI32x4,
+//           getLaneIndex(4));
+//         case BinaryConsts::I64x2ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecI64x2,
+//           getLaneIndex(2));
+//         case BinaryConsts::F16x8ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecF16x8,
+//           getLaneIndex(8));
+//         case BinaryConsts::F32x4ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecF32x4,
+//           getLaneIndex(4));
+//         case BinaryConsts::F64x2ReplaceLane:
+//           return builder.makeSIMDReplace(ReplaceLaneVecF64x2,
+//           getLaneIndex(2));
+//         case BinaryConsts::I8x16Shuffle: {
+//           std::array<uint8_t, 16> lanes;
+//           for (Index i = 0; i < 16; ++i) {
+//             lanes[i] = getLaneIndex(32);
+//           }
+//           return builder.makeSIMDShuffle(lanes);
+//         }
+//         case BinaryConsts::V128Bitselect:
+//           return builder.makeSIMDTernary(Bitselect);
+//         case BinaryConsts::I8x16Laneselect:
+//           return builder.makeSIMDTernary(LaneselectI8x16);
+//         case BinaryConsts::I16x8Laneselect:
+//           return builder.makeSIMDTernary(LaneselectI16x8);
+//         case BinaryConsts::I32x4Laneselect:
+//           return builder.makeSIMDTernary(LaneselectI32x4);
+//         case BinaryConsts::I64x2Laneselect:
+//           return builder.makeSIMDTernary(LaneselectI64x2);
+//         case BinaryConsts::F16x8RelaxedMadd:
+//           return builder.makeSIMDTernary(RelaxedMaddVecF16x8);
+//         case BinaryConsts::F16x8RelaxedNmadd:
+//           return builder.makeSIMDTernary(RelaxedNmaddVecF16x8);
+//         case BinaryConsts::F32x4RelaxedMadd:
+//           return builder.makeSIMDTernary(RelaxedMaddVecF32x4);
+//         case BinaryConsts::F32x4RelaxedNmadd:
+//           return builder.makeSIMDTernary(RelaxedNmaddVecF32x4);
+//         case BinaryConsts::F64x2RelaxedMadd:
+//           return builder.makeSIMDTernary(RelaxedMaddVecF64x2);
+//         case BinaryConsts::F64x2RelaxedNmadd:
+//           return builder.makeSIMDTernary(RelaxedNmaddVecF64x2);
+//         case BinaryConsts::I32x4DotI8x16I7x16AddS:
+//           return builder.makeSIMDTernary(DotI8x16I7x16AddSToVecI32x4);
+//         case BinaryConsts::I8x16Shl:
+//           return builder.makeSIMDShift(ShlVecI8x16);
+//         case BinaryConsts::I8x16ShrS:
+//           return builder.makeSIMDShift(ShrSVecI8x16);
+//         case BinaryConsts::I8x16ShrU:
+//           return builder.makeSIMDShift(ShrUVecI8x16);
+//         case BinaryConsts::I16x8Shl:
+//           return builder.makeSIMDShift(ShlVecI16x8);
+//         case BinaryConsts::I16x8ShrS:
+//           return builder.makeSIMDShift(ShrSVecI16x8);
+//         case BinaryConsts::I16x8ShrU:
+//           return builder.makeSIMDShift(ShrUVecI16x8);
+//         case BinaryConsts::I32x4Shl:
+//           return builder.makeSIMDShift(ShlVecI32x4);
+//         case BinaryConsts::I32x4ShrS:
+//           return builder.makeSIMDShift(ShrSVecI32x4);
+//         case BinaryConsts::I32x4ShrU:
+//           return builder.makeSIMDShift(ShrUVecI32x4);
+//         case BinaryConsts::I64x2Shl:
+//           return builder.makeSIMDShift(ShlVecI64x2);
+//         case BinaryConsts::I64x2ShrS:
+//           return builder.makeSIMDShift(ShrSVecI64x2);
+//         case BinaryConsts::I64x2ShrU:
+//           return builder.makeSIMDShift(ShrUVecI64x2);
+//         case BinaryConsts::V128Const:
+//           return builder.makeConst(getVec128Literal());
+//         case BinaryConsts::V128Store: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeStore(16, offset, align, Type::v128, mem);
+//         }
+//         case BinaryConsts::V128Load: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeLoad(16, false, offset, align, Type::v128, mem);
+//         }
+//         case BinaryConsts::V128Load8Splat: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load8SplatVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load16Splat: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load16SplatVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load32Splat: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load32SplatVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load64Splat: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load64SplatVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load8x8S: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load8x8SVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load8x8U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load8x8UVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load16x4S: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load16x4SVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load16x4U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load16x4UVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load32x2S: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load32x2SVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load32x2U: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load32x2UVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load32Zero: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load32ZeroVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load64Zero: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoad(Load64ZeroVec128, offset, align, mem);
+//         }
+//         case BinaryConsts::V128Load8Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Load8LaneVec128, offset, align, getLaneIndex(16), mem);
+//         }
+//         case BinaryConsts::V128Load16Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Load16LaneVec128, offset, align, getLaneIndex(8), mem);
+//         }
+//         case BinaryConsts::V128Load32Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Load32LaneVec128, offset, align, getLaneIndex(4), mem);
+//         }
+//         case BinaryConsts::V128Load64Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Load64LaneVec128, offset, align, getLaneIndex(2), mem);
+//         }
+//         case BinaryConsts::V128Store8Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Store8LaneVec128, offset, align, getLaneIndex(16), mem);
+//         }
+//         case BinaryConsts::V128Store16Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Store16LaneVec128, offset, align, getLaneIndex(8), mem);
+//         }
+//         case BinaryConsts::V128Store32Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Store32LaneVec128, offset, align, getLaneIndex(4), mem);
+//         }
+//         case BinaryConsts::V128Store64Lane: {
+//           auto [mem, align, offset] = getMemarg();
+//           return builder.makeSIMDLoadStoreLane(
+//             Store64LaneVec128, offset, align, getLaneIndex(2), mem);
+//         }
+//       }
+//       return Err{"unknown SIMD operation"};
+//     }
+//     case BinaryConsts::GCPrefix: {
+//       auto op = getU32LEB();
+//       switch (op) {
+//         case BinaryConsts::RefI31:
+//           return builder.makeRefI31(Unshared);
+//         case BinaryConsts::RefI31Shared:
+//           return builder.makeRefI31(Shared);
+//         case BinaryConsts::I31GetS:
+//           return builder.makeI31Get(true);
+//         case BinaryConsts::I31GetU:
+//           return builder.makeI31Get(false);
+//         case BinaryConsts::RefTest:
+//           return builder.makeRefTest(Type(getHeapType(), NonNullable));
+//         case BinaryConsts::RefTestNull:
+//           return builder.makeRefTest(Type(getHeapType(), Nullable));
+//         case BinaryConsts::RefCast:
+//           return builder.makeRefCast(Type(getHeapType(), NonNullable));
+//         case BinaryConsts::RefCastNull:
+//           return builder.makeRefCast(Type(getHeapType(), Nullable));
+//         case BinaryConsts::BrOnCast:
+//         case BinaryConsts::BrOnCastFail: {
+//           auto flags = getInt8();
+//           auto label = getU32LEB();
+//           auto in = Type(getHeapType(), (flags & 1) ? Nullable :
+//           NonNullable); auto cast = Type(getHeapType(), (flags & 2) ?
+//           Nullable : NonNullable); auto kind = op == BinaryConsts::BrOnCast ?
+//           BrOnCast : BrOnCastFail; return builder.makeBrOn(label, kind, in,
+//           cast);
+//         }
+//         case BinaryConsts::StructNew:
+//           return builder.makeStructNew(getIndexedHeapType());
+//         case BinaryConsts::StructNewDefault:
+//           return builder.makeStructNewDefault(getIndexedHeapType());
+//         case BinaryConsts::StructGet:
+//         case BinaryConsts::StructGetS:
+//         case BinaryConsts::StructGetU: {
+//           auto type = getIndexedHeapType();
+//           auto field = getU32LEB();
+//           return builder.makeStructGet(
+//             type, field, op == BinaryConsts::StructGetS);
+//         }
+//         case BinaryConsts::StructSet: {
+//           auto type = getIndexedHeapType();
+//           auto field = getU32LEB();
+//           return builder.makeStructSet(type, field);
+//         }
+//         case BinaryConsts::ArrayNew:
+//           return builder.makeArrayNew(getIndexedHeapType());
+//         case BinaryConsts::ArrayNewDefault:
+//           return builder.makeArrayNewDefault(getIndexedHeapType());
+//         case BinaryConsts::ArrayNewFixed: {
+//           auto type = getIndexedHeapType();
+//           auto arity = getU32LEB();
+//           return builder.makeArrayNewFixed(type, arity);
+//         }
+//         case BinaryConsts::ArrayNewData: {
+//           auto type = getIndexedHeapType();
+//           auto data = getDataName(getU32LEB());
+//           return builder.makeArrayNewData(type, data);
+//         }
+//         case BinaryConsts::ArrayNewElem: {
+//           auto type = getIndexedHeapType();
+//           auto elem = getElemName(getU32LEB());
+//           return builder.makeArrayNewElem(type, elem);
+//         }
+//         case BinaryConsts::ArrayGet:
+//         case BinaryConsts::ArrayGetU:
+//           return builder.makeArrayGet(getIndexedHeapType(), false);
+//         case BinaryConsts::ArrayGetS:
+//           return builder.makeArrayGet(getIndexedHeapType(), true);
+//         case BinaryConsts::ArraySet:
+//           return builder.makeArraySet(getIndexedHeapType());
+//         case BinaryConsts::ArrayLen:
+//           return builder.makeArrayLen();
+//         case BinaryConsts::ArrayCopy: {
+//           auto dest = getIndexedHeapType();
+//           auto src = getIndexedHeapType();
+//           return builder.makeArrayCopy(dest, src);
+//         }
+//         case BinaryConsts::ArrayFill:
+//           return builder.makeArrayFill(getIndexedHeapType());
+//         case BinaryConsts::ArrayInitData: {
+//           auto type = getIndexedHeapType();
+//           auto data = getDataName(getU32LEB());
+//           return builder.makeArrayInitData(type, data);
+//         }
+//         case BinaryConsts::ArrayInitElem: {
+//           auto type = getIndexedHeapType();
+//           auto elem = getElemName(getU32LEB());
+//           return builder.makeArrayInitElem(type, elem);
+//         }
+//         case BinaryConsts::StringNewLossyUTF8Array:
+//           return builder.makeStringNew(StringNewLossyUTF8Array);
+//         case BinaryConsts::StringNewWTF16Array:
+//           return builder.makeStringNew(StringNewWTF16Array);
+//         case BinaryConsts::StringFromCodePoint:
+//           return builder.makeStringNew(StringNewFromCodePoint);
+//         case BinaryConsts::StringAsWTF16:
+//           // This turns into nothing because we do not represent stringviews
+//           in
+//           // the IR.
+//           return Ok{};
+//         case BinaryConsts::StringConst:
+//           return builder.makeStringConst(getIndexedString());
+//         case BinaryConsts::StringMeasureUTF8:
+//           return builder.makeStringMeasure(StringMeasureUTF8);
+//         case BinaryConsts::StringMeasureWTF16:
+//           return builder.makeStringMeasure(StringMeasureWTF16);
+//         case BinaryConsts::StringEncodeLossyUTF8Array:
+//           return builder.makeStringEncode(StringEncodeLossyUTF8Array);
+//         case BinaryConsts::StringEncodeWTF16Array:
+//           return builder.makeStringEncode(StringEncodeWTF16Array);
+//         case BinaryConsts::StringConcat:
+//           return builder.makeStringConcat();
+//         case BinaryConsts::StringEq:
+//           return builder.makeStringEq(StringEqEqual);
+//         case BinaryConsts::StringCompare:
+//           return builder.makeStringEq(StringEqCompare);
+//         case BinaryConsts::StringViewWTF16GetCodePoint:
+//           return builder.makeStringWTF16Get();
+//         case BinaryConsts::StringViewWTF16Slice:
+//           return builder.makeStringSliceWTF();
+//         case BinaryConsts::AnyConvertExtern:
+//           return builder.makeRefAs(AnyConvertExtern);
+//         case BinaryConsts::ExternConvertAny:
+//           return builder.makeRefAs(ExternConvertAny);
+//       }
+//       return Err{"unknown GC operation"};
+//     }
+//   }
+//   return Err{"unknown operation"};
+// }
+
+// void WasmBinaryReader::readExports() {
+//   size_t num = getU32LEB();
+//   std::unordered_set<Name> names;
+//   for (size_t i = 0; i < num; i++) {
+//     auto curr = std::make_unique<Export>();
+//     curr->name = getInlineString();
+//     if (!names.emplace(curr->name).second) {
+//       throwError("duplicate export name");
+//     }
+//     curr->kind = (ExternalKind)getU32LEB();
+//     auto* ex = wasm.addExport(std::move(curr));
+//     auto index = getU32LEB();
+//     switch (ex->kind) {
+//       case ExternalKind::Function:
+//         ex->value = getFunctionName(index);
+//         continue;
+//       case ExternalKind::Table:
+//         ex->value = getTableName(index);
+//         continue;
+//       case ExternalKind::Memory:
+//         ex->value = getMemoryName(index);
+//         continue;
+//       case ExternalKind::Global:
+//         ex->value = getGlobalName(index);
+//         continue;
+//       case ExternalKind::Tag:
+//         ex->value = getTagName(index);
+//         continue;
+//       case ExternalKind::Invalid:
+//         break;
+//     }
+//     throwError("invalid export kind");
+//   }
+// }
+
+// Expression* WasmBinaryReader::readExpression() {
+//   assert(builder.empty());
+//   while (input[pos] != BinaryConsts::End) {
+//     auto inst = readInst();
+//     if (auto* err = inst.getErr()) {
+//       throwError(err->msg);
+//     }
+//   }
+//   ++pos;
+//   auto expr = builder.build();
+//   if (auto* err = expr.getErr()) {
+//     throwError(err->msg);
+//   }
+//   return *expr;
+// }
+
+// void WasmBinaryReader::readStrings() {
+//   auto reserved = getU32LEB();
+//   if (reserved != 0) {
+//     throwError("unexpected reserved value in strings");
+//   }
+//   size_t num = getU32LEB();
+//   for (size_t i = 0; i < num; i++) {
+//     auto string = getInlineString(false);
+//     // Re-encode from WTF-8 to WTF-16.
+//     std::stringstream wtf16;
+//     if (!String::convertWTF8ToWTF16(wtf16, string.str)) {
+//       throwError("invalid string constant");
+//     }
+//     // TODO: Use wtf16.view() once we have C++20.
+//     strings.push_back(wtf16.str());
+//   }
+// }
+
+// Name WasmBinaryReader::getIndexedString() {
+//   auto index = getU32LEB();
+//   if (index >= strings.size()) {
+//     throwError("bad string index");
+//   }
+//   return strings[index];
+// }
+
+// void WasmBinaryReader::readGlobals() {
+//   size_t num = getU32LEB();
+//   auto numImports = wasm.globals.size();
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : globalNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: global index out of bounds in name section: "
+//                 << name << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     auto [name, isExplicit] = getOrMakeName(
+//       globalNames, numImports + i, makeName("global$", i), usedNames);
+//     auto type = getConcreteType();
+//     auto mutable_ = getU32LEB();
+//     if (mutable_ & ~1) {
+//       throwError("Global mutability must be 0 or 1");
+//     }
+//     auto* init = readExpression();
+//     auto global = Builder::makeGlobal(
+//       name, type, init, mutable_ ? Builder::Mutable : Builder::Immutable);
+//     global->hasExplicitName = isExplicit;
+//     wasm.addGlobal(std::move(global));
+//   }
+// }
+
+// void WasmBinaryReader::validateBinary() {
+//   if (hasDataCount && wasm.dataSegments.size() != dataCount) {
+//     throwError("Number of segments does not agree with DataCount section");
+//   }
+
+//   if (functionTypes.size() != numFuncImports + numFuncBodies) {
+//     throwError("function and code sections have inconsistent lengths");
+//   }
+// }
+
+// void WasmBinaryReader::createDataSegments(Index count) {
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : dataNames) {
+//     if (index >= count) {
+//       std::cerr << "warning: data index out of bounds in name section: " <<
+//       name
+//                 << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < count; ++i) {
+//     auto [name, isExplicit] =
+//       getOrMakeName(dataNames, i, makeName("", i), usedNames);
+//     auto curr = Builder::makeDataSegment(name);
+//     curr->hasExplicitName = isExplicit;
+//     wasm.addDataSegment(std::move(curr));
+//   }
+// }
+
+// void WasmBinaryReader::readDataSegmentCount() {
+//   hasDataCount = true;
+//   dataCount = getU32LEB();
+//   // Eagerly create the data segments so they are available during parsing of
+//   // the code section.
+//   createDataSegments(dataCount);
+// }
+
+// void WasmBinaryReader::readDataSegments() {
+//   auto num = getU32LEB();
+//   if (hasDataCount) {
+//     if (num != dataCount) {
+//       throwError("data count and data sections disagree on size");
+//     }
+//   } else {
+//     // We haven't already created the data segments, so create them now.
+//     createDataSegments(num);
+//   }
+//   assert(wasm.dataSegments.size() == num);
+//   for (size_t i = 0; i < num; i++) {
+//     auto& curr = wasm.dataSegments[i];
+//     uint32_t flags = getU32LEB();
+//     if (flags > 2) {
+//       throwError("bad segment flags, must be 0, 1, or 2, not " +
+//                  std::to_string(flags));
+//     }
+//     curr->isPassive = flags & BinaryConsts::IsPassive;
+//     if (curr->isPassive) {
+//       curr->memory = Name();
+//       curr->offset = nullptr;
+//     } else {
+//       Index memIdx = 0;
+//       if (flags & BinaryConsts::HasIndex) {
+//         memIdx = getU32LEB();
+//       }
+//       curr->memory = getMemoryName(memIdx);
+//       curr->offset = readExpression();
+//     }
+//     auto size = getU32LEB();
+//     auto data = getByteView(size);
+//     curr->data = {data.begin(), data.end()};
+//   }
+// }
+
+// void WasmBinaryReader::readTableDeclarations() {
+//   auto num = getU32LEB();
+//   auto numImports = wasm.tables.size();
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : tableNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: table index out of bounds in name section: "
+//                 << name << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     auto [name, isExplicit] =
+//       getOrMakeName(tableNames, numImports + i, makeName("", i), usedNames);
+//     auto elemType = getType();
+//     if (!elemType.isRef()) {
+//       throwError("Table type must be a reference type");
+//     }
+//     auto table = Builder::makeTable(name, elemType);
+//     table->hasExplicitName = isExplicit;
+//     bool is_shared;
+//     getResizableLimits(table->initial,
+//                        table->max,
+//                        is_shared,
+//                        table->addressType,
+//                        Table::kUnlimitedSize);
+//     if (is_shared) {
+//       throwError("Tables may not be shared");
+//     }
+//     wasm.addTable(std::move(table));
+//   }
+// }
+
+// void WasmBinaryReader::readElementSegments() {
+//   auto num = getU32LEB();
+//   if (num >= Table::kMaxSize) {
+//     throwError("Too many segments");
+//   }
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : elemNames) {
+//     if (index >= num) {
+//       std::cerr << "warning: elem index out of bounds in name section: " <<
+//       name
+//                 << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     auto [name, isExplicit] =
+//       getOrMakeName(elemNames, i, makeName("", i), usedNames);
+//     auto flags = getU32LEB();
+//     bool isPassive = (flags & BinaryConsts::IsPassive) != 0;
+//     bool hasTableIdx = !isPassive && ((flags & BinaryConsts::HasIndex) != 0);
+//     bool isDeclarative =
+//       isPassive && ((flags & BinaryConsts::IsDeclarative) != 0);
+//     bool usesExpressions = (flags & BinaryConsts::UsesExpressions) != 0;
+
+//     if (isDeclarative) {
+//       // Declared segments are needed in wasm text and binary, but not in
+//       // Binaryen IR; skip over the segment
+//       [[maybe_unused]] auto type = getU32LEB();
+//       auto num = getU32LEB();
+//       for (Index i = 0; i < num; i++) {
+//         if (usesExpressions) {
+//           readExpression();
+//         } else {
+//           getU32LEB();
+//         }
+//       }
+//       continue;
+//     }
+
+//     auto segment = std::make_unique<ElementSegment>();
+//     segment->setName(name, isExplicit);
+
+//     if (!isPassive) {
+//       Index tableIdx = 0;
+//       if (hasTableIdx) {
+//         tableIdx = getU32LEB();
+//       }
+
+//       if (tableIdx >= wasm.tables.size()) {
+//         throwError("Table index out of range.");
+//       }
+//       auto* table = wasm.tables[tableIdx].get();
+//       segment->table = table->name;
+//       segment->offset = readExpression();
+//     }
+
+//     if (isPassive || hasTableIdx) {
+//       if (usesExpressions) {
+//         segment->type = getType();
+//       } else {
+//         auto elemKind = getU32LEB();
+//         if (elemKind != 0x0) {
+//           throwError("Invalid kind (!= funcref(0)) since !usesExpressions.");
+//         }
+//       }
+//     }
+
+//     auto& segmentData = segment->data;
+//     auto size = getU32LEB();
+//     if (usesExpressions) {
+//       for (Index j = 0; j < size; j++) {
+//         segmentData.push_back(readExpression());
+//       }
+//     } else {
+//       for (Index j = 0; j < size; j++) {
+//         Index index = getU32LEB();
+//         auto sig = getTypeByFunctionIndex(index);
+//         auto* refFunc = Builder(wasm).makeRefFunc(getFunctionName(index),
+//         sig); segmentData.push_back(refFunc);
+//       }
+//     }
+//     wasm.addElementSegment(std::move(segment));
+//   }
+// }
+
+// void WasmBinaryReader::readTags() {
+//   size_t num = getU32LEB();
+//   auto numImports = wasm.tags.size();
+//   std::unordered_set<Name> usedNames;
+//   for (auto& [index, name] : tagNames) {
+//     if (index >= num + numImports) {
+//       std::cerr << "warning: tag index out of bounds in name section: " <<
+//       name
+//                 << " at index " << index << '\n';
+//     }
+//     usedNames.insert(name);
+//   }
+//   for (size_t i = 0; i < num; i++) {
+//     getInt8(); // Reserved 'attribute' field
+//     auto [name, isExplicit] =
+//       getOrMakeName(tagNames, numImports + i, makeName("tag$", i),
+//       usedNames);
+//     auto typeIndex = getU32LEB();
+//     auto tag = Builder::makeTag(name, getSignatureByTypeIndex(typeIndex));
+//     tag->hasExplicitName = isExplicit;
+//     wasm.addTag(std::move(tag));
+//   }
+// }
+
+// static bool isIdChar(char ch) {
+//   return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') ||
+//          (ch >= 'a' && ch <= 'z') || ch == '!' || ch == '#' || ch == '$' ||
+//          ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' ||
+//          ch == '-' || ch == '.' || ch == '/' || ch == ':' || ch == '<' ||
+//          ch == '=' || ch == '>' || ch == '?' || ch == '@' || ch == '^' ||
+//          ch == '_' || ch == '`' || ch == '|' || ch == '~';
+// }
+
+// static char formatNibble(int nibble) {
+//   return nibble < 10 ? '0' + nibble : 'a' - 10 + nibble;
+// }
+
+// Name WasmBinaryReader::escape(Name name) {
+//   bool allIdChars = true;
+//   for (char c : name.str) {
+//     if (!(allIdChars = isIdChar(c))) {
+//       break;
+//     }
+//   }
+//   if (allIdChars) {
+//     return name;
+//   }
+//   // encode name, if at least one non-idchar (per WebAssembly spec) was found
+//   std::string escaped;
+//   for (char c : name.str) {
+//     if (isIdChar(c)) {
+//       escaped.push_back(c);
+//       continue;
+//     }
+//     // replace non-idchar with `\xx` escape
+//     escaped.push_back('\\');
+//     escaped.push_back(formatNibble(c >> 4));
+//     escaped.push_back(formatNibble(c & 15));
+//   }
+//   return escaped;
+// }
+
+// namespace {
+
+// // Performs necessary processing of names from the name section before using
+// // them. Specifically it escapes and deduplicates them.
+// class NameProcessor {
+// public:
+//   // Returns a unique, escaped name. Notes that name for the items to follow
+//   to
+//   // keep them unique as well.
+//   Name process(Name name) {
+//     return deduplicate(WasmBinaryReader::escape(name));
+//   }
+
+// private:
+//   std::unordered_set<Name> usedNames;
+
+//   Name deduplicate(Name base) {
+//     auto name = Names::getValidNameGivenExisting(base, usedNames);
+//     usedNames.insert(name);
+//     return name;
+//   }
+// };
+
+// } // anonymous namespace
+
+// void WasmBinaryReader::findAndReadNames() {
+//   // Find the names section. Skip the magic and version.
+//   assert(pos == 0);
+//   getInt32();
+//   getInt32();
+//   Index payloadLen, sectionPos;
+//   bool found = false;
+//   while (more()) {
+//     uint8_t sectionCode = getInt8();
+//     payloadLen = getU32LEB();
+//     sectionPos = pos;
+//     if (sectionCode == BinaryConsts::Section::Custom) {
+//       auto sectionName = getInlineString();
+//       if (sectionName.equals(BinaryConsts::CustomSections::Name)) {
+//         found = true;
+//         break;
+//       }
+//     }
+//     pos = sectionPos + payloadLen;
+//   }
+//   if (!found) {
+//     // No names section to read.
+//     pos = 0;
+//     return;
+//   }
+
+//   // Read the names.
+//   uint32_t lastType = 0;
+//   while (pos < sectionPos + payloadLen) {
+//     auto nameType = getU32LEB();
+//     if (lastType && nameType <= lastType) {
+//       std::cerr << "warning: out-of-order name subsection: " << nameType
+//                 << std::endl;
+//     }
+//     lastType = nameType;
+//     auto subsectionSize = getU32LEB();
+//     auto subsectionPos = pos;
+//     using Subsection = BinaryConsts::CustomSections::Subsection;
+//     if (nameType == Subsection::NameModule) {
+//       wasm.name = getInlineString();
+//     } else if (nameType == Subsection::NameFunction) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         functionNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameLocal) {
+//       auto numFuncs = getU32LEB();
+//       for (size_t i = 0; i < numFuncs; i++) {
+//         auto funcIndex = getU32LEB();
+//         auto numLocals = getU32LEB();
+//         NameProcessor processor;
+//         for (size_t j = 0; j < numLocals; j++) {
+//           auto localIndex = getU32LEB();
+//           auto rawName = getInlineString();
+//           auto name = processor.process(rawName);
+//           localNames[funcIndex][localIndex] = name;
+//         }
+//       }
+//     } else if (nameType == Subsection::NameType) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         typeNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameTable) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         tableNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameElem) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         elemNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameMemory) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         memoryNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameData) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         dataNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameGlobal) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         globalNames[index] = name;
+//       }
+//     } else if (nameType == Subsection::NameField) {
+//       auto numTypes = getU32LEB();
+//       for (size_t i = 0; i < numTypes; i++) {
+//         auto typeIndex = getU32LEB();
+//         auto numFields = getU32LEB();
+//         NameProcessor processor;
+//         for (size_t i = 0; i < numFields; i++) {
+//           auto fieldIndex = getU32LEB();
+//           auto rawName = getInlineString();
+//           auto name = processor.process(rawName);
+//           fieldNames[typeIndex][fieldIndex] = name;
+//         }
+//       }
+//     } else if (nameType == Subsection::NameTag) {
+//       auto num = getU32LEB();
+//       NameProcessor processor;
+//       for (size_t i = 0; i < num; i++) {
+//         auto index = getU32LEB();
+//         auto rawName = getInlineString();
+//         auto name = processor.process(rawName);
+//         tagNames[index] = name;
+//       }
+//     } else {
+//       std::cerr << "warning: unknown name subsection with id "
+//                 << std::to_string(nameType) << " at " << pos << std::endl;
+//       pos = subsectionPos + subsectionSize;
+//     }
+//     if (pos != subsectionPos + subsectionSize) {
+//       throwError("bad names subsection position change");
+//     }
+//   }
+//   if (pos != sectionPos + payloadLen) {
+//     throwError("bad names section position change");
+//   }
+
+//   // Reset the position; we were just reading ahead.
+//   pos = 0;
+// }
+
+// void WasmBinaryReader::readFeatures(size_t payloadLen) {
+//   wasm.hasFeaturesSection = true;
+
+//   auto sectionPos = pos;
+//   size_t numFeatures = getU32LEB();
+//   for (size_t i = 0; i < numFeatures; ++i) {
+//     uint8_t prefix = getInt8();
+
+//     bool disallowed = prefix == BinaryConsts::FeatureDisallowed;
+//     bool used = prefix == BinaryConsts::FeatureUsed;
+
+//     if (!disallowed && !used) {
+//       throwError("Unrecognized feature policy prefix");
+//     }
+
+//     Name name = getInlineString();
+//     if (pos > sectionPos + payloadLen) {
+//       throwError("ill-formed string extends beyond section");
+//     }
+
+//     FeatureSet feature;
+//     if (name == BinaryConsts::CustomSections::AtomicsFeature) {
+//       feature = FeatureSet::Atomics;
+//     } else if (name == BinaryConsts::CustomSections::BulkMemoryFeature) {
+//       feature = FeatureSet::BulkMemory;
+//       if (used) {
+//         // For backward compatibility, enable this dependent feature.
+//         feature |= FeatureSet::BulkMemoryOpt;
+//       }
+//     } else if (name == BinaryConsts::CustomSections::BulkMemoryOptFeature) {
+//       feature = FeatureSet::BulkMemoryOpt;
+//     } else if (name ==
+//     BinaryConsts::CustomSections::ExceptionHandlingFeature) {
+//       feature = FeatureSet::ExceptionHandling;
+//     } else if (name == BinaryConsts::CustomSections::MutableGlobalsFeature) {
+//       feature = FeatureSet::MutableGlobals;
+//     } else if (name == BinaryConsts::CustomSections::TruncSatFeature) {
+//       feature = FeatureSet::TruncSat;
+//     } else if (name == BinaryConsts::CustomSections::SignExtFeature) {
+//       feature = FeatureSet::SignExt;
+//     } else if (name == BinaryConsts::CustomSections::SIMD128Feature) {
+//       feature = FeatureSet::SIMD;
+//     } else if (name == BinaryConsts::CustomSections::TailCallFeature) {
+//       feature = FeatureSet::TailCall;
+//     } else if (name == BinaryConsts::CustomSections::ReferenceTypesFeature) {
+//       feature = FeatureSet::ReferenceTypes;
+//     } else if (name == BinaryConsts::CustomSections::MultivalueFeature) {
+//       feature = FeatureSet::Multivalue;
+//     } else if (name == BinaryConsts::CustomSections::GCFeature) {
+//       feature = FeatureSet::GC;
+//     } else if (name == BinaryConsts::CustomSections::Memory64Feature) {
+//       feature = FeatureSet::Memory64;
+//     } else if (name == BinaryConsts::CustomSections::RelaxedSIMDFeature) {
+//       feature = FeatureSet::RelaxedSIMD;
+//     } else if (name == BinaryConsts::CustomSections::ExtendedConstFeature) {
+//       feature = FeatureSet::ExtendedConst;
+//     } else if (name == BinaryConsts::CustomSections::StringsFeature) {
+//       feature = FeatureSet::Strings;
+//     } else if (name == BinaryConsts::CustomSections::MultiMemoryFeature) {
+//       feature = FeatureSet::MultiMemory;
+//     } else if (name ==
+//                BinaryConsts::CustomSections::TypedContinuationsFeature) {
+//       feature = FeatureSet::TypedContinuations;
+//     } else if (name == BinaryConsts::CustomSections::SharedEverythingFeature)
+//     {
+//       feature = FeatureSet::SharedEverything;
+//     } else if (name == BinaryConsts::CustomSections::FP16Feature) {
+//       feature = FeatureSet::FP16;
+//     } else {
+//       // Silently ignore unknown features (this may be and old binaryen
+//       running
+//       // on a new wasm).
+//     }
+
+//     if (disallowed && wasm.features.has(feature)) {
+//       std::cerr
+//         << "warning: feature " << feature.toString()
+//         << " was enabled by the user, but disallowed in the features
+//         section.";
+//     }
+//     if (used) {
+//       wasm.features.enable(feature);
+//     }
+//   }
+//   if (pos != sectionPos + payloadLen) {
+//     throwError("bad features section size");
+//   }
+// }
+
+// void WasmBinaryReader::readDylink(size_t payloadLen) {
+//   wasm.dylinkSection = std::make_unique<DylinkSection>();
+
+//   auto sectionPos = pos;
+
+//   wasm.dylinkSection->isLegacy = true;
+//   wasm.dylinkSection->memorySize = getU32LEB();
+//   wasm.dylinkSection->memoryAlignment = getU32LEB();
+//   wasm.dylinkSection->tableSize = getU32LEB();
+//   wasm.dylinkSection->tableAlignment = getU32LEB();
+
+//   size_t numNeededDynlibs = getU32LEB();
+//   for (size_t i = 0; i < numNeededDynlibs; ++i) {
+//     wasm.dylinkSection->neededDynlibs.push_back(getInlineString());
+//   }
+
+//   if (pos != sectionPos + payloadLen) {
+//     throwError("bad dylink section size");
+//   }
+// }
+
+// void WasmBinaryReader::readDylink0(size_t payloadLen) {
+//   auto sectionPos = pos;
+//   uint32_t lastType = 0;
+
+//   wasm.dylinkSection = std::make_unique<DylinkSection>();
+//   while (pos < sectionPos + payloadLen) {
+//     auto oldPos = pos;
+//     auto dylinkType = getU32LEB();
+//     if (lastType && dylinkType <= lastType) {
+//       std::cerr << "warning: out-of-order dylink.0 subsection: " <<
+//       dylinkType
+//                 << std::endl;
+//     }
+//     lastType = dylinkType;
+//     auto subsectionSize = getU32LEB();
+//     auto subsectionPos = pos;
+//     if (dylinkType ==
+//     BinaryConsts::CustomSections::Subsection::DylinkMemInfo) {
+//       wasm.dylinkSection->memorySize = getU32LEB();
+//       wasm.dylinkSection->memoryAlignment = getU32LEB();
+//       wasm.dylinkSection->tableSize = getU32LEB();
+//       wasm.dylinkSection->tableAlignment = getU32LEB();
+//     } else if (dylinkType ==
+//                BinaryConsts::CustomSections::Subsection::DylinkNeeded) {
+//       size_t numNeededDynlibs = getU32LEB();
+//       for (size_t i = 0; i < numNeededDynlibs; ++i) {
+//         wasm.dylinkSection->neededDynlibs.push_back(getInlineString());
+//       }
+//     } else {
+//       // Unknown subsection.  Stop parsing now and store the rest of
+//       // the section verbatim.
+//       pos = oldPos;
+//       size_t remaining = (sectionPos + payloadLen) - pos;
+//       auto tail = getByteView(remaining);
+//       wasm.dylinkSection->tail = {tail.begin(), tail.end()};
+//       break;
+//     }
+//     if (pos != subsectionPos + subsectionSize) {
+//       throwError("bad dylink.0 subsection position change");
+//     }
+//   }
+// }
+
+// Index WasmBinaryReader::readMemoryAccess(Address& alignment, Address& offset)
+// {
+//   auto rawAlignment = getU32LEB();
+//   bool hasMemIdx = false;
+//   Index memIdx = 0;
+//   // Check bit 6 in the alignment to know whether a memory index is present
+//   per:
+//   //
+//   https://github.com/WebAssembly/multi-memory/blob/main/proposals/multi-memory/Overview.md
+//   if (rawAlignment & (1 << (6))) {
+//     hasMemIdx = true;
+//     // Clear the bit before we parse alignment
+//     rawAlignment = rawAlignment & ~(1 << 6);
+//   }
+
+//   if (rawAlignment > 8) {
+//     throwError("Alignment must be of a reasonable size");
+//   }
+
+//   alignment = Bits::pow2(rawAlignment);
+//   if (hasMemIdx) {
+//     memIdx = getU32LEB();
+//   }
+//   if (memIdx >= wasm.memories.size()) {
+//     throwError("Memory index out of range while reading memory alignment.");
+//   }
+//   auto* memory = wasm.memories[memIdx].get();
+//   offset = memory->addressType == Type::i32 ? getU32LEB() : getU64LEB();
+
+//   return memIdx;
+// }
+
+// // TODO: make this the only version
+// std::tuple<Name, Address, Address> WasmBinaryReader::getMemarg() {
+//   Address alignment, offset;
+//   auto memIdx = readMemoryAccess(alignment, offset);
+//   return {getMemoryName(memIdx), alignment, offset};
+// }
 
 } // namespace wasm

@@ -28,7 +28,7 @@
 #include "passes/passes.h"
 #include "support/colors.h"
 #include "wasm-debug.h"
-#include "wasm-io.h"
+// #include "wasm-io.h"
 #include "wasm-validator.h"
 
 namespace wasm {
@@ -282,9 +282,9 @@ void PassRegistry::registerPasses() {
   //                "Lower memory.copy and memory.fill to wasm mvp and disable "
   //                "the bulk-memory feature.",
   //                createLLVMMemoryCopyFillLoweringPass);
-  registerPass("memory-packing",
-               "packs memory into separate segments, skipping zeros",
-               createMemoryPackingPass);
+  // registerPass("memory-packing",
+  //              "packs memory into separate segments, skipping zeros",
+  //              createMemoryPackingPass);
   registerPass(
     "merge-blocks", "merges blocks to their parents", createMergeBlocksPass);
   //   registerPass("merge-similar-functions",
@@ -728,7 +728,7 @@ void PassRunner::addDefaultGlobalOptimizationPrePasses() {
   if (options.optimizeLevel >= 2) {
     addIfNoDWARFIssues("remove-unused-module-elements");
   }
-  addIfNoDWARFIssues("memory-packing");
+  // addIfNoDWARFIssues("memory-packing");
   if (options.optimizeLevel >= 2) {
     addIfNoDWARFIssues("once-reduction");
   }
@@ -817,9 +817,9 @@ static void dumpWasm(Name name, Module* wasm, const PassOptions& options) {
 #endif
   fullName += numstr + "-" + name.toString();
   Colors::setEnabled(false);
-  ModuleWriter writer(options);
-  writer.setDebugInfo(true);
-  writer.writeBinary(*wasm, fullName + ".wasm");
+  // ModuleWriter writer(options);
+  // writer.setDebugInfo(true);
+  // writer.writeBinary(*wasm, fullName + ".wasm");
 }
 
 void PassRunner::run() {

@@ -1408,193 +1408,195 @@ private:
 
 extern std::vector<char> defaultEmptySourceMap;
 
-class WasmBinaryReader {
-  Module& wasm;
-  MixedArena& allocator;
-  const std::vector<char>& input;
+// class WasmBinaryReader {
+//   Module& wasm;
+//   MixedArena& allocator;
+//   const std::vector<char>& input;
 
-  // Settings.
+//   // Settings.
 
-  bool debugInfo = true;
-  bool DWARF = false;
-  bool skipFunctionBodies = false;
+//   bool debugInfo = true;
+//   bool DWARF = false;
+//   bool skipFunctionBodies = false;
 
-  // Internal state.
+//   // Internal state.
 
-  size_t pos = 0;
-  Index startIndex = -1;
-  size_t codeSectionLocation;
-  std::unordered_set<uint8_t> seenSections;
+//   size_t pos = 0;
+//   Index startIndex = -1;
+//   size_t codeSectionLocation;
+//   std::unordered_set<uint8_t> seenSections;
 
-  IRBuilder builder;
-  SourceMapReader sourceMapReader;
+//   IRBuilder builder;
+//   SourceMapReader sourceMapReader;
 
-  // All types defined in the type section
-  std::vector<HeapType> types;
+//   // All types defined in the type section
+//   std::vector<HeapType> types;
 
-public:
-  WasmBinaryReader(Module& wasm,
-                   FeatureSet features,
-                   const std::vector<char>& input,
-                   const std::vector<char>& sourceMap = defaultEmptySourceMap);
+// public:
+//   WasmBinaryReader(Module& wasm,
+//                    FeatureSet features,
+//                    const std::vector<char>& input,
+//                    const std::vector<char>& sourceMap =
+//                    defaultEmptySourceMap);
 
-  void setDebugInfo(bool value) { debugInfo = value; }
-  void setDWARF(bool value) { DWARF = value; }
-  void setSkipFunctionBodies(bool skipFunctionBodies_) {
-    skipFunctionBodies = skipFunctionBodies_;
-  }
-  void read();
-  void readCustomSection(size_t payloadLen);
+//   void setDebugInfo(bool value) { debugInfo = value; }
+//   void setDWARF(bool value) { DWARF = value; }
+//   void setSkipFunctionBodies(bool skipFunctionBodies_) {
+//     skipFunctionBodies = skipFunctionBodies_;
+//   }
+//   void read();
+//   void readCustomSection(size_t payloadLen);
 
-  bool more() { return pos < input.size(); }
+//   bool more() { return pos < input.size(); }
 
-  std::string_view getByteView(size_t size);
-  uint8_t getInt8();
-  uint16_t getInt16();
-  uint32_t getInt32();
-  uint64_t getInt64();
-  uint8_t getLaneIndex(size_t lanes);
-  // it is unsafe to return a float directly, due to ABI issues with the
-  // signalling bit
-  Literal getFloat32Literal();
-  Literal getFloat64Literal();
-  Literal getVec128Literal();
-  uint32_t getU32LEB();
-  uint64_t getU64LEB();
-  int32_t getS32LEB();
-  int64_t getS64LEB();
-  uint64_t getUPtrLEB();
+//   std::string_view getByteView(size_t size);
+//   uint8_t getInt8();
+//   uint16_t getInt16();
+//   uint32_t getInt32();
+//   uint64_t getInt64();
+//   uint8_t getLaneIndex(size_t lanes);
+//   // it is unsafe to return a float directly, due to ABI issues with the
+//   // signalling bit
+//   Literal getFloat32Literal();
+//   Literal getFloat64Literal();
+//   Literal getVec128Literal();
+//   uint32_t getU32LEB();
+//   uint64_t getU64LEB();
+//   int32_t getS32LEB();
+//   int64_t getS64LEB();
+//   uint64_t getUPtrLEB();
 
-  bool getBasicType(int32_t code, Type& out);
-  bool getBasicHeapType(int64_t code, HeapType& out);
-  // Get the signature of a control flow structure.
-  Signature getBlockType();
-  // Read a value and get a type for it.
-  Type getType();
-  // Get a type given the initial S32LEB has already been read, and is provided.
-  Type getType(int code);
-  HeapType getHeapType();
-  HeapType getIndexedHeapType();
+//   bool getBasicType(int32_t code, Type& out);
+//   bool getBasicHeapType(int64_t code, HeapType& out);
+//   // Get the signature of a control flow structure.
+//   Signature getBlockType();
+//   // Read a value and get a type for it.
+//   Type getType();
+//   // Get a type given the initial S32LEB has already been read, and is
+//   provided. Type getType(int code); HeapType getHeapType(); HeapType
+//   getIndexedHeapType();
 
-  Type getConcreteType();
-  Name getInlineString(bool requireValid = true);
-  void verifyInt8(int8_t x);
-  void verifyInt16(int16_t x);
-  void verifyInt32(int32_t x);
-  void verifyInt64(int64_t x);
-  void readHeader();
-  void readStart();
-  void readMemories();
-  void readTypes();
+//   Type getConcreteType();
+//   Name getInlineString(bool requireValid = true);
+//   void verifyInt8(int8_t x);
+//   void verifyInt16(int16_t x);
+//   void verifyInt32(int32_t x);
+//   void verifyInt64(int64_t x);
+//   void readHeader();
+//   void readStart();
+//   void readMemories();
+//   void readTypes();
 
-  // gets a name in the combined import+defined space
-  Name getFunctionName(Index index);
-  Name getTableName(Index index);
-  Name getMemoryName(Index index);
-  Name getGlobalName(Index index);
-  Name getTagName(Index index);
-  Name getDataName(Index index);
-  Name getElemName(Index index);
+//   // gets a name in the combined import+defined space
+//   Name getFunctionName(Index index);
+//   Name getTableName(Index index);
+//   Name getMemoryName(Index index);
+//   Name getGlobalName(Index index);
+//   Name getTagName(Index index);
+//   Name getDataName(Index index);
+//   Name getElemName(Index index);
 
-  // gets a memory in the combined import+defined space
-  Memory* getMemory(Index index);
-  // gets a table in the combined import+defined space
-  Table* getTable(Index index);
+//   // gets a memory in the combined import+defined space
+//   Memory* getMemory(Index index);
+//   // gets a table in the combined import+defined space
+//   Table* getTable(Index index);
 
-  void getResizableLimits(Address& initial,
-                          Address& max,
-                          bool& shared,
-                          Type& addressType,
-                          Address defaultIfNoMax);
-  void readImports();
+//   void getResizableLimits(Address& initial,
+//                           Address& max,
+//                           bool& shared,
+//                           Type& addressType,
+//                           Address defaultIfNoMax);
+//   void readImports();
 
-  // The signatures of each function, including imported functions, given in the
-  // import and function sections. Store HeapTypes instead of Signatures because
-  // reconstructing the HeapTypes from the Signatures is expensive.
-  std::vector<HeapType> functionTypes;
+//   // The signatures of each function, including imported functions, given in
+//   the
+//   // import and function sections. Store HeapTypes instead of Signatures
+//   because
+//   // reconstructing the HeapTypes from the Signatures is expensive.
+//   std::vector<HeapType> functionTypes;
 
-  // Used to make sure the number of imported functions, signatures, and
-  // declared functions all match up.
-  Index numFuncImports = 0;
-  Index numFuncBodies = 0;
+//   // Used to make sure the number of imported functions, signatures, and
+//   // declared functions all match up.
+//   Index numFuncImports = 0;
+//   Index numFuncBodies = 0;
 
-  void readFunctionSignatures();
-  HeapType getTypeByIndex(Index index);
-  HeapType getTypeByFunctionIndex(Index index);
-  Signature getSignatureByTypeIndex(Index index);
-  Signature getSignatureByFunctionIndex(Index index);
+//   void readFunctionSignatures();
+//   HeapType getTypeByIndex(Index index);
+//   HeapType getTypeByFunctionIndex(Index index);
+//   Signature getSignatureByTypeIndex(Index index);
+//   Signature getSignatureByFunctionIndex(Index index);
 
-  Name getNextLabel();
+//   Name getNextLabel();
 
-  // We read the names section first so we know in advance what names various
-  // elements should have. Store the information for use when building
-  // expressions.
-  std::unordered_map<Index, Name> functionNames;
-  std::unordered_map<Index, std::unordered_map<Index, Name>> localNames;
-  std::unordered_map<Index, Name> typeNames;
-  std::unordered_map<Index, std::unordered_map<Index, Name>> fieldNames;
-  std::unordered_map<Index, Name> tableNames;
-  std::unordered_map<Index, Name> memoryNames;
-  std::unordered_map<Index, Name> globalNames;
-  std::unordered_map<Index, Name> tagNames;
-  std::unordered_map<Index, Name> dataNames;
-  std::unordered_map<Index, Name> elemNames;
+//   // We read the names section first so we know in advance what names various
+//   // elements should have. Store the information for use when building
+//   // expressions.
+//   std::unordered_map<Index, Name> functionNames;
+//   std::unordered_map<Index, std::unordered_map<Index, Name>> localNames;
+//   std::unordered_map<Index, Name> typeNames;
+//   std::unordered_map<Index, std::unordered_map<Index, Name>> fieldNames;
+//   std::unordered_map<Index, Name> tableNames;
+//   std::unordered_map<Index, Name> memoryNames;
+//   std::unordered_map<Index, Name> globalNames;
+//   std::unordered_map<Index, Name> tagNames;
+//   std::unordered_map<Index, Name> dataNames;
+//   std::unordered_map<Index, Name> elemNames;
 
-  Function* currFunction = nullptr;
-  // before we see a function (like global init expressions), there is no end of
-  // function to check
-  Index endOfFunction = -1;
+//   Function* currFunction = nullptr;
+//   // before we see a function (like global init expressions), there is no end
+//   of
+//   // function to check
+//   Index endOfFunction = -1;
 
-  // Throws a parsing error if we are not in a function context
-  void requireFunctionContext(const char* error);
+//   // Throws a parsing error if we are not in a function context
+//   void requireFunctionContext(const char* error);
 
-  void readFunctions();
-  void readVars();
-  void setLocalNames(Function& func, Index i);
+//   void readFunctions();
+//   void readVars();
+//   void setLocalNames(Function& func, Index i);
 
-  Result<> readInst();
+//   Result<> readInst();
 
-  void readExports();
+//   void readExports();
 
-  // The strings in the strings section (which are referred to by StringConst).
-  std::vector<Name> strings;
-  void readStrings();
-  Name getIndexedString();
+//   // The strings in the strings section (which are referred to by
+//   StringConst). std::vector<Name> strings; void readStrings(); Name
+//   getIndexedString();
 
-  Expression* readExpression();
-  void readGlobals();
+//   Expression* readExpression();
+//   void readGlobals();
 
-  // validations that cannot be performed on the Module
-  void validateBinary();
+//   // validations that cannot be performed on the Module
+//   void validateBinary();
 
-  size_t dataCount = 0;
-  bool hasDataCount = false;
+//   size_t dataCount = 0;
+//   bool hasDataCount = false;
 
-  void createDataSegments(Index count);
-  void readDataSegments();
-  void readDataSegmentCount();
+//   void createDataSegments(Index count);
+//   void readDataSegments();
+//   void readDataSegmentCount();
 
-  void readTableDeclarations();
-  void readElementSegments();
+//   void readTableDeclarations();
+//   void readElementSegments();
 
-  void readTags();
+//   void readTags();
 
-  static Name escape(Name name);
-  void findAndReadNames();
-  void readFeatures(size_t);
-  void readDylink(size_t);
-  void readDylink0(size_t);
+//   static Name escape(Name name);
+//   void findAndReadNames();
+//   void readFeatures(size_t);
+//   void readDylink(size_t);
+//   void readDylink0(size_t);
 
-  Index readMemoryAccess(Address& alignment, Address& offset);
-  std::tuple<Name, Address, Address> getMemarg();
+//   Index readMemoryAccess(Address& alignment, Address& offset);
+//   std::tuple<Name, Address, Address> getMemarg();
 
-  [[noreturn]] void throwError(std::string text) {
-    throw ParseException(text, 0, pos);
-  }
+//   [[noreturn]] void throwError(std::string text) {
+//     throw ParseException(text, 0, pos);
+//   }
 
-private:
-  bool hasDWARFSections();
-};
+// private:
+//   bool hasDWARFSections();
+// };
 
 } // namespace wasm
 

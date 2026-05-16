@@ -463,12 +463,11 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_CHAR);
-    expr->literal.string.data = token.lexeme;
-    expr->literal.string.length = token.length;
+    expr->literal.integer = token.lexeme[0];
 
-    if (expr->literal.string.length > 1)
+    if (token.length > 1)
       error(token, "Character constant cannot have multiple characters.");
-    else if (expr->literal.string.length == 0)
+    else if (token.length == 0)
       error(token, "Character constant cannot be empty.");
 
     break;

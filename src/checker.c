@@ -56,6 +56,7 @@ static bool analyze_statements(ArrayStmt statements);
 
 static bool autocast(Expr** expression, DataType* from, DataType* to);
 static bool autocast_int_literal_to_float_literal(Expr** expression, DataType* from, DataType* to);
+static bool autocast_int_literal_to_char_literal(Expr** expression, DataType* from, DataType* to);
 
 static const char* data_type_token_to_string(DataTypeToken type, ArrayChar* string);
 static DataType data_type_token_to_data_type(DataTypeToken type);
@@ -656,6 +657,9 @@ bool assignable_data_type(bool permissive, DataType destination, DataType source
   if (destination.type == TYPE_FLOAT && permissive)
     return source.type == TYPE_INTEGER;
 
+  if (destination.type == TYPE_CHAR && permissive)
+    return source.type == TYPE_INTEGER;
+
   if (destination.type == TYPE_OBJECT)
     return source.type == TYPE_NULL;
 
@@ -755,6 +759,10 @@ static void data_type_inference(Expr** source_expression, DataType* source, Data
   else if (source->type == TYPE_INTEGER && target->type == TYPE_FLOAT)
   {
     autocast_int_literal_to_float_literal(source_expression, source, target);
+  }
+  else if (source->type == TYPE_INTEGER && target->type == TYPE_CHAR)
+  {
+    autocast_int_literal_to_char_literal(source_expression, source, target);
   }
 }
 
@@ -1283,10 +1291,15 @@ static bool autocast_int_literal_to_float_literal(Expr** expression, DataType* f
     {
       expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
       expr->literal.floating = (float)expr->literal.integer;
-    }
 
-    *from = *to;
-    return true;
+      *from = *to;
+      return true;
+    }
+    else if (expr->literal.data_type.type == TYPE_FLOAT)
+    {
+      *from = *to;
+      return true;
+    }
   }
   else if (expr->type == EXPR_UNARY)
   {
@@ -1303,6 +1316,41 @@ static bool autocast_int_literal_to_float_literal(Expr** expression, DataType* f
     if (autocast_int_literal_to_float_literal(&expr->group.expr, from, to))
     {
       expr->group.data_type = DATA_TYPE(TYPE_FLOAT);
+      *from = *to;
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool autocast_int_literal_to_char_literal(Expr** expression, DataType* from, DataType* to)
+{
+  if (expression == NULL)
+    return true;
+
+  Expr* expr = *expression;
+  if (expr->type == EXPR_LITERAL)
+  {
+    if (expr->literal.data_type.type == TYPE_INTEGER && expr->literal.integer <= 0xFF)
+    {
+      expr->literal.data_type = DATA_TYPE(TYPE_CHAR);
+
+      *from = *to;
+      return true;
+    }
+    else if (expr->literal.data_type.type == TYPE_CHAR)
+    {
+      *from = *to;
+      return true;
+    }
+  }
+  else if (expr->type == EXPR_GROUP)
+  {
+    if (autocast_int_literal_to_char_literal(&expr->group.expr, from, to))
+    {
+      expr->group.data_type = DATA_TYPE(TYPE_CHAR);
       *from = *to;
 
       return true;

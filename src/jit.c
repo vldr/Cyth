@@ -414,7 +414,7 @@ static MIR_type_t data_type_to_sized_mir_type(DataType data_type)
     return MIR_T_I64;
   case TYPE_BOOL:
   case TYPE_CHAR:
-    return MIR_T_I8;
+    return MIR_T_U8;
   case TYPE_INTEGER:
     return MIR_T_I32;
   case TYPE_FLOAT:
@@ -2309,6 +2309,7 @@ static void generate_literal_expression(CyVM* vm, MIR_reg_t dest, LiteralExpr* e
   switch (expression->data_type.type)
   {
   case TYPE_INTEGER:
+  case TYPE_CHAR:
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                  MIR_new_reg_op(vm->ctx, dest),
@@ -2330,12 +2331,6 @@ static void generate_literal_expression(CyVM* vm, MIR_reg_t dest, LiteralExpr* e
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
                                  MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, 0)));
-    return;
-  case TYPE_CHAR:
-    MIR_append_insn(vm->ctx, vm->function,
-                    MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->data_type),
-                                 MIR_new_reg_op(vm->ctx, dest),
-                                 MIR_new_int_op(vm->ctx, expression->string.data[0])));
     return;
   case TYPE_STRING:
     generate_string_literal_expression(vm, MIR_new_reg_op(vm->ctx, dest), expression->string.data,

@@ -3456,6 +3456,7 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
   switch (expression->data_type.type)
   {
   case TYPE_INTEGER:
+  case TYPE_CHAR:
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->integer));
   case TYPE_FLOAT:
     return BinaryenConst(codegen.module, BinaryenLiteralFloat32(expression->floating));
@@ -3463,8 +3464,6 @@ static BinaryenExpressionRef generate_literal_expression(LiteralExpr* expression
     return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->boolean));
   case TYPE_NULL:
     return BinaryenRefNull(codegen.module, data_type_to_binaryen_type(expression->data_type));
-  case TYPE_CHAR:
-    return BinaryenConst(codegen.module, BinaryenLiteralInt32(expression->string.data[0]));
   case TYPE_STRING:
     return generate_string_literal_expression(expression->string.data, expression->string.length);
   default:

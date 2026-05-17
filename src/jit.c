@@ -1,6 +1,7 @@
 #include "array.h"
 #include "checker.h"
 #include "expression.h"
+#include "ftoa.h"
 #include "include/cyth.h"
 #include "lexer.h"
 #include "main.h"
@@ -274,39 +275,49 @@ static int string_equals(CyString* left, CyString* right)
 
 static CyString* string_int_cast(int n)
 {
-  int length = snprintf(NULL, 0, "%d", n) + 1;
-  uintptr_t size = sizeof(CyString) + length;
+  uint64_t u = n;
+  if (n < 0)
+    u = -u;
+
+  unsigned char data[24];
+  int index = ftoa_format_base10(data, sizeof(data), u);
+  if (n < 0)
+    data[--index] = '-';
+
+  int length = sizeof(data) - index;
+  uintptr_t size = sizeof(CyString) + length + 1;
 
   CyString* result = GC_malloc_atomic(size);
-  result->size = length - 1;
-
-  snprintf(result->data, length, "%d", n);
+  result->size = length;
+  result->data[length] = '\0';
+  memcpy(result->data, data + index, length);
 
   return result;
 }
 
 static CyString* string_float_cast(float n)
 {
-  int length = snprintf(NULL, 0, "%.10g", n) + 1;
-  uintptr_t size = sizeof(CyString) + length;
+  unsigned char data[512];
+  int length = ftoa(data, sizeof(data), n);
+  uintptr_t size = sizeof(CyString) + length + 1;
 
   CyString* result = GC_malloc_atomic(size);
-  result->size = length - 1;
-
-  snprintf(result->data, length, "%.10g", n);
+  result->size = length;
+  result->data[length] = '\0';
+  memcpy(result->data, data, length);
 
   return result;
 }
 
 static CyString* string_char_cast(char n)
 {
-  int length = snprintf(NULL, 0, "%c", n) + 1;
-  uintptr_t size = sizeof(CyString) + length;
+  int length = 1;
+  uintptr_t size = sizeof(CyString) + length + 1;
 
   CyString* result = GC_malloc_atomic(size);
-  result->size = length - 1;
-
-  snprintf(result->data, length, "%c", n);
+  result->size = length;
+  result->data[0] = n;
+  result->data[length] = '\0';
 
   return result;
 }

@@ -5,6 +5,9 @@ log("" + 4294967296.625)
 log("" + inf)
 log("" + -inf)
 
+log("" + nan)
+log("" + -nan)
+
 log("" + true)
 log("" + false)
 
@@ -19,6 +22,8 @@ for int i = -10; i <= 10; i += 1
 # 4294967296
 # inf
 # -inf
+# nan
+# -nan
 # true
 # false
 # 2147483647

@@ -551,7 +551,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
-    expr->literal.floating = INFINITY;
+    expr->literal.integer = 0x7F800000;
 
     break;
   case TOKEN_NAN:
@@ -559,7 +559,7 @@ static Expr* primary(void)
 
     expr->type = EXPR_LITERAL;
     expr->literal.data_type = DATA_TYPE(TYPE_FLOAT);
-    expr->literal.floating = NAN;
+    expr->literal.integer = 0x7FC00000;
 
     break;
   default:

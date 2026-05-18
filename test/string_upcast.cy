@@ -23,7 +23,7 @@ for int i = -10; i <= 10; i += 1
 # inf
 # -inf
 # nan
-# -nan
+# nan
 # true
 # false
 # 2147483647

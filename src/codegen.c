@@ -345,16 +345,7 @@ static const char* generate_string_float_cast_function(void)
     {
       nan_exit = BinaryenIf(
         codegen.module, BinaryenBinary(codegen.module, BinaryenNeFloat32(), INPUT(), INPUT()),
-        BinaryenReturn(
-          codegen.module,
-          BinaryenSelect(
-            codegen.module,
-            BinaryenBinary(codegen.module, BinaryenShrUInt32(),
-                           BinaryenUnary(codegen.module, BinaryenReinterpretFloat32(), INPUT()),
-                           CONSTANT(31)),
-            generate_string_literal_expression("-nan", -1),
-            generate_string_literal_expression("nan", -1))),
-        NULL);
+        BinaryenReturn(codegen.module, generate_string_literal_expression("nan", -1)), NULL);
     }
 
     BinaryenExpressionRef body_list[] = {

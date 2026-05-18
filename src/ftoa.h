@@ -1302,6 +1302,80 @@ static inline int ftoa_format_digits(uint8_t* dst, int cap, int neg, ftoa_decima
   return len;
 }
 
+static inline int ftoa_format_digits_exponent(uint8_t* dst, int cap, int neg, ftoa_decimal_slice* d,
+                                              int prec)
+{
+  int len = 0;
+  if (neg && d->nd != 0)
+  {
+    FTOA_PUSH(dst, len, cap, '-');
+  }
+
+  char ch = '0';
+  if (d->nd != 0)
+  {
+    ch = d->d[0];
+  }
+  FTOA_PUSH(dst, len, cap, ch);
+
+  if (prec > 0)
+  {
+    FTOA_PUSH(dst, len, cap, '.');
+    int i = 1;
+    int m = d->nd < (prec + 1) ? d->nd : (prec + 1);
+
+    if (i < m)
+    {
+      for (; i < m; i++)
+      {
+        FTOA_PUSH(dst, len, cap, d->d[i]);
+      }
+
+      i = m;
+    }
+
+    for (; i <= prec; i++)
+    {
+      FTOA_PUSH(dst, len, cap, '0');
+    }
+  }
+
+  FTOA_PUSH(dst, len, cap, 'e');
+  int exp = d->dp - 1;
+  if (d->nd == 0)
+  {
+    exp = 0;
+  }
+
+  if (exp < 0)
+  {
+    ch = '-';
+    exp = -exp;
+  }
+  else
+  {
+    ch = '+';
+  }
+  FTOA_PUSH(dst, len, cap, ch);
+
+  if (exp < 10)
+  {
+    FTOA_PUSH(dst, len, cap, exp + '0');
+  }
+  else if (exp < 100)
+  {
+    FTOA_PUSH(dst, len, cap, exp / 10 + '0');
+    FTOA_PUSH(dst, len, cap, exp % 10 + '0');
+  }
+  else
+  {
+    FTOA_PUSH(dst, len, cap, exp / 100 + '0');
+    FTOA_PUSH(dst, len, cap, (exp / 10) % 10 + '0');
+    FTOA_PUSH(dst, len, cap, exp % 10 + '0');
+  }
+
+  return len;
+}
 static inline int ftoa_generic_ftoa(uint8_t* dst, int cap, double val, int bit_size)
 {
   uint64_t bits;
@@ -1331,9 +1405,6 @@ static inline int ftoa_generic_ftoa(uint8_t* dst, int cap, double val, int bit_s
   {
     int len = 0;
 
-    if (neg)
-      FTOA_PUSH(dst, len, cap, '-');
-
     if (mant != 0)
     {
       FTOA_PUSH(dst, len, cap, 'n');
@@ -1342,6 +1413,11 @@ static inline int ftoa_generic_ftoa(uint8_t* dst, int cap, double val, int bit_s
     }
     else
     {
+      if (neg)
+      {
+        FTOA_PUSH(dst, len, cap, '-');
+      }
+
       FTOA_PUSH(dst, len, cap, 'i');
       FTOA_PUSH(dst, len, cap, 'n');
       FTOA_PUSH(dst, len, cap, 'f');
@@ -1374,6 +1450,13 @@ static inline int ftoa_generic_ftoa(uint8_t* dst, int cap, double val, int bit_s
   }
 
   ftoa_dbox_ftoa(&digs, mant, exp - mantbits, denorm, bit_size);
+
+  int dp_exp = digs.dp - 1;
+  if (dp_exp < -6 || dp_exp >= 21)
+  {
+    int prec = digs.nd - 1;
+    return ftoa_format_digits_exponent(dst, cap, neg, &digs, prec);
+  }
 
   int prec = digs.nd - digs.dp;
   if (prec < 0)

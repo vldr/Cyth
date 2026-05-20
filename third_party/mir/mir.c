@@ -1209,6 +1209,7 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
   }
   data->el_type = canon_type (el_type);
   data->nel = nel;
+  data->gc_root = 0;
   memcpy (data->u.els, els, el_len * nel);
   return item;
 }

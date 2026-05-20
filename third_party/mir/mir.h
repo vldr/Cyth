@@ -350,6 +350,7 @@ typedef struct MIR_data {
   const char *name; /* can be NULL */
   MIR_type_t el_type;
   size_t nel;
+  int gc_root;
   union {
     long double d; /* for alignment of temporary literals */
     uint8_t els[1];

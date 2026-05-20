@@ -4916,6 +4916,7 @@ static void init_variable_declaration(CyVM* vm, VarStmt* statement)
       vm->ctx,
       memory_sprintf("%s.%s", statement->name.lexeme, data_type_to_string(statement->data_type)),
       data_type_to_mir_type(statement->data_type), 1, &init);
+    statement->item->u.data->gc_root = data_type_is_pointer(statement->data_type);
 
     MIR_reg_t ptr = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
     MIR_append_insn(vm->ctx, vm->function,
@@ -5117,6 +5118,9 @@ int cyth_compile(CyVM* vm)
     if (item->u.data->el_type != MIR_T_I64)
       continue;
 
+    if (!item->u.data->gc_root)
+      continue;
+
     GC_add_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
   }
 
@@ -5139,6 +5143,9 @@ void cyth_destroy(CyVM* vm)
       continue;
 
     if (item->u.data->el_type != MIR_T_I64)
+      continue;
+
+    if (!item->u.data->gc_root)
       continue;
 
     GC_remove_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));

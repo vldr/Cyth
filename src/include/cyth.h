@@ -176,15 +176,19 @@ extern "C"
   // You MUST call "cyth_run" before accessing global variables, otherwise
   // they will be uninitialized.
   //
-  // [name] must be in the format: <variable name>.<type name>
+  // Note that if a global variable is only read/written within the top-level scope of a program,
+  // and not within other functions, it will be demoted from a global to a local variable and thus
+  // will not be accessible by this function.
   //
-  // For example, if I have the following Cyth code:
+  //  [name] must be in the format: <variable name>.<type name>
   //
-  //    int globalVariable = 10
+  //  For example, if I have the following Cyth code:
   //
-  // The corresponding C code would look like:
+  //     int globalVariable = 10
   //
-  //    int* myVariable = (int*) cyth_get_variable(vm, "globalVariable.int");
+  //  The corresponding C code would look like:
+  //
+  //     int* myVariable = (int*) cyth_get_variable(vm, "globalVariable.int");
   //
   uintptr_t cyth_get_variable(CyVM* vm, const char* name);
 

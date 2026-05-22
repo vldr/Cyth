@@ -4934,6 +4934,10 @@ static void init_variable_declaration(CyVM* vm, VarStmt* statement)
         MIR_new_mem_op(vm->ctx, data_type_to_mir_type(statement->data_type), 0, ptr, 0, 1),
         MIR_new_reg_op(vm->ctx, initializer)));
   }
+  else if (statement->scope == SCOPE_LOCAL)
+  {
+    generate_default_initialization(vm, statement->reg, statement->data_type);
+  }
   else
   {
     UNREACHABLE("Unexpected scope type");
@@ -5084,6 +5088,10 @@ int cyth_compile(CyVM* vm)
     ArrayVarStmt global_local_statements = checker_global_locals();
     array_foreach(&global_local_statements, global_local)
     {
+      if (global_local->index == -1)
+        continue;
+
+      global_local->scope = SCOPE_LOCAL;
       global_local->reg = MIR_new_func_reg(
         vm->ctx, vm->function->u.func, data_type_to_mir_type(global_local->data_type),
         memory_sprintf("%s.%d", global_local->name.lexeme, global_local->index));

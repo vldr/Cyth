@@ -1916,15 +1916,12 @@ static void init_variable_declaration(VarStmt* statement)
   else
   {
     if (environment == checker.global_environment)
-    {
       statement->scope = SCOPE_GLOBAL;
-    }
     else
-    {
       statement->scope = SCOPE_LOCAL;
-      statement->index = array_size(&checker.global_locals);
-      array_add(&checker.global_locals, statement);
-    }
+
+    statement->index = array_size(&checker.global_locals);
+    array_add(&checker.global_locals, statement);
   }
 
   if (statement->type.type == DATA_TYPE_TOKEN_NONE)
@@ -2581,6 +2578,11 @@ static DataType check_variable_expression(VarExpr* expression)
   {
     error_cannot_access_name_outside_function(expression->name, name);
     return DATA_TYPE(TYPE_VOID);
+  }
+
+  if (variable->scope == SCOPE_GLOBAL && (checker.function != NULL || checker.class != NULL))
+  {
+    variable->index = -1;
   }
 
   expression->variable = variable;

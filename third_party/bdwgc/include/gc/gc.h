@@ -36,11 +36,21 @@
 #  pragma message("Warning: Expecting _WIN64 for x64 targets!")
 #endif
 
-#define NO_EXECUTE_PERMISSION 1
 #define POINTER_MASK 0x0000FFFFFFFFFFFF
-#define GC_NOT_DLL
+#define NO_EXECUTE_PERMISSION
 #define NO_MSGBOX_ON_ERROR
 #define NO_DEBUGGING
+#define NO_FIND_LEAK
+#define NO_ALL_INTERIOR_POINTERS
+#define NO_GETENV
+#define NO_CLOCK
+#define GC_NOT_DLL
+#define GC_NO_DEINIT
+#define GC_DISABLE_INCREMENTAL
+#define GC_DISABLE_SNPRINTF
+#define GC_NO_FINALIZATION
+#define LARGE_CONFIG
+#define SMALL_CONFIG
 
 /*
  * Define version numbers here to allow test on build machine for

@@ -49,8 +49,6 @@
 #define GC_DISABLE_INCREMENTAL
 #define GC_DISABLE_SNPRINTF
 #define GC_NO_FINALIZATION
-#define LARGE_CONFIG
-#define SMALL_CONFIG
 
 /*
  * Define version numbers here to allow test on build machine for

@@ -1428,6 +1428,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->last_temp_num = 0;
   func->vararg_p = vararg_p != 0;
   func->expr_p = func->jret_p = FALSE;
+  func->leaf_p = TRUE;
   func->n_inlines = 0;
   func->length = 0;
   func->machine_code = func->call_addr = NULL;
@@ -3888,19 +3889,19 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 }
 
 #ifndef MIR_MAX_INSNS_FOR_INLINE
-#define MIR_MAX_INSNS_FOR_INLINE 200
+#define MIR_MAX_INSNS_FOR_INLINE 150
 #endif
 
 #ifndef MIR_MAX_INSNS_FOR_CALL_INLINE
 #define MIR_MAX_INSNS_FOR_CALL_INLINE 100
 #endif
 
-#ifndef MIR_MAX_FUNC_INLINE_GROWTH
-#define MIR_MAX_FUNC_INLINE_GROWTH 50
+#ifndef MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE
+#define MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE MIR_MAX_INSNS_FOR_CALL_INLINE * 2
 #endif
 
-#ifndef MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE
-#define MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE MIR_MAX_INSNS_FOR_INLINE
+#ifndef MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE_LEAF
+#define MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE_LEAF MIR_MAX_INSNS_FOR_CALL_INLINE * 40
 #endif
 
 /* Simple alloca analysis.  Return top alloca insn with const size.
@@ -4057,13 +4058,14 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_insn_t call, insn, prev_insn, new_insn, ret_insn, anchor, stop_insn;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
-  size_t original_func_insns_num, func_insns_num, called_func_insns_num;
+  size_t original_func_insns_num, func_insns_num, leaf_func_insns_num, called_func_insns_num;
 
   mir_assert (func_item->item_type == MIR_func_item);
   vn_empty (ctx);
   func = func_item->u.func;
   original_func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
   func_insns_num = 0;
+  leaf_func_insns_num = 0;
   func_top_alloca = func_alloca_features (ctx, func, &func_top_alloca_used_p, NULL, &alloca_size);
   mir_assert (func_top_alloca != NULL || !func_top_alloca_used_p);
   init_func_top_alloca_size = curr_func_top_alloca_size = max_func_top_alloca_size = 0;
@@ -4103,14 +4105,26 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     }
     called_func = called_func_item->u.func;
     called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
-    if (called_func->first_lref != NULL || called_func->vararg_p || called_func->jret_p
-        || called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
-                                                                : MIR_MAX_INSNS_FOR_CALL_INLINE)
-        || func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE) {
+
+    const int is_leaf_function = called_func->leaf_p || func_insn->code == MIR_INLINE;
+    if (
+      called_func->first_lref != NULL || 
+      called_func->vararg_p || 
+      called_func->jret_p || 
+      called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
+                                                           : MIR_MAX_INSNS_FOR_CALL_INLINE) ||
+      (is_leaf_function ? (leaf_func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE_LEAF)
+                        : (func_insns_num      > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE))
+    ) {
       simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
-    func_insns_num += called_func_insns_num;
+
+    if (is_leaf_function)
+      leaf_func_insns_num += called_func_insns_num;
+    else
+      func_insns_num += called_func_insns_num;
+
     inlined_calls++;
     res_types = call->ops[0].u.ref->u.proto->res_types;
     prev_insn = DLIST_PREV (MIR_insn_t, call);

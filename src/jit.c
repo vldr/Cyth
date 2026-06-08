@@ -2355,15 +2355,22 @@ static void generate_binary_expression_function_call(CyVM* vm, MIR_reg_t dest,
                                                      BinaryExpr* expression, MIR_reg_t left,
                                                      MIR_reg_t right)
 {
-  MIR_insn_t insn =
-    expression->function->data_type.type == TYPE_VOID
-      ? MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, expression->function->proto),
-                          MIR_new_ref_op(vm->ctx, expression->function->item),
-                          MIR_new_reg_op(vm->ctx, left), MIR_new_reg_op(vm->ctx, right))
-      : MIR_new_call_insn(vm->ctx, 5, MIR_new_ref_op(vm->ctx, expression->function->proto),
-                          MIR_new_ref_op(vm->ctx, expression->function->item),
-                          MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, left),
-                          MIR_new_reg_op(vm->ctx, right));
+  MIR_insn_t insn = expression->function->data_type.type == TYPE_VOID
+                      ? MIR_new_insn_arr(vm->ctx, MIR_INLINE, 4,
+                                         (MIR_op_t[]){
+                                           MIR_new_ref_op(vm->ctx, expression->function->proto),
+                                           MIR_new_ref_op(vm->ctx, expression->function->item),
+                                           MIR_new_reg_op(vm->ctx, left),
+                                           MIR_new_reg_op(vm->ctx, right),
+                                         })
+                      : MIR_new_insn_arr(vm->ctx, MIR_INLINE, 5,
+                                         (MIR_op_t[]){
+                                           MIR_new_ref_op(vm->ctx, expression->function->proto),
+                                           MIR_new_ref_op(vm->ctx, expression->function->item),
+                                           MIR_new_reg_op(vm->ctx, dest),
+                                           MIR_new_reg_op(vm->ctx, left),
+                                           MIR_new_reg_op(vm->ctx, right),
+                                         });
 
   MIR_append_insn(vm->ctx, vm->function, generate_debug_info(vm, expression->op, insn));
 }
@@ -2445,7 +2452,7 @@ static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* exp
       }
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn_arr(vm->ctx, MIR_INLINE, arguments.size, arguments.elems));
+                      MIR_new_insn_arr(vm->ctx, MIR_CALL, arguments.size, arguments.elems));
       return;
     }
     else if (data_type.type == TYPE_OBJECT)
@@ -3372,6 +3379,8 @@ static Function* generate_string_object_cast_function(CyVM* vm, Token token, Dat
 static void generate_string_cast(CyVM* vm, Token token, MIR_reg_t dest, MIR_reg_t expr,
                                  MIR_reg_t depth, MIR_reg_t list, DataType data_type)
 {
+  vm->function->u.func->leaf_p = false;
+
   switch (data_type.type)
   {
   case TYPE_BOOL:
@@ -4005,6 +4014,7 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
 {
   MIR_item_t proto = NULL;
   MIR_item_t func = NULL;
+  bool should_inline = false;
 
   if (expression->callee_data_type.type == TYPE_ALIAS)
   {
@@ -4021,6 +4031,7 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
   {
     proto = expression->function->proto_prototype;
     func = expression->function->item_prototype;
+    should_inline = true;
   }
   else if (expression->callee_data_type.type == TYPE_FUNCTION_POINTER)
   {
@@ -4067,10 +4078,14 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
     array_add(&arguments, MIR_new_reg_op(vm->ctx, temp));
   }
 
+  if (!should_inline)
+    vm->function->u.func->leaf_p = false;
+
   MIR_append_insn(
     vm->ctx, vm->function,
     generate_debug_info(vm, expression->callee_token,
-                        MIR_new_insn_arr(vm->ctx, MIR_CALL, arguments.size, arguments.elems)));
+                        MIR_new_insn_arr(vm->ctx, should_inline ? MIR_INLINE : MIR_CALL,
+                                         arguments.size, arguments.elems)));
 }
 
 static void generate_access_expression(CyVM* vm, MIR_reg_t dest, AccessExpr* expression)

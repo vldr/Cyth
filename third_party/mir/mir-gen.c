@@ -94,7 +94,6 @@
 #include <inttypes.h>
 
 #include <assert.h>
-#include "mir-code-alloc.h"
 #include "mir-alloc.h"
 
 #define gen_assert(cond) assert (cond)
@@ -410,6 +409,7 @@ struct bb_insn {
   MIR_insn_t insn;
   unsigned char gvn_val_const_p; /* true for int value, false otherwise */
   unsigned char alloca_flag;     /* true for value may and/or must be from alloca */
+  unsigned char escapes_flag;
   uint32_t index, mem_index;
   int64_t gvn_val; /* used for GVN, it is negative index for non GVN expr insns */
   DLIST_LINK (bb_insn_t) bb_insn_link;
@@ -605,6 +605,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->insn = insn;
   bb_insn->gvn_val_const_p = FALSE;
   bb_insn->alloca_flag = insn->code == MIR_ALLOCA ? MAY_ALLOCA | MUST_ALLOCA : 0;
+  bb_insn->escapes_flag = FALSE;
   bb_insn->call_hard_reg_args = NULL;
   gen_assert (curr_cfg->curr_bb_insn_index != (uint32_t) ~0ull);
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
@@ -2145,6 +2146,7 @@ typedef struct ssa_edge *ssa_edge_t;
 struct ssa_edge {
   bb_insn_t use, def;
   char flag;
+  bb_insn_t scanned, scanned_finalization;
   uint16_t def_op_num;
   uint32_t use_op_num;
   ssa_edge_t prev_use, next_use; /* of the same def: we have only head in op.data */
@@ -2380,6 +2382,7 @@ static ssa_edge_t add_ssa_edge_1 (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_n
   gen_assert (use_op_num >= 0 && def_op_num >= 0 && def_op_num < (1 << 16));
   gen_assert (def->insn->code != MIR_CALL || def_op_num != 0);
   ssa_edge->flag = FALSE;
+  ssa_edge->scanned = ssa_edge->scanned_finalization = NULL;
   ssa_edge->def = def;
   ssa_edge->def_op_num = def_op_num;
   ssa_edge->use = use;
@@ -5236,6 +5239,400 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
     dead_insns_num++;
   }
   DEBUG (1, { fprintf (debug_file, "%5ld removed SSA dead insns\n", dead_insns_num); });
+}
+
+static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, bb_insn_t bb_insn, VARR(bb_insn_t)* defs, VARR(bb_insn_t)* mallocs)
+{
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_alloc_t alloc = gen_alloc(gen_ctx);
+
+  MIR_insn_t insn = bb_insn->insn;
+  if (!MIR_call_code_p(insn->code))
+    return;
+
+  MIR_op_t callee = insn->ops[1];
+  if (callee.mode != MIR_OP_REF)
+    return;
+
+  if (callee.u.ref->item_type != MIR_import_item)
+    return;
+
+  if (strcmp(callee.u.ref->u.import_id, "malloc") != 0 &&
+      strcmp(callee.u.ref->u.import_id, "malloc_atomic") != 0)
+    return;
+
+  if (bb_insn->escapes_flag)
+    return;
+
+  DEBUG (0, {
+    fprintf(debug_file, "--- pass 2 GC_malloc (bb=%d, insn=%d, func=%s) ---\n", (int)bb_insn->bb->index, (int)bb_insn->index, curr_func_item->u.func->name);
+    fprintf(debug_file, "  call: ");
+    MIR_output_insn(ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+  });
+
+  ssa_edge_t edge = insn->ops[2].data;
+  if (!edge)
+    return;
+  
+  VARR(ssa_edge_t) *scan;
+  VARR_CREATE(ssa_edge_t, scan, alloc, 16);
+
+  for (ssa_edge_t e = insn->ops[2].data; e != NULL; e = e->next_use)
+    VARR_PUSH(ssa_edge_t, scan, e);
+
+  loop_node_t parent = bb_insn->bb->loop_node->parent;
+  int inside_loop = parent && parent != curr_cfg->root_loop_node;
+
+  while (VARR_LENGTH(ssa_edge_t, scan) != 0)
+  {
+    ssa_edge_t e = VARR_POP(ssa_edge_t, scan);
+    bb_insn_t use_bb_insn = e->use;
+    MIR_insn_t use_insn = use_bb_insn->insn;
+
+    if (e->scanned_finalization == bb_insn)
+      continue;
+
+    e->scanned_finalization = bb_insn;
+
+    DEBUG (0, {
+      fprintf(debug_file, "  use (bb=%d, insn=%d): ", (int)e->use->bb->index, (int)e->use->index);
+      MIR_output_insn(ctx, debug_file, use_insn, curr_func_item->u.func, TRUE);
+    });
+
+    if (
+      (use_insn->code >= MIR_EQ && use_insn->code <= MIR_UBNO) ||
+      use_insn->code == MIR_FSQRT ||
+      use_insn->code == MIR_FMOV
+    )
+    {
+    }
+    else if (
+      (use_insn->code >= MIR_EXT8 && use_insn->code <= MIR_LDNEG) ||
+      (use_insn->code >= MIR_ADD && use_insn->code <= MIR_UMULOS) ||
+      use_insn->code == MIR_PHI ||
+      use_insn->code == MIR_CCLEAR
+    )
+    {
+      for (ssa_edge_t e = use_insn->ops[0].data; e != NULL; e = e->next_use)
+      {
+        DEBUG (0, {
+          MIR_output_insn(ctx, debug_file, e->use->insn, curr_func_item->u.func, TRUE);
+        });
+        
+        VARR_PUSH(ssa_edge_t, scan, e);
+      }
+    }
+    else if (use_insn->code == MIR_MOV)
+    {
+      if (e->use_op_num == 1 && use_insn->ops[0].mode == MIR_OP_VAR_MEM)
+      {
+        int found = FALSE;
+
+        ssa_edge_t p = use_insn->ops[0].data;
+        for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, defs); i++)
+        {
+          bb_insn_t def_insn = VARR_GET (bb_insn_t, defs, i);
+          bb_insn_t malloc_insn = VARR_GET (bb_insn_t, mallocs, i);
+
+          if (p->def == def_insn)
+          {
+            DEBUG (0, {
+              MIR_output_insn(ctx, debug_file, p->def->insn, curr_func_item->u.func, TRUE);
+              fprintf(debug_file, "Found a matching mov: %d %p\n", malloc_insn->escapes_flag, malloc_insn);
+            });
+
+            escape_analysis_finalization(gen_ctx, loop_map, malloc_insn, defs, mallocs);
+
+            if (malloc_insn->escapes_flag)
+            {
+              bb_insn->escapes_flag = TRUE;
+            }
+            else if (inside_loop)
+            {
+              loop_node_t loop = def_insn->bb->loop_node->parent;
+              int escapes = TRUE;
+              
+              while (loop)
+              {
+                if (loop == parent && def_insn->bb->index >= bb_insn->bb->index)
+                {
+                  escapes = FALSE;
+                  break;
+                }
+                
+                loop = loop->parent;
+              }
+              
+              if (escapes)
+              {
+                DEBUG (0, {
+                  fprintf(debug_file, "Moving to a pointer outside loop\n");
+                });
+
+                bb_insn->escapes_flag = TRUE;
+              }
+            }
+
+            found = TRUE;
+          }
+        }
+
+        if (!found)
+        {
+          DEBUG (0, {
+            fprintf(debug_file, "No matching mov found...\n");
+          });
+          
+          bb_insn->escapes_flag = TRUE;
+        }
+      }
+    }
+  }
+
+  if (!bb_insn->escapes_flag)
+  {
+    if (inside_loop && !bitmap_bit_p(loop_map, parent->index))
+    {
+      bitmap_set_bit_p(loop_map, parent->index);
+
+      bb_t header = parent->entry->bb;
+
+      MIR_reg_t temp = gen_new_temp_reg(gen_ctx, MIR_T_I64, curr_func_item->u.func);
+      MIR_insn_t bstart = MIR_new_insn(ctx, MIR_BSTART, _MIR_new_var_op(ctx, temp));
+      gen_add_insn_before(gen_ctx, DLIST_HEAD(bb_insn_t, header->bb_insns)->insn, bstart);
+
+      for (edge_t e = DLIST_HEAD(in_edge_t, header->in_edges); e != NULL; e = DLIST_NEXT(in_edge_t, e))
+      {
+        if (e->back_edge_p)
+        {
+          bb_insn_t latch_tail = DLIST_TAIL(bb_insn_t, e->src->bb_insns);
+          MIR_insn_t bend = MIR_new_insn(ctx, MIR_BEND, _MIR_new_var_op(ctx, temp));
+          gen_add_insn_before(gen_ctx, latch_tail->insn, bend);
+        }
+      }
+    }
+
+    MIR_op_t result_op = insn->ops[2];
+    MIR_op_t size_op = insn->ops[3];
+  
+    insn->code = MIR_ALLOCA;
+    insn->ops[2].data = NULL;
+    insn->ops[3].data = NULL;
+    insn->ops[0] = result_op;
+    insn->ops[1] = size_op;
+    insn->nops = 2;
+
+    ssa_edge_t e;
+    for (e = result_op.data; e != NULL; e = e->next_use)
+      e->def_op_num = 0;
+
+    e = size_op.data;
+    if (e) e->use_op_num = 1;
+
+    DEBUG (0, {
+      fprintf(debug_file, "Does not escape\n");
+    });
+  }
+
+  VARR_DESTROY(ssa_edge_t, scan);
+}
+
+static void escape_analysis(gen_ctx_t gen_ctx)
+{
+  MIR_alloc_t alloc = gen_alloc(gen_ctx);
+  MIR_context_t ctx = gen_ctx->ctx;
+
+  VARR(bb_insn_t)* mallocs;
+  VARR_CREATE(bb_insn_t, mallocs, alloc, 16);
+
+  VARR(bb_insn_t)* defs;
+  VARR_CREATE(bb_insn_t, defs, alloc, 16);
+
+  VARR(ssa_edge_t)* scan;
+  VARR_CREATE(ssa_edge_t, scan, alloc, 16);
+
+  for (bb_t bb = DLIST_HEAD(bb_t, curr_cfg->bbs);
+       bb != NULL;
+       bb = DLIST_NEXT(bb_t, bb))
+  {
+    for (bb_insn_t bb_insn = DLIST_HEAD(bb_insn_t, bb->bb_insns);
+         bb_insn != NULL;
+         bb_insn = DLIST_NEXT(bb_insn_t, bb_insn)) 
+    {
+      MIR_insn_t insn = bb_insn->insn;
+      if (!MIR_call_code_p(insn->code))
+        continue;
+
+      MIR_op_t callee = insn->ops[1];
+      if (callee.mode != MIR_OP_REF)
+        continue;
+
+      if (callee.u.ref->item_type != MIR_import_item)
+        continue;
+
+      if (strcmp(callee.u.ref->u.import_id, "malloc") != 0 &&
+          strcmp(callee.u.ref->u.import_id, "malloc_atomic") != 0)
+        continue;
+
+      DEBUG (0, {
+        fprintf(debug_file, "=== found GC_malloc (bb=%d, insn=%d, func=%s) ===\n", (int)bb->index, (int)bb_insn->index, curr_func_item->u.func->name);
+        fprintf(debug_file, "  call: ");
+        MIR_output_insn(ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+      });
+
+      VARR_PUSH(bb_insn_t, defs, bb_insn);
+      VARR_PUSH(bb_insn_t, mallocs, bb_insn);
+    
+      ssa_edge_t edge = insn->ops[2].data;
+      if (edge == NULL)
+        continue;
+
+      for (ssa_edge_t e = insn->ops[2].data; e != NULL; e = e->next_use)
+        VARR_PUSH(ssa_edge_t, scan, e);
+
+      loop_node_t parent = bb_insn->bb->loop_node->parent;
+      int inside_loop = parent && parent != curr_cfg->root_loop_node;
+
+      while (VARR_LENGTH(ssa_edge_t, scan) != 0)
+      {
+        ssa_edge_t e = VARR_POP(ssa_edge_t, scan);
+        bb_insn_t use_bb_insn = e->use;
+        MIR_insn_t use_insn = use_bb_insn->insn;
+
+        if (e->scanned == bb_insn)
+          continue;
+
+        e->scanned = bb_insn;
+
+        DEBUG (0, {
+          fprintf(debug_file, "  use (bb=%d, insn=%d): ", (int)e->use->bb->index, (int)e->use->index);
+          MIR_output_insn(ctx, debug_file, use_insn, curr_func_item->u.func, TRUE);
+        });
+        
+        if (inside_loop)
+        {
+          loop_node_t loop = use_bb_insn->bb->loop_node->parent;
+          int escapes = TRUE;
+          
+          while (loop)
+          {
+            if (loop == parent && use_bb_insn->bb->index >= bb_insn->bb->index)
+            {
+              escapes = FALSE;
+              break;
+            }
+            
+            loop = loop->parent;
+          }
+          
+          if (escapes)
+          {
+
+            DEBUG (0, {
+              fprintf(debug_file, "    ^ ESCAPES via loop (dest=%d, src=%d)\n", (int)use_bb_insn->bb->index, (int)bb_insn->bb->index);
+            });
+
+            bb_insn->escapes_flag = TRUE;
+          }
+        }
+
+        if (use_insn->code == MIR_RET)
+        {
+          DEBUG (0, {
+            fprintf(debug_file, "    ^ ESCAPES via return\n");
+          });
+
+          bb_insn->escapes_flag = TRUE;
+        }
+        else if (MIR_call_code_p(use_insn->code))
+        {
+          MIR_op_t callee = use_insn->ops[1];
+
+          if (callee.mode != MIR_OP_REF ||
+              callee.u.ref->item_type != MIR_import_item ||
+              strcmp(callee.u.ref->u.import_id, "memcpy") != 0)
+          {
+            DEBUG (0, {
+              fprintf(debug_file, "    ^ ESCAPES via call\n");
+            });
+
+            bb_insn->escapes_flag = TRUE;
+          }
+        }
+        else if (
+          (use_insn->code >= MIR_EQ && use_insn->code <= MIR_UBNO) ||
+          use_insn->code == MIR_FSQRT ||
+          use_insn->code == MIR_FMOV
+        )
+        {
+        }
+        else if (
+          (use_insn->code >= MIR_EXT8 && use_insn->code <= MIR_LDNEG) ||
+          (use_insn->code >= MIR_ADD && use_insn->code <= MIR_UMULOS) ||
+          use_insn->code == MIR_PHI ||
+          use_insn->code == MIR_CCLEAR
+        )
+        {
+          for (ssa_edge_t e = use_insn->ops[0].data; e != NULL; e = e->next_use)
+          {
+            DEBUG (0, {
+              MIR_output_insn(ctx, debug_file, e->use->insn, curr_func_item->u.func, TRUE);
+            });
+
+            VARR_PUSH(ssa_edge_t, scan, e);
+          }
+
+          VARR_PUSH(bb_insn_t, defs, use_bb_insn);
+          VARR_PUSH(bb_insn_t, mallocs, bb_insn);
+        }
+        else if (use_insn->code == MIR_MOV)
+        {
+          if (e->use_op_num != 0 && use_insn->ops[e->use_op_num].mode == MIR_OP_VAR_MEM && use_insn->ops[e->use_op_num].u.mem.type == MIR_T_I64)
+          {
+            for (ssa_edge_t e = use_insn->ops[0].data; e != NULL; e = e->next_use)
+            {
+              DEBUG (0, {
+                MIR_output_insn(ctx, debug_file, e->use->insn, curr_func_item->u.func, TRUE);
+              });
+
+              VARR_PUSH(ssa_edge_t, scan, e);
+            }
+          }
+        }
+        else
+        {
+          DEBUG (0, {
+            fprintf(debug_file, "    ^ Unknown opcode!\n");
+          });
+
+          bb_insn->escapes_flag = TRUE;
+        }
+      }
+
+      DEBUG (0, {
+        fprintf(debug_file, "First pass complete: %p %d\n", bb_insn, bb_insn->escapes_flag);
+      });
+    }
+  }
+
+  bitmap_t loop_map = bitmap_create2(alloc, curr_bb_index + 1);
+
+  for (bb_t bb = DLIST_HEAD(bb_t, curr_cfg->bbs);
+       bb != NULL;
+       bb = DLIST_NEXT(bb_t, bb))
+  {
+    for (bb_insn_t bb_insn = DLIST_HEAD(bb_insn_t, bb->bb_insns);
+         bb_insn != NULL;
+         bb_insn = DLIST_NEXT(bb_insn_t, bb_insn)) 
+    {
+      escape_analysis_finalization(gen_ctx, loop_map, bb_insn, defs, mallocs);
+    }
+  }
+
+  VARR_DESTROY(bb_insn_t, mallocs);
+  VARR_DESTROY(bb_insn_t, defs);
+  VARR_DESTROY(ssa_edge_t, scan);
+  bitmap_destroy(loop_map);
 }
 
 /* New Page */
@@ -9374,6 +9771,13 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
         print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
       });
     }
+
+    escape_analysis (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after escape analysis:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
+
     destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
     curr_cfg->root_loop_node = NULL;
   }

@@ -5120,15 +5120,15 @@ int cyth_compile(CyVM* vm)
   MIR_finish_func(vm->ctx);
   MIR_finish_module(vm->ctx);
 
-  if (vm->logging)
-    MIR_output(vm->ctx, stdout);
-
   MIR_load_module(vm->ctx, vm->module);
   MIR_gen_init(vm->ctx);
   MIR_gen_set_optimize_level(vm->ctx, 3);
   MIR_link(vm->ctx, MIR_set_gen_interface, NULL);
 
   vm->start = (Start)MIR_gen(vm->ctx, vm->function);
+
+  if (vm->logging)
+    MIR_output(vm->ctx, stdout);
 
   GC_set_no_dls(true);
 

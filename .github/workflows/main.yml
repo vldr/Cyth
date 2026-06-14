@@ -331,14 +331,14 @@ jobs:
 
       - name: Build and Test (WASM)
         run: |
-          cmake.exe -DWASM=1 -S . -B build -G "Visual Studio 17 2022"
+          cmake.exe -DWASM=1 -S . -B build
           cd build
           msbuild test.vcxproj
           msbuild testwasm.vcxproj
 
       - name: Build (MIR)
         run: |
-          cmake.exe -S . -B winbuild -G "Visual Studio 17 2022"
+          cmake.exe -S . -B winbuild
           cd winbuild
           msbuild cyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64
           msbuild libcyth.vcxproj -t:rebuild -property:Configuration=Release -property:Platform=x64

@@ -4088,8 +4088,6 @@ static void check_class_declaration(ClassStmt* statement)
   }
 
   statement->size = align(offset, statement->alignment);
-  if (statement->size <= 0)
-    statement->size = 1;
 
   FuncStmt* function_statement;
   array_foreach(&statement->functions, function_statement)

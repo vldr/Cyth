@@ -5241,6 +5241,8 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
   DEBUG (1, { fprintf (debug_file, "%5ld removed SSA dead insns\n", dead_insns_num); });
 }
 
+static int get_int_const (gen_ctx_t gen_ctx, MIR_op_t *op_ref, int64_t *c);
+
 static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, bb_insn_t bb_insn, VARR(bb_insn_t)* defs, VARR(bb_insn_t)* mallocs)
 {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -5263,6 +5265,16 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
 
   if (bb_insn->escapes_flag)
     return;
+
+  int64_t size;
+  if (!get_int_const(gen_ctx, &insn->ops[3], &size))
+  {
+    bb_insn->escapes_flag = TRUE;
+    return;
+  }
+
+  if (size <= 0)
+    size = 1;
 
   DEBUG (0, {
     fprintf(debug_file, "--- pass 2 GC_malloc (bb=%d, insn=%d, func=%s) ---\n", (int)bb_insn->bb->index, (int)bb_insn->index, curr_func_item->u.func->name);
@@ -5414,20 +5426,18 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
 
     MIR_op_t result_op = insn->ops[2];
     MIR_op_t size_op = insn->ops[3];
+    remove_ssa_edge(gen_ctx, size_op.data);
   
     insn->code = MIR_ALLOCA;
     insn->ops[2].data = NULL;
     insn->ops[3].data = NULL;
     insn->ops[0] = result_op;
-    insn->ops[1] = size_op;
+    insn->ops[1] = MIR_new_int_op(ctx, size);
     insn->nops = 2;
 
     ssa_edge_t e;
     for (e = result_op.data; e != NULL; e = e->next_use)
       e->def_op_num = 0;
-
-    e = size_op.data;
-    if (e) e->use_op_num = 1;
 
     DEBUG (0, {
       fprintf(debug_file, "Does not escape\n");

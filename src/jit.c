@@ -1296,11 +1296,6 @@ static Function* generate_array_reserve_function(CyVM* vm, DataType data_type)
   return function;
 }
 
-static int int_hash(int n)
-{
-  return n;
-}
-
 static Function* generate_int_hash_function(CyVM* vm)
 {
   const char* name = "int.hash";
@@ -1310,68 +1305,7 @@ static Function* generate_int_hash_function(CyVM* vm)
   {
     MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)int_hash);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
-static int float_hash(float n)
-{
-  union {
-    float f;
-    int i;
-  } value;
-  value.f = n;
-
-  return value.i;
-}
-
-static Function* generate_float_hash_function(CyVM* vm)
-{
-  const char* name = "float.hash";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
-    MIR_var_t params[] = {
-      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)float_hash);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
-static Function* generate_float_sqrt_function(CyVM* vm)
-{
-  const char* name = "float.sqrt";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT));
-    MIR_var_t params[] = {
-      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1387,15 +1321,104 @@ static Function* generate_float_sqrt_function(CyVM* vm)
 
     vm->function = function->func;
 
-    MIR_reg_t n = MIR_reg(vm->ctx, "n", vm->function->u.func);
+    MIR_reg_t input = MIR_reg(vm->ctx, "input", vm->function->u.func);
 
     {
-      MIR_append_insn(
-        vm->ctx, vm->function,
-        MIR_new_insn(vm->ctx, MIR_FSQRT, MIR_new_reg_op(vm->ctx, n), MIR_new_reg_op(vm->ctx, n)));
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_ret_insn(vm->ctx, 1, MIR_new_reg_op(vm->ctx, input)));
+    }
+
+    map_put_function(&vm->functions, name, function);
+
+    MIR_finish_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, previous_func);
+    vm->function = previous_function;
+  }
+
+  return function;
+}
+
+static Function* generate_float_hash_function(CyVM* vm)
+{
+  const char* name = "float.hash";
+
+  Function* function = map_get_function(&vm->functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_var_t params[] = {
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+    };
+
+    MIR_item_t previous_function = vm->function;
+    MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(vm->ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    vm->function = function->func;
+
+    MIR_reg_t input = MIR_reg(vm->ctx, "input", vm->function->u.func);
+    MIR_reg_t result = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+
+    {
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_F2U, MIR_new_reg_op(vm->ctx, result),
+                                   MIR_new_reg_op(vm->ctx, input)));
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_ret_insn(vm->ctx, 1, MIR_new_reg_op(vm->ctx, n)));
+                      MIR_new_ret_insn(vm->ctx, 1, MIR_new_reg_op(vm->ctx, result)));
+    }
+
+    map_put_function(&vm->functions, name, function);
+
+    MIR_finish_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, previous_func);
+    vm->function = previous_function;
+  }
+
+  return function;
+}
+
+static Function* generate_float_sqrt_function(CyVM* vm)
+{
+  const char* name = "float.sqrt";
+
+  Function* function = map_get_function(&vm->functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT));
+    MIR_var_t params[] = {
+      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+    };
+
+    MIR_item_t previous_function = vm->function;
+    MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(vm->ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    vm->function = function->func;
+
+    MIR_reg_t input = MIR_reg(vm->ctx, "input", vm->function->u.func);
+
+    {
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_FSQRT, MIR_new_reg_op(vm->ctx, input),
+                                   MIR_new_reg_op(vm->ctx, input)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_ret_insn(vm->ctx, 1, MIR_new_reg_op(vm->ctx, input)));
     }
 
     map_put_function(&vm->functions, name, function);
@@ -2221,12 +2244,59 @@ static void generate_default_initialization(CyVM* vm, MIR_reg_t dest, DataType d
   }
 }
 
+static void generate_float_sqrt_intrinsic(CyVM* vm, MIR_reg_t dest, Expr* argument)
+{
+  generate_expression(vm, dest, argument);
+  MIR_append_insn(
+    vm->ctx, vm->function,
+    MIR_new_insn(vm->ctx, MIR_FSQRT, MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, dest)));
+}
+
+static void generate_int_hash_intrinsic(CyVM* vm, MIR_reg_t dest, Expr* argument)
+{
+  generate_expression(vm, dest, argument);
+}
+
+static void generate_float_hash_intrinsic(CyVM* vm, MIR_reg_t dest, Expr* argument)
+{
+  MIR_reg_t input = _MIR_new_temp_reg(vm->ctx, MIR_T_F, vm->function->u.func);
+  generate_expression(vm, input, argument);
+
+  MIR_append_insn(
+    vm->ctx, vm->function,
+    MIR_new_insn(vm->ctx, MIR_F2U, MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, input)));
+}
+
+static bool generate_function_internal_intrinsic(CyVM* vm, MIR_reg_t dest, CallExpr* expression)
+{
+  DataType data_type = expression->callee_data_type;
+  assert(data_type.type == TYPE_FUNCTION_INTERNAL);
+
+  const char* name = data_type.function_internal.name;
+  if (strcmp(name, "float.sqrt") == 0)
+  {
+    generate_float_sqrt_intrinsic(vm, dest, array_at(&expression->arguments, 0));
+    return true;
+  }
+  else if (strcmp(name, "int.hash") == 0)
+  {
+    generate_int_hash_intrinsic(vm, dest, array_at(&expression->arguments, 0));
+    return true;
+  }
+  else if (strcmp(name, "float.hash") == 0)
+  {
+    generate_float_hash_intrinsic(vm, dest, array_at(&expression->arguments, 0));
+    return true;
+  }
+
+  return false;
+}
+
 static Function* generate_function_internal(CyVM* vm, DataType data_type)
 {
   assert(data_type.type == TYPE_FUNCTION_INTERNAL);
 
   const char* name = data_type.function_internal.name;
-
   if (strcmp(name, "array.push") == 0)
     return generate_array_push_function(vm,
                                         array_at(&data_type.function_internal.parameter_types, 0),
@@ -4023,6 +4093,9 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
   }
   else if (expression->callee_data_type.type == TYPE_FUNCTION_INTERNAL)
   {
+    if (generate_function_internal_intrinsic(vm, dest, expression))
+      return;
+
     Function* internal = generate_function_internal(vm, expression->callee_data_type);
     proto = internal->proto;
     func = internal->func;

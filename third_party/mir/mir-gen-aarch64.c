@@ -1292,7 +1292,10 @@ static const struct pattern patterns[] = {
 
   /* fsqrt Sd,Sn */
   {MIR_FSQRT, "r r", "1e21c000:fffffc00 vd0 vn1"},
-  
+
+  /* fmov Wd,Sn */
+  {MIR_F2U, "r r", "1e260000:ffff0000 rd0 vn1"},
+
   {MIR_STP, "r r r Iq", "a9800000:ffc00000 rn0 rd1 ra2 Iq"}, /* stp Xd, Xa, [Xn, #Iq]! */
   {MIR_LDP, "r r r Iq", "a8c00000:ffc00000 rn0 rd1 ra2 Iq"}, /* ldp Xd, Xa, [Xn, #Iq]! */
 

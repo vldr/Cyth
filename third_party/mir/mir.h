@@ -160,6 +160,7 @@ typedef enum {
   INSN_EL (CCLEAR), /* Compares 3rd and 4th operand, if less than, 2nd operand is moved into 1st operand,
                        otherwise, zero is moved into the 1st operand. Used to perform bounds checking. */
   INSN_EL (FSQRT),
+  INSN_EL (F2U),
 
   /* Used only internally for ARM64 prologue and epilogue  */
   INSN_EL (STP),

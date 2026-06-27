@@ -8,10 +8,6 @@
 
 #include "mir.h"
 
-#ifndef MIR_NO_GEN_DEBUG
-#define MIR_NO_GEN_DEBUG 0
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif

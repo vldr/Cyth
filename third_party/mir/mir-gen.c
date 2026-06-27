@@ -141,6 +141,10 @@ static int64_t gen_int_log2 (int64_t i);
 #define MIR_GEN_CALL_TRACE 0
 #endif
 
+#ifndef MIR_NO_GEN_DEBUG
+#define MIR_NO_GEN_DEBUG 1
+#endif
+
 #if MIR_NO_GEN_DEBUG
 #define DEBUG(level, code)
 #else
@@ -1932,7 +1936,7 @@ static void solve_dataflow (gen_ctx_t gen_ctx, int forward_p, void (*con_func_0)
   while (VARR_LENGTH (bb_t, worklist) != 0) {
     VARR_TRUNC (bb_t, pending, 0);
     addr = VARR_ADDR (bb_t, worklist);
-    qsort (addr, VARR_LENGTH (bb_t, worklist), sizeof (bb), forward_p ? rpost_cmp : post_cmp);
+    qsort (addr, VARR_LENGTH (bb_t, worklist), sizeof (bb_t), forward_p ? rpost_cmp : post_cmp);
     bitmap_clear (bb_to_consider);
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
       int changed_p = iter == 0;
@@ -2361,6 +2365,7 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
 }
 
 static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
+#if !MIR_NO_GEN_DEBUG
   ssa_edge_t se;
 
   if (op_data == NULL) {
@@ -2372,6 +2377,7 @@ static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
       fprintf (debug_file, "%s%d", se == op_data ? "(" : ", ", se->use->index);
     fprintf (debug_file, ")");
   }
+#endif
 }
 
 static ssa_edge_t add_ssa_edge_1 (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
@@ -5094,11 +5100,13 @@ static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
 }
 
 static void print_mem_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
+#if !MIR_NO_GEN_DEBUG
   fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
   output_bitmap (gen_ctx, "   Mem live in:", bb->mem_live_in, FALSE, NULL);
   output_bitmap (gen_ctx, "   Mem live out:", bb->mem_live_out, FALSE, NULL);
   output_bitmap (gen_ctx, "   Mem live gen:", bb->mem_live_gen, FALSE, NULL);
   output_bitmap (gen_ctx, "   Mem live kill:", bb->mem_live_kill, FALSE, NULL);
+#endif
 }
 
 static void calculate_mem_live_info (gen_ctx_t gen_ctx) {
@@ -6976,7 +6984,7 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
     for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
       VARR_PUSH (bb_t, worklist, bb);
     if (optimize_level <= 1) /* arrange BBs in PO (post order) for more compact ranges: */
-      qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb), post_cmp);
+      qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), post_cmp);
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
       bb = VARR_GET (bb_t, worklist, i);
       if (DLIST_HEAD (bb_insn_t, bb->bb_insns) == NULL) continue;
@@ -9681,8 +9689,10 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   uint8_t *code;
   void *machine_code = NULL;
   size_t code_len = 0;
-  double start_time = real_usec_time ();
   uint32_t bbs_num;
+  
+  double start_time = 0.0;
+  DEBUG (0, { start_time = real_usec_time (); });
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
   if (func_item->u.func->machine_code != NULL) {
@@ -10024,6 +10034,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
+#if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "BBs for lazy code generation:\n");
     for (size_t i = 0; i < n_bbs; i++) {
@@ -10034,6 +10045,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       }
     }
   }
+#endif
   for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL; lref = lref->next) {
     bb_stub_t lab_bb_stub = lref->label->data;
     void *addr, *addr2;
@@ -10064,7 +10076,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->ra_ctx = NULL;
   gen_ctx->combine_ctx = NULL;
 #if !MIR_NO_GEN_DEBUG
-  debug_file = NULL;
+  debug_file = stdout;
   debug_level = 100;
 #endif
   VARR_CREATE (void_ptr_t, to_free, alloc, 0);

@@ -347,7 +347,6 @@ static void number(void)
 
   bool underscore = false;
   bool decimal = false;
-  bool period = false;
   bool invalid = false;
 
   lexeme[length++] = peek_previous();
@@ -378,19 +377,22 @@ static void number(void)
         break;
       }
 
-      period = true;
+      if (!isdigit(peek_next()) && peek_next() != '_' && peek_next() != '.')
+      {
+        break;
+      }
+
       decimal = true;
       lexeme[length++] = advance();
     }
     else
     {
-      period = false;
       underscore = false;
       lexeme[length++] = advance();
     }
   }
 
-  if (invalid || underscore || period)
+  if (invalid || underscore)
   {
     error(lexer.filename, lexer.start_line, lexer.start_column, lexer.current_line,
           lexer.current_column, "Invalid numeric literal.");

@@ -44,11 +44,17 @@ for string a in ["abc", "def"]
 # f -> 2
 
 class Simon
-    int length = 3
-    int counter = 0
+    int __begin__()
+        return 1
+
+    bool __hasNext__(int index)
+        return index <= 3
+
+    int __next__(int index)
+        return index + 1
 
     string __get__(int index)
-        return "Simon says " + (counter += 1)
+        return "Simon says " + index
 
 for string a in Simon()
     log(a)

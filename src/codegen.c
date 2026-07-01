@@ -3318,6 +3318,146 @@ static const char* generate_string_to_array_function(DataType return_data_type)
 #undef CONSTANT
 }
 
+static const char* generate_begin_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("begin.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      CONSTANT(0),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { this_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results = BinaryenTypeInt32();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef CONSTANT
+}
+
+static const char* generate_next_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define INPUT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("next.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenBinary(codegen.module, BinaryenAddInt32(), INPUT(), CONSTANT(1)),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results = BinaryenTypeInt32();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef INPUT
+#undef CONSTANT
+}
+
+static const char* generate_array_has_next_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define INPUT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("array.hasNext.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenBinary(codegen.module, BinaryenLtSInt32(), INPUT(),
+                     BinaryenStructGet(codegen.module, 1, THIS(), BinaryenTypeInt32(), false)),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results = BinaryenTypeInt32();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef INPUT
+#undef CONSTANT
+}
+
+static const char* generate_string_has_next_function(DataType this_data_type)
+{
+#define THIS() (BinaryenLocalGet(codegen.module, 0, this_type))
+#define INPUT() (BinaryenLocalGet(codegen.module, 1, BinaryenTypeInt32()))
+#define CONSTANT(_v) (BinaryenConst(codegen.module, BinaryenLiteralInt32(_v)))
+
+  BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
+
+  const char* name = memory_sprintf("string.hasNext.%d", this_type);
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenExpressionRef body_list[] = {
+      BinaryenBinary(codegen.module, BinaryenLtSInt32(), INPUT(),
+                     BinaryenArrayLen(codegen.module, THIS())),
+    };
+    BinaryenExpressionRef body =
+      BinaryenBlock(codegen.module, NULL, body_list, sizeof(body_list) / sizeof_ptr(body_list),
+                    BinaryenTypeInt32());
+
+    BinaryenType params_list[] = { this_type, BinaryenTypeInt32() };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenType results = BinaryenTypeInt32();
+
+    BinaryenAddFunction(codegen.module, name, params, results, NULL, 0, body);
+  }
+
+  return name;
+
+#undef THIS
+#undef INPUT
+#undef CONSTANT
+}
+
 static const char* generate_function_internal(DataType data_type)
 {
   assert(data_type.type == TYPE_FUNCTION_INTERNAL);
@@ -3343,6 +3483,18 @@ static const char* generate_function_internal(DataType data_type)
   else if (strcmp(name, "array.remove") == 0)
     return generate_array_remove_function(
       array_at(&data_type.function_internal.parameter_types, 0));
+
+  else if (strcmp(name, "array.begin") == 0 || strcmp(name, "string.begin") == 0)
+    return generate_begin_function(array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.next") == 0 || strcmp(name, "string.next") == 0)
+    return generate_next_function(array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "array.hasNext") == 0)
+    return generate_array_has_next_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
+  else if (strcmp(name, "string.hasNext") == 0)
+    return generate_string_has_next_function(
+      array_at(&data_type.function_internal.parameter_types, 0));
+
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();
   else if (strcmp(name, "float.sqrt") == 0)

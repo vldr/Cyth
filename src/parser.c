@@ -1306,22 +1306,6 @@ static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, 
   Token end_token = previous();
   Token list_token = combine_tokens(start_token, end_token);
 
-  Stmt* counter_stmt = STMT();
-  counter_stmt->type = STMT_VARIABLE_DECL;
-  counter_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
-  counter_stmt->var.type.type = DATA_TYPE_TOKEN_PRIMITIVE;
-  counter_stmt->var.type.token = TOKEN_EMPTY();
-  counter_stmt->var.type.token.type = TOKEN_IDENTIFIER_INT;
-  counter_stmt->var.name = name;
-  counter_stmt->var.name.lexeme = "it";
-  counter_stmt->var.name.length = sizeof("it");
-  counter_stmt->var.equals = TOKEN_EMPTY();
-  counter_stmt->var.initializer = NULL;
-  counter_stmt->var.function = NULL;
-  counter_stmt->var.scope = SCOPE_NONE;
-
-  array_add(&stmt->loop.initializer, counter_stmt);
-
   Stmt* list_stmt = STMT();
   list_stmt->type = STMT_VARIABLE_DECL;
   list_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
@@ -1336,12 +1320,58 @@ static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, 
 
   array_add(&stmt->loop.initializer, list_stmt);
 
+  Stmt* iterator_stmt;
   {
-    Expr* counter = EXPR();
-    counter->type = EXPR_VAR;
-    counter->var.name = counter_stmt->var.name;
-    counter->var.variable = NULL;
-    counter->var.template_types = NULL;
+    Expr* list = EXPR();
+    list->type = EXPR_VAR;
+    list->var.name = list_stmt->var.name;
+    list->var.variable = NULL;
+    list->var.template_types = NULL;
+
+    Expr* begin_function = EXPR();
+    begin_function->type = EXPR_ACCESS;
+    begin_function->access.name = list_token;
+    begin_function->access.name.lexeme = "__begin__";
+    begin_function->access.name.length = sizeof("__begin__") - 1;
+    begin_function->access.variable = NULL;
+    begin_function->access.template_types = NULL;
+    begin_function->access.expr = list;
+    begin_function->access.expr_token = list_token;
+
+    ArrayExpr arguments;
+    array_init(&arguments);
+
+    ArrayToken argument_tokens;
+    array_init(&argument_tokens);
+
+    Expr* call = EXPR();
+    call->type = EXPR_CALL;
+    call->call.arguments = arguments;
+    call->call.argument_tokens = argument_tokens;
+    call->call.callee = begin_function;
+    call->call.callee_token = list_token;
+
+    iterator_stmt = STMT();
+    iterator_stmt->type = STMT_VARIABLE_DECL;
+    iterator_stmt->var.type = DATA_TYPE_TOKEN_EMPTY();
+    iterator_stmt->var.type.token = TOKEN_EMPTY();
+    iterator_stmt->var.name = name;
+    iterator_stmt->var.name.lexeme = "it";
+    iterator_stmt->var.name.length = sizeof("it");
+    iterator_stmt->var.equals = TOKEN_EMPTY();
+    iterator_stmt->var.initializer = call;
+    iterator_stmt->var.function = NULL;
+    iterator_stmt->var.scope = SCOPE_NONE;
+
+    array_add(&stmt->loop.initializer, iterator_stmt);
+  }
+
+  {
+    Expr* iterator = EXPR();
+    iterator->type = EXPR_VAR;
+    iterator->var.name = iterator_stmt->var.name;
+    iterator->var.variable = NULL;
+    iterator->var.template_types = NULL;
 
     Expr* list = EXPR();
     list->type = EXPR_VAR;
@@ -1349,51 +1379,83 @@ static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, 
     list->var.variable = NULL;
     list->var.template_types = NULL;
 
-    Expr* element_access = EXPR();
-    element_access->type = EXPR_ACCESS;
-    element_access->access.name = list_token;
-    element_access->access.name.lexeme = "length";
-    element_access->access.name.length = sizeof("length") - 1;
-    element_access->access.variable = NULL;
-    element_access->access.template_types = NULL;
-    element_access->access.expr = list;
-    element_access->access.expr_token = list_token;
+    Expr* has_next_function = EXPR();
+    has_next_function->type = EXPR_ACCESS;
+    has_next_function->access.name = list_token;
+    has_next_function->access.name.lexeme = "__hasNext__";
+    has_next_function->access.name.length = sizeof("__hasNext__") - 1;
+    has_next_function->access.variable = NULL;
+    has_next_function->access.template_types = NULL;
+    has_next_function->access.expr = list;
+    has_next_function->access.expr_token = list_token;
 
-    Token op = TOKEN_EMPTY();
-    op.type = TOKEN_LESS;
+    ArrayExpr arguments;
+    array_init(&arguments);
+    array_add(&arguments, iterator);
 
-    BINARY_EXPR(stmt->loop.condition, op, counter, element_access);
+    ArrayToken argument_tokens;
+    array_init(&argument_tokens);
+    array_add(&argument_tokens, list_token);
+
+    Expr* call = EXPR();
+    call->type = EXPR_CALL;
+    call->call.arguments = arguments;
+    call->call.argument_tokens = argument_tokens;
+    call->call.callee = has_next_function;
+    call->call.callee_token = list_token;
+
+    stmt->loop.condition = call;
   }
 
   {
-    Expr* counter = EXPR();
-    counter->type = EXPR_VAR;
-    counter->var.name = counter_stmt->var.name;
-    counter->var.variable = NULL;
-    counter->var.template_types = NULL;
+    Expr* iterator = EXPR();
+    iterator->type = EXPR_VAR;
+    iterator->var.name = iterator_stmt->var.name;
+    iterator->var.variable = NULL;
+    iterator->var.template_types = NULL;
 
-    Expr* constant = EXPR();
-    constant->type = EXPR_LITERAL;
-    constant->literal.data_type = DATA_TYPE(TYPE_INTEGER);
-    constant->literal.integer = 1;
+    Expr* list = EXPR();
+    list->type = EXPR_VAR;
+    list->var.name = list_stmt->var.name;
+    list->var.variable = NULL;
+    list->var.template_types = NULL;
 
-    Token op = TOKEN_EMPTY();
-    op.type = TOKEN_PLUS;
+    Expr* next_function = EXPR();
+    next_function->type = EXPR_ACCESS;
+    next_function->access.name = list_token;
+    next_function->access.name.lexeme = "__next__";
+    next_function->access.name.length = sizeof("__next__") - 1;
+    next_function->access.variable = NULL;
+    next_function->access.template_types = NULL;
+    next_function->access.expr = list;
+    next_function->access.expr_token = list_token;
 
-    Expr* binary;
-    BINARY_EXPR(binary, op, counter, constant);
+    ArrayExpr arguments;
+    array_init(&arguments);
+    array_add(&arguments, iterator);
+
+    ArrayToken argument_tokens;
+    array_init(&argument_tokens);
+    array_add(&argument_tokens, list_token);
+
+    Expr* call = EXPR();
+    call->type = EXPR_CALL;
+    call->call.arguments = arguments;
+    call->call.argument_tokens = argument_tokens;
+    call->call.callee = next_function;
+    call->call.callee_token = list_token;
 
     Expr* target = EXPR();
     target->type = EXPR_VAR;
-    target->var.name = counter_stmt->var.name;
+    target->var.name = iterator_stmt->var.name;
     target->var.variable = NULL;
     target->var.template_types = NULL;
 
     Expr* assignment = EXPR();
     assignment->type = EXPR_ASSIGN;
-    assignment->assign.op = op;
+    assignment->assign.op = TOKEN_EMPTY();
     assignment->assign.target = target;
-    assignment->assign.value = binary;
+    assignment->assign.value = call;
     assignment->assign.variable = NULL;
 
     Stmt* incrementer = STMT();
@@ -1413,11 +1475,11 @@ static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, 
     statements(&stmt->loop.body);
 
   {
-    Expr* counter = EXPR();
-    counter->type = EXPR_VAR;
-    counter->var.name = counter_stmt->var.name;
-    counter->var.variable = NULL;
-    counter->var.template_types = NULL;
+    Expr* iterator = EXPR();
+    iterator->type = EXPR_VAR;
+    iterator->var.name = iterator_stmt->var.name;
+    iterator->var.variable = NULL;
+    iterator->var.template_types = NULL;
 
     Expr* list = EXPR();
     list->type = EXPR_VAR;
@@ -1427,7 +1489,7 @@ static Stmt* for_in_statement(bool parenthesis, DataTypeToken type, Token name, 
 
     Expr* index = EXPR();
     index->type = EXPR_INDEX;
-    index->index.index = counter;
+    index->index.index = iterator;
     index->index.index_token = list_token;
     index->index.expr = list;
     index->index.expr_token = list_token;

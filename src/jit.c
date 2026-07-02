@@ -2722,7 +2722,7 @@ static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* exp
   {
   case TOKEN_PLUS:
     if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
-      op = MIR_ADD;
+      op = MIR_ADDS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FADD;
     else if (data_type.type == TYPE_STRING)
@@ -2789,7 +2789,7 @@ static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* exp
     break;
   case TOKEN_MINUS:
     if (data_type.type == TYPE_INTEGER || data_type.type == TYPE_CHAR)
-      op = MIR_SUB;
+      op = MIR_SUBS;
     else if (data_type.type == TYPE_FLOAT)
       op = MIR_FSUB;
     else if (data_type.type == TYPE_OBJECT)

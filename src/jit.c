@@ -3830,9 +3830,9 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
   if (expression->to_data_type.type == TYPE_FLOAT &&
       expression->from_data_type.type == TYPE_INTEGER)
   {
-    MIR_append_insn(
-      vm->ctx, vm->function,
-      MIR_new_insn(vm->ctx, MIR_I2F, MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_I2FS, MIR_new_reg_op(vm->ctx, dest),
+                                 MIR_new_reg_op(vm->ctx, expr)));
     return;
   }
   else if (expression->to_data_type.type == TYPE_STRING)
@@ -3919,7 +3919,7 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     case TYPE_BOOL:
     case TYPE_INTEGER:
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_I2F, MIR_new_reg_op(vm->ctx, dest),
+                      MIR_new_insn(vm->ctx, MIR_I2FS, MIR_new_reg_op(vm->ctx, dest),
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
     default:
@@ -3951,7 +3951,7 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
       return;
     case TYPE_FLOAT:
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_F2I, MIR_new_reg_op(vm->ctx, dest),
+                      MIR_new_insn(vm->ctx, MIR_F2IS, MIR_new_reg_op(vm->ctx, dest),
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
     default:
@@ -5449,8 +5449,9 @@ int cyth_compile(CyVM* vm)
   MIR_gen_init(vm->ctx);
   MIR_gen_set_optimize_level(vm->ctx, 3);
   MIR_link(vm->ctx, MIR_set_gen_interface, NULL);
+  MIR_gen(vm->ctx, vm->function);
 
-  vm->start = (Start)MIR_gen(vm->ctx, vm->function);
+  vm->start = (Start)(uintptr_t)vm->function->u.func->machine_code;
 
   if (vm->logging)
     MIR_output(vm->ctx, stdout);
@@ -5472,7 +5473,9 @@ int cyth_compile(CyVM* vm)
     GC_add_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
   }
 
+  MIR_gen_finish(vm->ctx);
   memory_reset();
+
   return result;
 }
 
@@ -5499,7 +5502,6 @@ void cyth_destroy(CyVM* vm)
     GC_remove_roots(item->addr, (char*)item->addr + sizeof(uintptr_t));
   }
 
-  MIR_gen_finish(vm->ctx);
   MIR_finish(vm->ctx);
   free(vm);
 }
@@ -5612,7 +5614,7 @@ uintptr_t cyth_get_function(CyVM* vm, const char* name)
       continue;
 
     if (strcmp(name, item->u.func->name) == 0)
-      return MIR_gen(vm->ctx, item);
+      return (uintptr_t)item->u.func->machine_code;
   }
 
   return 0;

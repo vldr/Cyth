@@ -1658,12 +1658,16 @@ static struct pattern patterns[] = {
   {MIR_UEXT32, "r r", "Y 8B r0 R1", 0},     /* mov r0,r1 */
   {MIR_UEXT32, "r m2", "Y 8B r0 m1", 0},    /* mov r0,m1 */
 
+  {MIR_I2FS, "r r", "F3 Y 0F 2A r0 R1", 0},                  /* cvtsi2ss r0,r1 */
+  {MIR_I2FS, "r m3", "F3 Y 0F 2A r0 m1", 0},                 /* cvtsi2ss r0,m1 */
   {MIR_I2F, "r r", "F3 X 0F 2A r0 R1", 0},                  /* cvtsi2ss r0,r1 */
   {MIR_I2F, "r m3", "F3 X 0F 2A r0 m1", 0},                 /* cvtsi2ss r0,m1 */
   {MIR_I2D, "r r", "F2 X 0F 2A r0 R1", 0},                  /* cvtsi2sd r0,r1 */
   {MIR_I2D, "r m3", "F2 X 0F 2A r0 m1", 0},                 /* cvtsi2sd r0,m1 */
   {MIR_I2LD, "mld r", "X 89 r1 mt; DF /5 mt; DB /7 m0", 0}, /*mov -16(sp),r1;fild -16(sp);fstp m0 */
 
+  {MIR_F2IS, "r r", "F3 Y 0F 2C r0 R1", 0},  /* cvttss2si r0,r1 */
+  {MIR_F2IS, "r mf", "F3 Y 0F 2C r0 m1", 0}, /* cvttss2si r0,m1 */
   {MIR_F2I, "r r", "F3 X 0F 2C r0 R1", 0},  /* cvttss2si r0,r1 */
   {MIR_F2I, "r mf", "F3 X 0F 2C r0 m1", 0}, /* cvttss2si r0,m1 */
   {MIR_D2I, "r r", "F2 X 0F 2C r0 R1", 0},  /* cvttsd2si r0,r1 */

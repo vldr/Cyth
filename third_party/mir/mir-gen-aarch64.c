@@ -1761,10 +1761,12 @@ static const struct pattern patterns[] = {
   {MIR_XORS, "r r r", "4a000000:ffe0fc00 rd0 rn1 rm2"}, /* eor Wd,Wn,Wm */
 
   // ??? can we add scale
+  {MIR_I2FS, "r r", "1e220000:ffff0000 vd0 rn1"},  /* scvtf Sd,Wn */
   {MIR_I2F, "r r", "9e220000:ffff0000 vd0 rn1"},  /* scvtf Sd,Rn */
   {MIR_I2D, "r r", "9e620000:ffff0000 vd0 rn1"},  /* scvtf Dd,Rn */
   {MIR_UI2F, "r r", "9e230000:ffff0000 vd0 rn1"}, /* ucvtf Sd,Rn */
   {MIR_UI2D, "r r", "9e630000:ffff0000 vd0 rn1"}, /* ucvtf Dd,Rn */
+  {MIR_F2IS, "r r", "1e380000:ffff0000 rd0 vn1"},  /* fcvtzs Wd,Sn */
   {MIR_F2I, "r r", "9e380000:ffff0000 rd0 vn1"},  /* fcvtzs Rd,Sn */
   {MIR_D2I, "r r", "9e780000:ffff0000 rd0 vn1"},  /* fcvtzs Rd,Dn */
   {MIR_F2D, "r r", "1e22c000:fffffc00 vd0 vn1"},  /* fcvt Dd,Sn */

@@ -97,9 +97,9 @@ typedef enum {
   REP4 (INSN_EL, MOV, FMOV, DMOV, LDMOV), /* Moves */
   /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
   REP6 (INSN_EL, EXT8, EXT16, EXT32, UEXT8, UEXT16, UEXT32),
-  REP3 (INSN_EL, I2F, I2D, I2LD),    /* Integer to float or (long) double conversion */
+  REP4 (INSN_EL, I2F, I2FS, I2D, I2LD),    /* Integer to float or (long) double conversion */
   REP3 (INSN_EL, UI2F, UI2D, UI2LD), /* Unsigned integer to float or (long) double conversion */
-  REP3 (INSN_EL, F2I, D2I, LD2I),    /* Float or (long) double to integer conversion */
+  REP4 (INSN_EL, F2I, F2IS, D2I, LD2I),    /* Float or (long) double to integer conversion */
   REP6 (INSN_EL, F2D, F2LD, D2F, D2LD, LD2F, LD2D), /* Float, (long) double conversions */
   REP5 (INSN_EL, NEG, NEGS, FNEG, DNEG, LDNEG),     /* Changing sign */
   REP4 (INSN_EL, ADDR, ADDR8, ADDR16, ADDR32), /* reg addr in natural mode or given integer mode */

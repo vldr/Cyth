@@ -5275,7 +5275,7 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
     return;
 
   int64_t size;
-  if (!get_int_const(gen_ctx, &insn->ops[3], &size))
+  if (!get_int_const(gen_ctx, &insn->ops[3], &size) || size > 8192)
   {
     bb_insn->escapes_flag = TRUE;
     return;
@@ -5285,7 +5285,7 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
     size = 1;
 
   DEBUG (0, {
-    fprintf(debug_file, "--- pass 2 GC_malloc (bb=%d, insn=%d, func=%s) ---\n", (int)bb_insn->bb->index, (int)bb_insn->index, curr_func_item->u.func->name);
+    fprintf(debug_file, "--- pass 2 GC_malloc (size=%d, bb=%d, insn=%d, func=%s) ---\n", (int)size, (int)bb_insn->bb->index, (int)bb_insn->index, curr_func_item->u.func->name);
     fprintf(debug_file, "  call: ");
     MIR_output_insn(ctx, debug_file, insn, curr_func_item->u.func, TRUE);
   });
@@ -5370,13 +5370,21 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
             }
             else if (inside_loop)
             {
-              loop_node_t loop = def_insn->bb->loop_node->parent;
+              DEBUG (0, {
+                fprintf(debug_file, "Inside a loop...\n");
+              });
+
+              loop_node_t loop = malloc_insn->bb->loop_node->parent;
               int escapes = TRUE;
               
               while (loop)
               {
-                if (loop == parent && def_insn->bb->index >= bb_insn->bb->index)
+                if (loop == parent)
                 {
+                  DEBUG (0, {
+                    fprintf(debug_file, "Does not escape while inside loop: %ld %ld\n", malloc_insn->bb->index, bb_insn->bb->index);
+                  });
+
                   escapes = FALSE;
                   break;
                 }

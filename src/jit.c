@@ -1216,9 +1216,7 @@ static Function* generate_array_reserve_function(CyVM* vm, DataType data_type)
                       MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
                                    generate_array_data_op(vm, ptr)));
 
-      generate_realloc_expression(vm, MIR_new_reg_op(vm->ctx, array_ptr),
-                                  MIR_new_reg_op(vm->ctx, array_ptr),
-                                  MIR_new_reg_op(vm->ctx, size));
+      generate_malloc_expression(vm, array_ptr, MIR_new_reg_op(vm->ctx, size));
 
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_insn(vm->ctx, MIR_MOV, generate_array_data_op(vm, ptr),
@@ -5527,7 +5525,9 @@ void cyth_set_logging(CyVM* vm, int logging)
 
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
 {
-  lexer_init(signature, signature, vm->error_callback);
+  const char* signature_copy = memory_strdup(signature);
+
+  lexer_init(signature_copy, signature_copy, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())

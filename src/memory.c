@@ -48,6 +48,12 @@ static struct
 static Bucket* new_bucket(size_t capacity)
 {
   Bucket* bucket = (Bucket*)malloc(sizeof(Bucket) + sizeof(long double) * capacity);
+  if (!bucket)
+  {
+    fprintf(stderr, "Cyth failed to allocate memory, aborting!\n");
+    exit(-1);
+  }
+
   bucket->next = NULL;
   bucket->count = 0;
   bucket->capacity = capacity;

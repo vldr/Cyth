@@ -16,6 +16,7 @@ A fast and simple, embeddable programming language that targets WebAssembly, x86
   - [Web](#web)
 - [Contributing](#contributing)
 - [Overview](#overview)
+- [Embedding Guide](#embedding-guide)
 
 ## Try it out
 
@@ -77,30 +78,27 @@ A server-side scripting environment for the Cyth programming language, written i
 
 ## Building
 
-To build Cyth, you will need to have [CMake](https://cmake.org/) and gcc/clang/MSVC installed. To run the test suite, you will need to have [Node.js](https://nodejs.org/) (v20 or higher) installed.
+To build Cyth, you will need to have [CMake](https://cmake.org/) and GCC/Clang/MSVC installed. To run the test suite, you will need to have [Node.js](https://nodejs.org/) (v20 or higher) installed.
 
 If you want to build the WASM backend, provide the `-DWASM=1` flag to CMake.
-
-_Note:_ The supported platforms for the JIT compiler are:
-- Windows x64 and ARM64
-- Linux x64 and ARM64
-- MacOS x64 and ARM64
 
 ### Linux
 
 Run the following commands from the root directory (in a terminal):
 
-_Debug_:  
+_Release_:  
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build
+mkdir build
 cd build
+cmake ..
 make
 ```
 
-_Release_:  
+_Debug_:  
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+mkdir build
 cd build
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
 make
 ```
 
@@ -111,6 +109,22 @@ _Manual C compilation_:
 
 Run the following commands from the root directory (in a terminal):
 
+_Release_:  
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
+
+_Debug_:  
+```bash
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
+make
+```
+
 _Xcode project_:  
 ```
 cmake -S . -B xbuild -G Xcode
@@ -118,19 +132,6 @@ cmake -S . -B xbuild -G Xcode
 
 Then, in the `xbuild` directory, open `cyth.xcodeproj` in Xcode.
 
-_Makefile (Debug)_:  
-```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -S . -B build
-cd build
-make
-```
-
-_Makefile (Release)_:  
-```bash
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
-cd build
-make
-```
 
 ### Windows
 
@@ -156,19 +157,21 @@ For web builds, you will need to have [Emscripten](https://emscripten.org/docs/g
 
 Run the following commands from the root directory (in a terminal):
 
+_Release_:
+```
+mkdir embuild
+cd embuild
+emcmake cmake ..
+make
+```
+
 _Debug_:  
 ```
-emcmake cmake -DCMAKE_BUILD_TYPE=Debug -S . -B embuild
+mkdir embuild
 cd embuild
+cmake -DCMAKE_BUILD_TYPE=Debug .. 
 make
 ``` 
-
-_Release_:  
-```
-emcmake cmake -DCMAKE_BUILD_TYPE=Release -S . -B embuild
-cd embuild
-make
-```
 
 ## Contributing
 
@@ -628,4 +631,605 @@ for int i = 0; i < 10; i += 1
     continue
 ```
 
+## Embedding Guide
 
+- [Calling C functions from Cyth](#calling-c-functions-from-cyth)
+- [Calling Cyth functions from C](#calling-cyth-functions-from-c)
+- [Sharing data between C and Cyth](#sharing-data-between-c-and-cyth)
+  - [Objects](#objects-1)
+  - [Strings](#strings)
+  - [Arrays](#arrays)
+
+Cyth's whole ethos is that it is an embeddable language. Cyth is designed to be embedded inside C, C++ and Rust applications.
+This is done through the C API provided in `cyth.h`. 
+
+This guide will show you how to embed Cyth inside a simple C application. It will show you how to call C functions from Cyth, call Cyth functions from C and how to share data between C and Cyth.
+Even though this guide shows C code, the code can be easily adapted to C++ or even Rust (though this will require some extra effort).
+
+### Calling C functions from Cyth
+
+To start, let's create a main function and import `cyth.h`. This header includes all the important functionality required to embed Cyth into your project. The header also includes documentation for each function, so be sure to check it out if you happen to forget something.
+
+Inside the `main` function, the very first thing to do is to create a Cyth VM instance. This VM instance is what you will provide as the first argument to all the `cyth_` functions in the `cyth.h` header. The VM instance internally keeps track of all the source code you provide, the compiled code you run, and much more.
+
+Right before the application closes, we'll also call `cyth_destroy` which cleans up all the resources allocated by the VM instance.
+
+**Side note:** Even though it's called a "VM", that's just convention. Cyth is a JIT compiled language, there is no concept of a virtual machine (aside from the internal intermediate instructions used to get to the final assembly).
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+Now that we have a VM initialized, the next step is to load some functions. This means that you will be able to call C functions from Cyth.
+
+
+This can be done using this function:
+```c++
+int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
+```
+For the first argument, you provide the Cyth VM instance that you previously created. Then you provide a signature and address. 
+
+The signature argument can be a bit tricky. A function signature is just a Cyth function without a body.
+
+For following example, we want to add a `print` function that prints an integer to the terminal. That means this function has to accept an `int` and return nothing, `void`, so the signature would be: `void print(int input)`
+
+As for the last argument, we simply get the address of the function that will be called by Cyth and cast it to a `uintptr_t`. This cast is unfortunate, but officially in C, there is no way to pass function pointers as `void*`.
+
+So, let's add that `print` function:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void print(int input) {
+  printf("%d\n", input);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void print(int input)", (uintptr_t)print);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+At this point, the `print` function is accessible from Cyth. All that is left to do is load some Cyth code, compile it and run it!
+
+To load Cyth code, you have two functions to choose from:
+```c++
+int cyth_load_string(CyVM* vm, const char* filename, const char* string)
+```
+
+and 
+
+```c++
+int cyth_load_file(CyVM* vm, const char* filename)
+```
+
+Both of these functions will load some Cyth code, the first one from a string and the last one from a file. The `filename` argument is used when an error occurs to show what file the error refers to.
+
+As the embedder, be aware that load order matters. Load your internal code before the user's code. This way, if a conflict occurs, the error will appear inside the user's code rather than your internal code, which the user may or may not have access to.
+
+Moving on, we will load some code directly from a string that calls the `print` function with the integer `1234`:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void print(int input) {
+  printf("%d\n", input);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void print(int input)", (uintptr_t)print);
+  cyth_load_string(vm, "example.cy", "print(1234)");
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+Lastly, we need to compile the Cyth code and run it. That is done using these two functions:
+
+```c++
+int cyth_compile(CyVM* vm)
+```
+This function will transform all the code you previously loaded into machine code.
+
+```c++
+int cyth_run(CyVM* vm)
+```
+
+This function will run the top-level scope of the program. There is no main function in the traditional sense, anything in the global scope is run top-to-bottom, for every file. 
+
+**Important:** You should *ALWAYS* call `cyth_run`. This is because if a user has defined some global variables, then these global variables won't be initialized until you call `cyth_run`.
+
+So with that said, let's add `cyth_compile` and `cyth_run`:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void print(int input) {
+  printf("%d\n", input);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void print(int input)", (uintptr_t)print);
+  cyth_load_string(vm, "example.cy", "print(1234)");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `1234` appear in your terminal.
+
+Something important to mention is that the above code does not check for errors.
+Most of the functions mentioned return an `int` which means they will return `1`, if they ran successfully, or `0` if they failed.
+
+When one of these functions fail, an "error callback" is also called. By default, the internal Cyth error callback is used which just prints the error to the terminal. But, you can override the error callback using the `cyth_set_error_callback` function found in `cyth.h`.
+
+### Calling Cyth functions from C
+
+In this next section, we will call a Cyth function from C.
+
+Cyth functions are basically C functions. In Cyth, whenever you call a function, you're really just calling a C function. Under the hood, each Cyth function is just a JIT compiled C function (generated when you call `cyth_compile`).
+
+To call a Cyth function, you first have to get its address using this function:
+```c++
+uintptr_t cyth_get_function(CyVM* vm, const char* name)
+```
+
+The `name` argument is a bit tricky. The format is `<function name>.<type name>`.
+
+For example, look at this Cyth function:
+
+```jai
+int sum(int a, int b)
+  return a + b
+```
+
+The function name is `sum` and the type name is: `int(int, int)`. So the name you provide is: `sum.int(int, int)`
+
+The `cyth_get_function` function returns an address; you can cast this address to a function pointer. This function can also return `NULL` if it fails to find a function with the given `name`.
+
+Once we have the function pointer, we can just call it:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void print(CyString* text) {
+  printf("%s\n", text->data);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void print(string text)", (uintptr_t)print);
+  cyth_load_string(vm, "example.cy", "int sum(int a, int b)\n"
+                                     "  return a + b\n");
+  cyth_compile(vm);
+  cyth_run(vm);
+
+  int (*sum)(int, int) = (int (*)(int, int)) cyth_get_function(vm, "sum.int(int, int)");
+  cyth_try_catch(vm, {
+    printf("The sum is %d\n", sum(10, 20));
+  });
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `The sum is 30` appear in your terminal.
+
+Wait a minute! Have a look, you may notice an odd `cyth_try_catch`. 
+
+In Cyth, functions can panic (crash). This `cyth_try_catch` macro is used to catch any panics to prevent your C program from crashing when the Cyth program crashes. Under the hood, this macro installs a temporary exception handler using setjmp/longjmp and signals. If you're curious, you can check out the macro in `cyth.h` to see all the inner workings.
+
+By the way, when you previously called `cyth_run`, it was already using `cyth_try_catch` internally.
+
+**Important:** You should *ALWAYS* wrap calls to Cyth functions with `cyth_try_catch`, otherwise your C program will crash alongside the Cyth program (remember, we're just JIT compiling and directly running code here).
+
+**Important:** You should *NEVER* call `return` or `break` inside this macro, otherwise the program will get into a corrupted state (since cleanup code will be skipped).
+
+One last thing to mention about `cyth_try_catch` is that you can add an `else` clause to check if the program crashed:
+
+```cpp
+cyth_try_catch(vm, {
+  printf("The sum is %d\n", sum(10, 20));
+} else {
+  printf("Error!\n");
+});
+```
+
+### Sharing data between C and Cyth
+
+Sharing data between C and Cyth is designed to be simple. All primitive types in Cyth are identical to their C counterparts. So, an `int` in Cyth, is an `int` in C.
+
+Objects, arrays and strings are all pointers to C structs; they are called pointer types. So, a `Node` object in Cyth, is a `Node *` in C.
+
+The fundamental rule to remember is: if it's not a primitive type, then it is a pointer type.
+
+| C | Cyth |
+| -------- | -------- |
+| int   | int |
+| float   | float |
+| bool   | bool |
+| char   | char |
+|  |  |
+| CyString*   | string |
+| CyArray*   | T[] |
+
+#### Objects
+
+Cyth objects (classes) are binary compatible with C structs. This is best illustrated with an example.
+
+Let's create a simple linked list `Node` object in Cyth:
+
+```cpp
+class Node
+  int value
+  Node next
+
+  void __init__(int value, Node next)
+    this.value = value
+    this.next = next
+```
+
+Now, let's pass this `Node` object to our C application through the `printList` function which prints each item in the list:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+typedef struct Node {
+  int value;
+  struct Node* next;
+} Node;
+
+void printList(Node* node) {
+  while (node) {
+    printf("%d\n", node->value);
+  
+    node = node->next;
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printList(Node node)", (uintptr_t)printList);
+  cyth_load_string(vm, "example.cy", "class Node\n"
+                                     "  int value\n"
+                                     "  Node next\n"
+                                     ""
+                                     "  void __init__(int value, Node next)\n"
+                                     "    this.value = value\n"
+                                     "    this.next = next\n"
+                                     ""
+                                     "printList(Node(10, Node(20, Node(30, null))))");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `10 20 30` appear in your terminal.
+
+**Important:** The memory layout of the Cyth class *MUST* match the memory layout of the C struct.
+
+**Important:** Make sure to keep Cyth pointers on the stack and not somewhere the garbage collector can't scan, like inside a heap-allocated C array. The GC can't see outside the stack and may collect an object out from under you if it's stored outside the stack.
+
+**Important:** Objects can be `NULL`, so make sure to check them. Strings and arrays are *NEVER* null, so you don't have to check them.
+
+---
+
+
+Next, let's consider allocating Cyth objects in C and then passing them into Cyth.
+
+To allocate Cyth objects in C, you need to use this function:
+```c++
+void* cyth_alloc(int atomic, uintptr_t size)
+```
+
+The first argument is a bit tricky. Atomic *MUST* be 1, if the object you are allocating does not contain any pointers. If it does contain pointers, it *MUST* be 0. Your object will typically contain pointers if it contains arrays, strings or other objects.
+
+The second argument is the size of the object, you can fetch the size of structs in C using `sizeof`.
+
+The `cyth_alloc` function uses Cyth's garbage collector to allocate memory. As long as the memory pointer is on the stack, the garbage collector will be able to find it. It is able to do so because it scans the stack. Cyth uses [Boehm GC](https://en.wikipedia.org/wiki/Boehm_garbage_collector) under the hood.
+
+So, with this information, let's create a function in our C application that will allocate a 2-item linked list.
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+typedef struct Node {
+  int value;
+  struct Node* next;
+} Node;
+
+Node* createList() {
+  Node* secondNode = (Node*) cyth_alloc(0, sizeof(Node));
+  secondNode->value = 1;
+  secondNode->next = NULL;
+
+  Node* node = (Node*) cyth_alloc(0, sizeof(Node));
+  node->value = 2;
+  node->next = secondNode;
+
+  return node;
+}
+
+void printList(Node* node) {
+  while (node) {
+    printf("%d\n", node->value);
+  
+    node = node->next;
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printList(Node node)", (uintptr_t)printList);
+  cyth_load_function(vm, "Node createList()", (uintptr_t)createList);
+  cyth_load_string(vm, "example.cy", "class Node\n"
+                                     "  int value\n"
+                                     "  Node next\n"
+                                     ""
+                                     "  void __init__(int value, Node next)\n"
+                                     "    this.value = value\n"
+                                     "    this.next = next\n"
+                                     ""
+                                     "printList(createList())");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `1 2` appear in your terminal.
+
+Have a look at the `cyth_alloc` function call where we passed `0` in for the first argument. This was done because the `Node` class is *NOT* atomic, since it contains an object (the `next` field), which is a pointer type.
+
+#### Arrays
+
+In this next section, we'll show how to share arrays between C and Cyth.
+
+The `cyth.h` header provides a `CyArray` struct definition which matches the memory layout of arrays in Cyth:
+
+```cpp
+typedef struct _CY_ARRAY
+{
+  int size;
+  int capacity;
+  void* data;
+} CyArray;
+```
+
+The `size` field is how many elements are in the array.
+The `capacity` field is how many elements are allocated.
+Lastly, the `data` field points to the underlying allocated buffer.
+
+Now, for example, let's pass an `int[]` array from Cyth to C:
+
+```cpp
+printArray([1,2,3,4,5,6])
+```
+
+Then, in our C application, we'll create the `printArray` function which will print each element in the array.
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void printArray(CyArray* array) {
+  int* data = array->data;
+
+  for (int i = 0; i < array->size; i++) {
+    printf("%d\n", data[i]);
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printArray(int[] array)", (uintptr_t)printArray);
+  cyth_load_string(vm, "example.cy", "printArray([1,2,3,4,5,6])");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `1 2 3 4 5 6` appear in your terminal.
+
+**Important:** You don't need to check if `array` is a `NULL` pointer because arrays are *NEVER* null. By default, they are empty. But, the `data` field may be `NULL` if the `size`/`capacity` is zero.
+
+---
+
+Next, let's consider allocating Cyth arrays in C and then passing them into Cyth.
+
+To allocate Cyth arrays in C, you need to use this function:
+```c++
+void* cyth_alloc(int atomic, uintptr_t size)
+```
+
+To allocate a Cyth array, we will need to perform two allocations. Once for the `CyArray` struct and another for the underlying `data` field.
+
+So, with this in mind, let's create a `createArray` function which will allocate a 2-item array and pass it into Cyth:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+CyArray* createArray() {
+  const int SIZE = 2;
+
+  int* data = cyth_alloc(1, sizeof(int) * SIZE);
+  data[0] = 10;
+  data[1] = 20;
+
+  CyArray* array = cyth_alloc(0, sizeof(CyArray));
+  array->size = SIZE;
+  array->capacity = SIZE;
+  array->data = data;
+
+  return array;
+}
+
+void printArray(CyArray* array) {
+  int* data = array->data;
+
+  for (int i = 0; i < array->size; i++) {
+    printf("%d\n", data[i]);
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "int[] createArray()", (uintptr_t)createArray);
+  cyth_load_function(vm, "void printArray(int[] array)", (uintptr_t)printArray);
+  cyth_load_string(vm, "example.cy", "printArray(createArray())");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `10 20` appear in your terminal.
+
+Have a look at the first `cyth_alloc` function call, where we passed `1` in for the first argument. This is because `int` is *NOT* a pointer type, it is a primitive type, therefore it is atomic.
+
+In contrast, have a look at the second `cyth_alloc` function call, where we passed `0` in for the first argument. This is because `CyArray` contains a pointer (in its `data` field) therefore it is *NOT* atomic.
+
+#### Strings
+
+In this final section, we'll show how to share strings between C and Cyth.
+
+The `cyth.h` header provides a `CyString` struct definition which matches the memory layout of strings in Cyth:
+
+```cpp
+typedef struct _CY_STRING
+{
+  int size;
+  char data[];
+} CyString;
+```
+
+The `size` field is how many characters are in the string.
+
+The `data` field is the character data array. Specifically, it's a flexible array member, meaning the string characters are stored directly within the CyString object rather than in a separate allocation. The character data is contiguous and null-terminated (for C compatibility).
+
+Now, for example, let's pass a `string` from Cyth to C:
+
+```cpp
+printString("Hello World")
+```
+
+Then, in our C application, we'll create the `printString` function which will print a string to the terminal.
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void printString(CyString* string) {
+  printf("%s\n", string->data);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printString(string array)", (uintptr_t)printString);
+  cyth_load_string(vm, "example.cy", "printString(\"Hello World\")");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `Hello World` appear in your terminal.
+
+Have a look at the `printf` function call, we passed `string->data` directly into `printf`. This works because, internally, the `data` array is `NULL` terminated.
+
+**Important:** You don't need to check if `string` is a `NULL` pointer because strings are *NEVER* null. By default, they are empty.
+
+---
+
+Next, let's consider allocating Cyth strings in C and then passing them into Cyth.
+
+To allocate Cyth strings in C, you need to use this function:
+```c++
+void* cyth_alloc(int atomic, uintptr_t size)
+```
+
+Allocating Cyth strings can be tricky, because you need to ensure three things:
+1. The size of the allocation must be `sizeof(CyString) + size + 1`.
+
+   Where `size` is the number of characters in the string and the extra `1` is for the NULL terminator which appears at the end of the `data` array.
+  
+2. You *MUST* place a `NULL` terminator at the end of the `data` array.
+
+3. You *MUST* pass `1` in for the `atomic` argument, since strings are atomic, because they do not contain any pointers.
+
+So, with this in mind, let's create a `createString` function which will allocate a string and pass it into Cyth:
+
+```cpp
+#include <stdio.h>
+#include <string.h>
+#include <cyth.h>
+
+CyString* createString() {
+  const char* text = "Hi everyone!";
+  int size = strlen(text);
+
+  CyString* string = (CyString*) cyth_alloc(1, sizeof(CyString) + size + 1);
+  memcpy(string->data, text, size);
+  string->data[size] = '\0';
+  string->size = size;
+
+  return string;
+}
+
+void printString(CyString* string) {
+  printf("%s\n", string->data);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "string createString()", (uintptr_t)createString);
+  cyth_load_function(vm, "void printString(string array)", (uintptr_t)printString);
+  cyth_load_string(vm, "example.cy", "printString(createString())");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `Hi everyone!` appear in your terminal.
+
+This concludes this guide. This is only a handful of the interesting things possible with Cyth that can be mentioned. If you are stuck on something or you have found a mistake, please feel free to [contribute](#contributing) changes.

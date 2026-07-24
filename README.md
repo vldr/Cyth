@@ -637,8 +637,8 @@ for int i = 0; i < 10; i += 1
 - [Calling Cyth functions from C](#calling-cyth-functions-from-c)
 - [Sharing data between C and Cyth](#sharing-data-between-c-and-cyth)
   - [Objects](#objects-1)
-  - [Strings](#strings)
   - [Arrays](#arrays)
+  - [Strings](#strings)
 
 Cyth's whole ethos is that it is an embeddable language. Cyth is designed to be embedded inside C, C++ and Rust applications.
 This is done through the C API provided in `cyth.h`. 
@@ -1012,7 +1012,7 @@ Have a look at the `cyth_alloc` function call where we passed `0` in for the fir
 
 #### Arrays
 
-In this next section, we'll show how to share arrays between C and Cyth.
+In this next section, we will show how to share arrays between C and Cyth.
 
 The `cyth.h` header provides a `CyArray` struct definition which matches the memory layout of arrays in Cyth:
 
@@ -1074,7 +1074,7 @@ To allocate Cyth arrays in C, you need to use this function:
 void* cyth_alloc(int atomic, uintptr_t size)
 ```
 
-To allocate a Cyth array, we will need to perform two allocations. Once for the `CyArray` struct and another for the underlying `data` field.
+To allocate a Cyth array, we will need to perform two allocations. One for the `CyArray` struct and another for the underlying `data` field.
 
 So, with this in mind, let's create a `createArray` function which will allocate a 2-item array and pass it into Cyth:
 
@@ -1120,13 +1120,13 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `10 20` appear in your terminal.
 
-Have a look at the first `cyth_alloc` function call, where we passed `1` in for the first argument. This is because `int` is *NOT* a pointer type, it is a primitive type, therefore it is atomic.
+Have a look at the first `cyth_alloc` function call, where we passed `1` in for the first argument. This was done because `int` is *NOT* a pointer type, it is a primitive type therefore it is atomic.
 
-In contrast, have a look at the second `cyth_alloc` function call, where we passed `0` in for the first argument. This is because `CyArray` contains a pointer (in its `data` field) therefore it is *NOT* atomic.
+In contrast, have a look at the second `cyth_alloc` function call, where we passed `0` in for the first argument. This was done because `CyArray` contains a pointer (in its `data` field) therefore it is *NOT* atomic.
 
 #### Strings
 
-In this final section, we'll show how to share strings between C and Cyth.
+In this final section, we will show how to share strings between C and Cyth.
 
 The `cyth.h` header provides a `CyString` struct definition which matches the memory layout of strings in Cyth:
 
@@ -1232,4 +1232,6 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `Hi everyone!` appear in your terminal.
 
-This concludes this guide. This is only a handful of the interesting things possible with Cyth that can be mentioned. If you are stuck on something or you have found a mistake, please feel free to [contribute](#contributing) changes.
+This concludes the guide. This is only a handful of the interesting things possible with Cyth that can be mentioned. 
+
+For more reference material, have a look at the [examples](#examples) section where Cyth is embedded inside a Rust and C application.

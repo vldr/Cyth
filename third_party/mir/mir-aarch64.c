@@ -200,11 +200,13 @@ static void gen_call_addr (VARR (uint8_t) * insn_varr, void *base_addr, int temp
   push_insns (insn_varr, &insn, sizeof (insn));
 }
 
-void *_MIR_get_thunk (MIR_context_t ctx) {
+void *_MIR_get_thunk (MIR_context_t ctx, int thunks, uint64_t *thunk_size) {
   /* maximal size thunk -- see _MIR_redirect_thunk */
   int pat[4] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
+  assert (sizeof (pat) <= 16);
 
-  return _MIR_publish_code (ctx, (uint8_t *) pat, sizeof (pat));
+  *thunk_size = thunks * 16;
+  return _MIR_publish_code (ctx, NULL, *thunk_size);
 }
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {

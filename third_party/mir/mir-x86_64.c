@@ -162,10 +162,13 @@ static const uint8_t long_jmp_pattern[] = {
 };
 
 /* r11=<address to go to>; jump *r11  */
-void *_MIR_get_thunk (MIR_context_t ctx) {
+void *_MIR_get_thunk (MIR_context_t ctx, int thunks, uint64_t *thunk_size) {
   void *res;
   assert (sizeof (short_jmp_pattern) == sizeof (long_jmp_pattern));
-  res = _MIR_publish_code (ctx, short_jmp_pattern, sizeof (short_jmp_pattern));
+  assert (sizeof (short_jmp_pattern) <= 16);
+
+  *thunk_size = thunks * 16;
+  res = _MIR_publish_code (ctx, NULL, *thunk_size);
   return res;
 }
 

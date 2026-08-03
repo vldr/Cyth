@@ -724,6 +724,8 @@ static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->data = NULL;
   m->last_temp_item_num = 0;
   m->name = get_ctx_str (ctx, name);
+  m->thunk_addr = NULL;
+  m->thunk_size = 0;
   DLIST_INIT (MIR_item_t, m->items);
 }
 
@@ -1940,6 +1942,7 @@ static void link_module_lrefs (MIR_context_t ctx, MIR_module_t m) {
 
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   int lref_p = FALSE;
+  int thunks = 0;
   mir_assert (m != NULL);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
@@ -1952,12 +1955,8 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
       item = load_bss_data_section (ctx, item, FALSE);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL) {
-        item->addr = _MIR_get_thunk (ctx);
-#if defined(MIR_DEBUG)
-        fprintf (stderr, "%016llx: %s\n", (unsigned long long) item->addr, item->u.func->name);
-#endif
+        thunks++;
       }
-      _MIR_redirect_thunk (ctx, item->addr, undefined_interface);
     }
     if (first_item->export_p) { /* update global item table */
       mir_assert (first_item->item_type != MIR_export_item
@@ -1975,6 +1974,26 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
                                   item->u.func->name);
     }
   }
+
+  assert(m->thunk_addr == NULL);
+  assert(m->thunk_size == 0);
+
+  uint8_t* thunk_addr = m->thunk_addr = _MIR_get_thunk (ctx, thunks, &m->thunk_size);
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->item_type == MIR_func_item) {
+      if (item->addr == NULL) {
+        item->addr = thunk_addr;
+        thunk_addr += 16;
+
+#if defined(MIR_DEBUG)
+        fprintf (stderr, "%016llx: %s\n", (unsigned long long) item->addr, item->u.func->name);
+#endif
+      }
+      _MIR_redirect_thunk (ctx, item->addr, undefined_interface);
+    }
+  }
+
   if (lref_p) link_module_lrefs (ctx, m);
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
@@ -4496,8 +4515,10 @@ static uint8_t *add_code (MIR_context_t ctx MIR_UNUSED, code_holder_t *ch_ptr, c
   MIR_code_reloc_t reloc;
   reloc.offset = 0;
   reloc.value = code;
-  _MIR_set_code (ctx->code_alloc, (size_t) ch_ptr->start, ch_ptr->bound - ch_ptr->start, mem, 1, &reloc, code_len);
-  _MIR_flush_code_cache (mem, ch_ptr->free);
+  if (code) {
+    _MIR_set_code (ctx->code_alloc, (size_t) ch_ptr->start, ch_ptr->bound - ch_ptr->start, mem, 1, &reloc, code_len);
+    _MIR_flush_code_cache (mem, ch_ptr->free);
+  }
   return mem;
 }
 

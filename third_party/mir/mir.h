@@ -448,6 +448,8 @@ struct MIR_module {
   DLIST (MIR_item_t) items; /* module items */
   DLIST_LINK (MIR_module_t) module_link;
   uint32_t last_temp_item_num; /* Used only internally */
+  uint8_t *thunk_addr;
+  uint64_t thunk_size;
 };
 
 /* Definition of double list of MIR_item_t type elements */
@@ -745,7 +747,7 @@ typedef struct {
 extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
                                _MIR_arg_desc_t *arg_descs, size_t arg_vars_num);
 extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler);
-extern void *_MIR_get_thunk (MIR_context_t ctx);
+extern void *_MIR_get_thunk (MIR_context_t ctx, int thunks, uint64_t* thunk_size);
 extern void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_jmpi_thunk (MIR_context_t ctx, void **res_loc, void *res, void *cont);

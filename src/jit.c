@@ -14,6 +14,7 @@
 #include <gc.h>
 #include <mir-gen.h>
 #include <mir.h>
+#include <setjmp.h>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -36,6 +37,8 @@ array_def(MIR_reg_t, MIR_reg_t);
 array_def(MIR_item_t, MIR_item_t);
 
 typedef void (*Start)(void);
+typedef int (*CySetJMP)(jmp_buf buf);
+typedef void (*CyLongJMP)(jmp_buf buf, int n);
 typedef struct _FUNCTION
 {
   MIR_item_t func;
@@ -58,18 +61,25 @@ struct _CY_VM
   MapMIR_item items;
   MapFunction functions;
 
+  MIR_item_t thunk_addr;
+  MIR_item_t thunk_size;
+
   Function panic;
   Function malloc;
   Function malloc_atomic;
   Function realloc;
   Function memcpy;
   Function memmove;
+  Function push_jmp;
+  Function set_jmp;
+  Function pop_jmp;
   Function string_equals;
   Function string_bool_cast;
   Function string_int_cast;
   Function string_float_cast;
   Function string_char_cast;
 
+  int error;
   int logging;
   void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
                          int end_column, const char* message);
@@ -85,6 +95,10 @@ static void generate_statements(CyVM* vm, ArrayStmt* statements);
 static void init_statement(CyVM* vm, Stmt* statement);
 static void init_statements(CyVM* vm, ArrayStmt* statements);
 static void init_function_declaration(CyVM* vm, FuncStmt* statement);
+static void* push_jmp(CyVM* vm, void* new);
+static void pop_jmp(CyVM* vm, void* old);
+static CySetJMP generate_setjmp(void);
+static CyLongJMP generate_longjmp(void);
 
 uintptr_t panic_fp;
 CyVM* panic_vm;
@@ -210,7 +224,8 @@ done:
     exit(-1);
   }
 
-  cyth_longjmp()(*vm->jmp, 1);
+  vm->error = 1;
+  generate_longjmp()(*vm->jmp, 1);
 }
 
 static MIR_insn_t generate_debug_info(CyVM* vm, Token token, MIR_insn_t insn)
@@ -442,6 +457,19 @@ static MIR_type_t sized_mir_type_to_mir_type(MIR_type_t type)
     return MIR_T_F;
   default:
     return MIR_T_I64;
+  }
+
+  UNREACHABLE("Unexpected mir type");
+}
+
+static MIR_insn_code_t sized_mir_type_to_mov_type(MIR_type_t type)
+{
+  switch (type)
+  {
+  case MIR_T_F:
+    return MIR_FMOV;
+  default:
+    return MIR_MOV;
   }
 
   UNREACHABLE("Unexpected mir type");
@@ -729,6 +757,105 @@ static Function* generate_array_push_function(CyVM* vm, DataType data_type,
   }
 
   return function;
+}
+
+static Function generate_function_wrapper(CyVM* vm, MIR_func_t func, bool use_pointer)
+{
+  char name[512];
+  snprintf(name, sizeof(name), "%s.wrapper", func->name);
+
+  char proto_name[512];
+  snprintf(proto_name, sizeof(proto_name), "%s.wrapper.proto", func->name);
+
+  MIR_item_t previous_function = vm->function;
+  MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
+  MIR_set_curr_func(vm->ctx, NULL);
+
+  MIR_item_t function =
+    MIR_new_func_arr(vm->ctx, name, func->nres, func->res_types, func->nargs, func->vars->varr);
+  MIR_item_t proto = MIR_new_proto_arr(vm->ctx, proto_name, func->nres, func->res_types,
+                                       func->nargs, func->vars->varr);
+  vm->function = function;
+
+  {
+    MIR_reg_t new = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_ALLOCA, MIR_new_reg_op(vm->ctx, new),
+                                 MIR_new_int_op(vm->ctx, sizeof(jmp_buf))));
+
+    MIR_reg_t old = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(
+      vm->ctx, vm->function,
+      MIR_new_call_insn(vm->ctx, 5, MIR_new_ref_op(vm->ctx, vm->push_jmp.proto),
+                        MIR_new_ref_op(vm->ctx, vm->push_jmp.func), MIR_new_reg_op(vm->ctx, old),
+                        MIR_new_int_op(vm->ctx, (uint64_t)vm), MIR_new_reg_op(vm->ctx, new)));
+
+    MIR_reg_t result = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, vm->set_jmp.proto),
+                                      MIR_new_ref_op(vm->ctx, vm->set_jmp.func),
+                                      MIR_new_reg_op(vm->ctx, result),
+                                      MIR_new_reg_op(vm->ctx, new)));
+
+    MIR_reg_t return_value = 0;
+    if (func->nres)
+    {
+      return_value = _MIR_new_temp_reg(vm->ctx, sized_mir_type_to_mir_type(*func->res_types),
+                                       vm->function->u.func);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, sized_mir_type_to_mov_type(*func->res_types),
+                                   MIR_new_reg_op(vm->ctx, return_value),
+                                   *func->res_types == MIR_T_F ? MIR_new_float_op(vm->ctx, 0.0)
+                                                               : MIR_new_int_op(vm->ctx, 0)));
+    }
+
+    MIR_label_t exit_label = MIR_new_label(vm->ctx);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_BT, MIR_new_label_op(vm->ctx, exit_label),
+                                 MIR_new_reg_op(vm->ctx, result)));
+
+    {
+      const int offset = 2 + (func->nres ? 1 : 0);
+      const int count = func->nargs + offset;
+
+      MIR_op_t* arguments = alloca(sizeof(MIR_op_t) * count);
+      arguments[0] = MIR_new_ref_op(vm->ctx, proto);
+      arguments[1] = use_pointer ? MIR_new_int_op(vm->ctx, (int64_t)func->machine_code)
+                                 : MIR_new_ref_op(vm->ctx, func->func_item);
+
+      if (func->nres)
+        arguments[2] = MIR_new_reg_op(vm->ctx, return_value);
+
+      for (uint32_t i = 0; i < func->nargs; i++)
+      {
+        MIR_reg_t n = MIR_reg(vm->ctx, func->vars->varr[i].name, vm->function->u.func);
+        arguments[offset + i] = MIR_new_reg_op(vm->ctx, n);
+      }
+
+      MIR_append_insn(vm->ctx, vm->function, MIR_new_insn_arr(vm->ctx, MIR_CALL, count, arguments));
+    }
+
+    MIR_append_insn(vm->ctx, vm->function, exit_label);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_call_insn(vm->ctx, 4, MIR_new_ref_op(vm->ctx, vm->pop_jmp.proto),
+                                      MIR_new_ref_op(vm->ctx, vm->pop_jmp.func),
+                                      MIR_new_int_op(vm->ctx, (uint64_t)vm),
+                                      MIR_new_reg_op(vm->ctx, old)));
+
+    if (func->nres)
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_ret_insn(vm->ctx, 1, MIR_new_reg_op(vm->ctx, return_value)));
+    else
+      MIR_append_insn(vm->ctx, vm->function, MIR_new_ret_insn(vm->ctx, 0));
+  }
+
+  MIR_finish_func(vm->ctx);
+  MIR_set_curr_func(vm->ctx, previous_func);
+
+  vm->function = previous_function;
+
+  return (Function){ .func = function, .proto = proto };
 }
 
 static Function* generate_array_push_string_function(CyVM* vm, DataType data_type)
@@ -2604,28 +2731,49 @@ static Function* generate_function_internal(CyVM* vm, DataType data_type)
 
 static void generate_function_pointer(CyVM* vm, MIR_reg_t dest, DataType data_type)
 {
+  MIR_item_t function;
+
   switch (data_type.type)
   {
   case TYPE_FUNCTION:
+    function = data_type.function->item;
+    break;
+  case TYPE_FUNCTION_MEMBER:
+    function = data_type.function_member.function->item;
+    break;
+  case TYPE_FUNCTION_INTERNAL:
+    function = generate_function_internal(vm, data_type)->func;
+    break;
+  default:
+    UNREACHABLE("Unknown function type");
+  }
+
+  if (function->item_type == MIR_func_item)
+  {
+    const char* name = memory_sprintf("%s.wrapper", function->u.func->name);
+    Function* function_wrapper = map_get_function(&vm->functions, name);
+
+    if (!function_wrapper)
+    {
+      function_wrapper = ALLOC(Function);
+      *function_wrapper = generate_function_wrapper(vm, function->u.func, false);
+
+      map_put_function(&vm->functions, name, function_wrapper);
+
+      DLIST_REMOVE(MIR_item_t, vm->module->items, function_wrapper->func);
+      DLIST_INSERT_BEFORE(MIR_item_t, vm->module->items, function, function_wrapper->func);
+    }
+
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_insn(vm->ctx, data_type_to_mov_type(data_type),
                                  MIR_new_reg_op(vm->ctx, dest),
-                                 MIR_new_ref_op(vm->ctx, data_type.function->item)));
-    return;
-  case TYPE_FUNCTION_MEMBER:
-    MIR_append_insn(
-      vm->ctx, vm->function,
-      MIR_new_insn(vm->ctx, data_type_to_mov_type(data_type), MIR_new_reg_op(vm->ctx, dest),
-                   MIR_new_ref_op(vm->ctx, data_type.function_member.function->item)));
-    return;
-  case TYPE_FUNCTION_INTERNAL:
-    MIR_append_insn(
-      vm->ctx, vm->function,
-      MIR_new_insn(vm->ctx, data_type_to_mov_type(data_type), MIR_new_reg_op(vm->ctx, dest),
-                   MIR_new_ref_op(vm->ctx, generate_function_internal(vm, data_type)->func)));
-    return;
-  default:
-    UNREACHABLE("Unknown function type");
+                                 MIR_new_ref_op(vm->ctx, function_wrapper->func)));
+  }
+  else
+  {
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, data_type_to_mov_type(data_type),
+                                 MIR_new_reg_op(vm->ctx, dest), MIR_new_ref_op(vm->ctx, function)));
   }
 }
 
@@ -4359,6 +4507,7 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
   else if (expression->callee_data_type.type == TYPE_FUNCTION_POINTER)
   {
     proto = data_type_to_proto(vm, expression->callee_data_type);
+    should_inline = true;
   }
   else
   {
@@ -4377,6 +4526,27 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
     MIR_reg_t callee_ptr = _MIR_new_temp_reg(
       vm->ctx, data_type_to_mir_type(expression->callee_data_type), vm->function->u.func);
     generate_expression(vm, callee_ptr, expression->callee);
+
+    MIR_reg_t temp = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_SUB, MIR_new_reg_op(vm->ctx, temp),
+                                 MIR_new_reg_op(vm->ctx, callee_ptr),
+                                 MIR_new_ref_op(vm->ctx, vm->thunk_addr)));
+
+    MIR_reg_t offset = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(
+      vm->ctx, vm->function,
+      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, offset), MIR_new_int_op(vm->ctx, 16)));
+
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_CCLEAR, MIR_new_reg_op(vm->ctx, offset),
+                                 MIR_new_reg_op(vm->ctx, offset), MIR_new_reg_op(vm->ctx, temp),
+                                 MIR_new_ref_op(vm->ctx, vm->thunk_size)));
+
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_ADD, MIR_new_reg_op(vm->ctx, callee_ptr),
+                                 MIR_new_reg_op(vm->ctx, callee_ptr),
+                                 MIR_new_reg_op(vm->ctx, offset)));
 
     array_add(&arguments, MIR_new_reg_op(vm->ctx, callee_ptr));
   }
@@ -5326,8 +5496,11 @@ CyVM* cyth_init(void)
   vm->jmp = NULL;
   vm->start = NULL;
   vm->logging = 0;
+  vm->error = 0;
   vm->error_callback = error_callback;
   vm->panic_callback = panic_callback;
+  vm->thunk_addr = MIR_new_import(vm->ctx, "thunk_addr");
+  vm->thunk_size = MIR_new_import(vm->ctx, "thunk_size");
   array_init(&vm->statements);
 
   MIR_load_external(vm->ctx, "panic", (uintptr_t)panic);
@@ -5374,6 +5547,29 @@ CyVM* cyth_init(void)
                                      { .name = "soruce", .size = 0, .type = MIR_T_I64 },
                                      { .name = "n", .size = 0, .type = MIR_T_I64 } });
   vm->memmove.func = MIR_new_import(vm->ctx, "memmove");
+
+  MIR_load_external(vm->ctx, "push_jmp", (uintptr_t)push_jmp);
+  vm->push_jmp.proto =
+    MIR_new_proto_arr(vm->ctx, "push_jmp.proto", 1, (MIR_type_t[]){ MIR_T_I64 }, 2,
+                      (MIR_var_t[]){
+                        { .name = "vm", .size = 0, .type = MIR_T_I64 },
+                        { .name = "new", .size = 0, .type = MIR_T_I64 },
+                      });
+  vm->push_jmp.func = MIR_new_import(vm->ctx, "push_jmp");
+
+  MIR_load_external(vm->ctx, "pop_jmp", (uintptr_t)pop_jmp);
+  vm->pop_jmp.proto = MIR_new_proto_arr(vm->ctx, "pop_jmp.proto", 0, NULL, 2,
+                                        (MIR_var_t[]){
+                                          { .name = "vm", .size = 0, .type = MIR_T_I64 },
+                                          { .name = "old", .size = 0, .type = MIR_T_I64 },
+                                        });
+  vm->pop_jmp.func = MIR_new_import(vm->ctx, "pop_jmp");
+
+  MIR_load_external(vm->ctx, "set_jmp", (uintptr_t)generate_setjmp());
+  vm->set_jmp.proto =
+    MIR_new_proto_arr(vm->ctx, "set_jmp.proto", 1, (MIR_type_t[]){ MIR_T_I32 }, 1,
+                      (MIR_var_t[]){ { .name = "buf", .size = 0, .type = MIR_T_I64 } });
+  vm->set_jmp.func = MIR_new_import(vm->ctx, "set_jmp");
 
   MIR_load_external(vm->ctx, "string.equals", (uintptr_t)string_equals);
   vm->string_equals.proto =
@@ -5439,17 +5635,21 @@ int cyth_compile(CyVM* vm)
     generate_statements(vm, &vm->statements);
   }
 
+  Function start = generate_function_wrapper(vm, vm->function->u.func, false);
+
   MIR_append_insn(vm->ctx, vm->function, MIR_new_ret_insn(vm->ctx, 0));
   MIR_finish_func(vm->ctx);
   MIR_finish_module(vm->ctx);
-
   MIR_load_module(vm->ctx, vm->module);
+  MIR_load_external(vm->ctx, "thunk_addr", (uintptr_t)vm->module->thunk_addr);
+  MIR_load_external(vm->ctx, "thunk_size", vm->module->thunk_size);
+
   MIR_gen_init(vm->ctx);
   MIR_gen_set_optimize_level(vm->ctx, 3);
   MIR_link(vm->ctx, MIR_set_gen_interface, NULL);
-  MIR_gen(vm->ctx, vm->function);
+  MIR_gen(vm->ctx, start.func);
 
-  vm->start = (Start)(uintptr_t)vm->function->u.func->machine_code;
+  vm->start = (Start)(uintptr_t)start.func->u.func->machine_code;
 
   if (vm->logging)
     MIR_output(vm->ctx, stdout);
@@ -5480,7 +5680,7 @@ int cyth_compile(CyVM* vm)
 void cyth_run(CyVM* vm)
 {
   if (vm->start)
-    cyth_try_catch(vm, { vm->start(); });
+    vm->start();
 }
 
 void cyth_destroy(CyVM* vm)
@@ -5521,6 +5721,11 @@ void cyth_set_panic_callback(CyVM* vm,
 void cyth_set_logging(CyVM* vm, int logging)
 {
   vm->logging = logging;
+}
+
+int cyth_error(CyVM* vm)
+{
+  return vm->error;
 }
 
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
@@ -5613,8 +5818,45 @@ uintptr_t cyth_get_function(CyVM* vm, const char* name)
     if (item->item_type != MIR_func_item)
       continue;
 
-    if (strcmp(name, item->u.func->name) == 0)
-      return (uintptr_t)item->u.func->machine_code;
+    MIR_func_t function = item->u.func;
+
+    if (strcmp(name, function->name) == 0)
+    {
+      if (function->machine_code == function->call_addr)
+      {
+        MIR_module_t module = MIR_new_module(vm->ctx, name);
+        Function wrapper_function = generate_function_wrapper(vm, function, true);
+
+        MIR_load_module(vm->ctx, module);
+        MIR_link(vm->ctx, MIR_set_gen_interface, NULL);
+        MIR_gen_init(vm->ctx);
+        MIR_gen_set_optimize_level(vm->ctx, 3);
+        MIR_gen(vm->ctx, wrapper_function.func);
+        MIR_gen_finish(vm->ctx);
+        MIR_finish_module(vm->ctx);
+
+        function->call_addr = wrapper_function.func->u.func->machine_code;
+      }
+
+      return (uintptr_t)function->call_addr;
+    }
+  }
+
+  return 0;
+}
+
+uintptr_t cyth_get_function_unsafe(CyVM* vm, const char* name)
+{
+  for (MIR_item_t item = DLIST_HEAD(MIR_item_t, vm->module->items); item != NULL;
+       item = DLIST_NEXT(MIR_item_t, item))
+  {
+    if (item->item_type != MIR_func_item)
+      continue;
+
+    MIR_func_t function = item->u.func;
+
+    if (strcmp(name, function->name) == 0)
+      return (uintptr_t)function->machine_code;
   }
 
   return 0;
@@ -5731,7 +5973,7 @@ static void signal_handler(int sig, siginfo_t* si, void* ctx)
 }
 #endif
 
-CySetJMP cyth_setjmp(void)
+static CySetJMP generate_setjmp(void)
 {
 #ifdef _WIN32
 #ifdef _M_ARM64
@@ -5797,7 +6039,7 @@ CySetJMP cyth_setjmp(void)
   return (CySetJMP)setjmp;
 }
 
-CyLongJMP cyth_longjmp(void)
+static CyLongJMP generate_longjmp(void)
 {
 #ifdef _WIN32
 #ifdef _M_ARM64
@@ -5861,10 +6103,11 @@ CyLongJMP cyth_longjmp(void)
   return (CyLongJMP)longjmp;
 }
 
-void* cyth_push_jmp(CyVM* vm, void* new)
+static void* push_jmp(CyVM* vm, void* new)
 {
   jmp_buf* old = vm->jmp;
   vm->jmp = new;
+  vm->error = 0;
 
   if (!old)
   {
@@ -5904,7 +6147,7 @@ void* cyth_push_jmp(CyVM* vm, void* new)
   return old;
 }
 
-void cyth_pop_jmp(CyVM* vm, void* old)
+static void pop_jmp(CyVM* vm, void* old)
 {
   vm->jmp = old;
 

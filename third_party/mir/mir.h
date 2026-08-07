@@ -298,6 +298,11 @@ typedef struct MIR_location {
   uint32_t function;
 } MIR_location_t;
 
+typedef struct {
+  int key;
+  int value;
+} MIR_location_map_t;
+
 struct MIR_insn {
   void *data; /* Aux data */
   size_t size;

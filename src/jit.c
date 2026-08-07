@@ -5189,9 +5189,7 @@ static void generate_class_declaration(CyVM* vm, ClassStmt* statement)
       }
 
       MIR_append_insn(vm->ctx, vm->function,
-                      generate_debug_info(
-                        vm, initializer_function->name,
-                        MIR_new_insn_arr(vm->ctx, MIR_INLINE, arguments.size, arguments.elems)));
+                      MIR_new_insn_arr(vm->ctx, MIR_INLINE, arguments.size, arguments.elems));
     }
 
     MIR_append_insn(vm->ctx, vm->function,
@@ -6135,12 +6133,7 @@ static void* push_jmp(CyVM* vm, void* new)
     handler = AddVectoredExceptionHandler(1, vector_handler);
 #endif
 
-#if defined(__clang__) || defined(__GNUC__)
-    panic_fp = (uintptr_t)__builtin_frame_address(0);
-#elif defined(_MSC_VER)
-    panic_fp = (uintptr_t)_AddressOfReturnAddress() - 8;
-#endif
-
+    panic_fp = (uintptr_t)new;
     panic_vm = vm;
   }
 

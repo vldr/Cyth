@@ -16,6 +16,15 @@ DEF_VARR (char);
 DEF_VARR (uint8_t);
 DEF_VARR (MIR_proto_t);
 DEF_VARR (MIR_location_t);
+DEF_HTAB (MIR_location_map_t)
+
+static htab_hash_t location_map_hash (MIR_location_map_t map, void *arg) {
+  return map.key;
+}
+
+static int location_map_eq (MIR_location_map_t map1, MIR_location_map_t map2, void *arg) {
+  return map1.key == map2.key;
+}
 
 struct gen_ctx;
 struct c2mir_ctx;
@@ -4082,6 +4091,9 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_func_t func, called_func;
   size_t original_func_insns_num, func_insns_num, leaf_func_insns_num, called_func_insns_num;
 
+  HTAB(MIR_location_map_t)* location_map;
+  HTAB_CREATE (MIR_location_map_t, location_map, ctx->alloc, 32, location_map_hash, location_map_eq, NULL);
+  
   mir_assert (func_item->item_type == MIR_func_item);
   vn_empty (ctx);
   func = func_item->u.func;
@@ -4204,8 +4216,9 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     VARR_TRUNC (MIR_insn_t, temp_insns, 0);
     VARR_TRUNC (MIR_insn_t, labels, 0);
     VARR_TRUNC (uint8_t, temp_data, 0);
+    HTAB_CLEAR(MIR_location_map_t, location_map);
     stop_insn = NULL;
-    
+
     VARR_PUSH(MIR_location_t, locations, call->location);
     int next_location = VARR_LENGTH(MIR_location_t, locations);
 
@@ -4218,10 +4231,34 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
 
         /* copy debug info during inlining */
         if (call) {
-          if (new_insn->location.line == 0 && new_insn->location.column == 0) 
+          if (new_insn->location.line == 0 && new_insn->location.column == 0) {
             new_insn->location = call->location;
-          else
+          } else if (new_insn->location.next == 0) {
             new_insn->location.next = next_location;
+          } else {
+            MIR_location_t* location = &new_insn->location;
+            while (location) {
+              MIR_location_map_t mapping = { .key = location->next };
+
+              if (location->next == 0) {
+                location->next = next_location;
+                break;
+              } else if (HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_FIND, mapping)) {
+                location->next = mapping.value;
+                break;
+              } else {
+                VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, location->next));
+                int next_location = VARR_LENGTH(MIR_location_t, locations);
+
+                mapping.value = next_location;
+                HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
+
+                location->next = next_location;
+              }
+
+              location = MIR_get_location(ctx, location->next);
+            }
+          }
         }
 
         change_inline_insn_regs (ctx, new_insn);
@@ -4239,10 +4276,34 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
 
       /* copy debug info during inlining */
       if (call) {
-        if (new_insn->location.line == 0 && new_insn->location.column == 0) 
+        if (new_insn->location.line == 0 && new_insn->location.column == 0) {
           new_insn->location = call->location;
-        else
+        } else if (new_insn->location.next == 0) {
           new_insn->location.next = next_location;
+        } else {
+          MIR_location_t* location = &new_insn->location;
+          while (location) {
+            MIR_location_map_t mapping = { .key = location->next };
+
+            if (location->next == 0) {
+              location->next = next_location;
+              break;
+            } else if (HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_FIND, mapping)) {
+              location->next = mapping.value;
+              break;
+            } else {
+              VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, location->next));
+              int next_location = VARR_LENGTH(MIR_location_t, locations);
+
+              mapping.value = next_location;
+              HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
+
+              location->next = next_location;
+            }
+
+            location = MIR_get_location(ctx, location->next);
+          }
+        }
       }
 
       /* va insns are possible here as va_list can be passed as arg */
@@ -4334,6 +4395,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     MIR_append_insn (ctx, func_item, insn);
   }
   if (curr_label_num < new_label_num) curr_label_num = new_label_num;
+
+  HTAB_DESTROY(MIR_location_map_t, location_map);
 }
 
 /* New Page */

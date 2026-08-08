@@ -337,10 +337,9 @@ class Vector
 > vector->y = 2;
 > vector->z = 3;
 >
-> float len = 0.0f;
-> cyth_try_catch(vm, { 
->   len = length(vector);
-> });
+> float len = length(vector);
+> if (cyth_error(vm))
+>   len = 0.0f;
 > ```
 >
 
@@ -496,10 +495,9 @@ Nested functions inside method functions are themselves method functions with an
 > typedef int (*Func)(int, int);
 > Func my_function = (Func) cyth_get_function(vm, "myFunction.int(int, int)");
 >
-> int sum = 0;
-> cyth_try_catch(vm, { 
->   sum = my_function(10, 20); 
-> });
+> int sum = my_function(10, 20);
+> if (cyth_error(vm))
+>   sum = 0;
 > ```
 > The address returned from `cyth_get_function` will be `NULL` if it was not found, or the signature is incorrect.
 > 
@@ -808,7 +806,9 @@ The function name is `sum` and the type name is: `int(int, int)`. So the name yo
 
 The `cyth_get_function` function returns an address; you can cast this address to a function pointer. This function can also return `NULL` if it fails to find a function with the given `name`.
 
-Once we have the function pointer, we can just call it:
+Once we have the function pointer, we can just call it. 
+
+There is one caveat: in Cyth, functions can panic (crash). When a function obtained from `cyth_get_function` panics, the return value will always be `0`/`NULL` (if the return type is not `void`). You can check whether the function you just ran crashed by calling the `cyth_error` function. The `cyth_error` function will return `1` if the last Cyth function called crashed; otherwise, it will return `0` if it ran successfully.
 
 ```cpp
 #include <stdio.h>
@@ -827,35 +827,25 @@ int main(int argc, char* argv[]) {
   cyth_run(vm);
 
   int (*sum)(int, int) = (int (*)(int, int)) cyth_get_function(vm, "sum.int(int, int)");
-  cyth_try_catch(vm, {
-    printf("The sum is %d\n", sum(10, 20));
-  });
+  int result = sum(10, 20);
 
+  if (!cyth_error(vm))
+    printf("The sum is %d\n", result);
+
+  cyth_destroy(vm);
   return 0;
 }
 ```
 
 You can now run the above code and you should see `The sum is 30` appear in your terminal.
 
-Wait a minute! Have a look, you may notice an odd `cyth_try_catch`. 
+**Important:** You should *ALWAYS* call `cyth_error` after calling a Cyth function to check whether the function ran successfully or not.
 
-In Cyth, functions can panic (crash). This `cyth_try_catch` macro is used to catch any panics to prevent your C program from crashing when the Cyth program crashes. Under the hood, this macro installs a temporary exception handler using setjmp/longjmp and signals. If you're curious, you can check out the macro in `cyth.h` to see all the inner workings.
+**Important:** If a Cyth function panics (crashes), it will *ALWAYS* return `0` or `NULL`. This includes strings and arrays, which are *NEVER* allowed to be `NULL`. So make sure to call `cyth_error` to see whether a given function ran successfully or not.
 
-By the way, when you previously called `cyth_run`, it was already using `cyth_try_catch` internally.
+One last thing to mention is that there exists a `cyth_get_function_unsafe` function. This function is similar to `cyth_get_function`, except that the address it returns is an unsafe variant, meaning that if you call the Cyth function and a runtime panic occurs, then your C application will crash alongside the Cyth application.
 
-**Important:** You should *ALWAYS* wrap calls to Cyth functions with `cyth_try_catch`, otherwise your C program will crash alongside the Cyth program (remember, we're just JIT compiling and directly running code here).
-
-**Important:** You should *NEVER* call `return` or `break` inside this macro, otherwise the program will get into a corrupted state (since cleanup code will be skipped).
-
-One last thing to mention about `cyth_try_catch` is that you can add an `else` clause to check if the program crashed:
-
-```cpp
-cyth_try_catch(vm, {
-  printf("The sum is %d\n", sum(10, 20));
-} else {
-  printf("Error!\n");
-});
-```
+For performance reasons, this function is useful if you know that the function you are calling will not panic, or if it does panic, you have already called a safe Cyth function and you are inside a callback or `cyth_run`.
 
 ### Sharing data between C and Cyth
 
@@ -916,11 +906,11 @@ int main(int argc, char* argv[]) {
   cyth_load_string(vm, "example.cy", "class Node\n"
                                      "  int value\n"
                                      "  Node next\n"
-                                     ""
+
                                      "  void __init__(int value, Node next)\n"
                                      "    this.value = value\n"
                                      "    this.next = next\n"
-                                     ""
+
                                      "printList(Node(10, Node(20, Node(30, null))))");
   cyth_compile(vm);
   cyth_run(vm);

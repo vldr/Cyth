@@ -211,9 +211,6 @@ extern "C"
     char data[sizeof(value)];                                                                      \
   } name = { .size = sizeof(value) - 1, .data = value }
 
-  //
-  // The following functions will only exist if Cyth was compiled with -DWASM=1.
-  //
 #ifdef WASM
   // Initializes WASM compilation.
   void cyth_wasm_init(void);

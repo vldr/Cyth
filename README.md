@@ -439,6 +439,8 @@ You can declare variables in the top-level scope of your program which will make
 > Make sure to only call `cyth_get_variable` after calling `cyth_run`, otherwise global variables will be 
 > uninitialized which can lead to issues if you're using types that have special default initializations (like arrays and strings).
 >
+>  Note that if a global variable is only read/written within the top-level scope of a program, and not within other functions, it will be demoted from a global to a local variable and will not be accessible by this function.
+>
 
 ## Functions
 
@@ -501,7 +503,7 @@ Nested functions inside method functions are themselves method functions with an
 > ```
 > The address returned from `cyth_get_function` will be `NULL` if it was not found, or the signature is incorrect.
 > 
-> - Make sure you wrap all calls to Cyth functions with `cyth_try_catch` (see `cyth.h` for details).
+> - Make sure to call `cyth_error` after calling a Cyth function to check whether the function ran successfully or not (see `cyth.h` for details).
 > - Make sure you call `cyth_run` before calling functions obtained from `cyth_get_function`, otherwise global variables will be uninitialized.
 >
 
@@ -808,7 +810,9 @@ The `cyth_get_function` function returns an address; you can cast this address t
 
 Once we have the function pointer, we can just call it. 
 
-There is one caveat: in Cyth, functions can panic (crash). When a function obtained from `cyth_get_function` panics, the return value will always be `0`/`NULL` (if the return type is not `void`). You can check whether the function you just ran crashed by calling the `cyth_error` function. The `cyth_error` function will return `1` if the last Cyth function called crashed; otherwise, it will return `0` if it ran successfully.
+There is one caveat: in Cyth, functions can panic (crash). You can check whether the function you just ran crashed by calling the `cyth_error` function. The `cyth_error` function will return `1` if the last executed Cyth function crashed; otherwise, it will return `0` if it ran successfully. The `cyth_error` flag is reset each time you call a Cyth function.
+
+The return value of a Cyth function that crashed is always `0` or `NULL` (if the return type is not `void`). This includes strings and arrays, which are *NEVER* allowed to be `NULL`. Thus, checking for errors is important.
 
 ```cpp
 #include <stdio.h>
@@ -827,8 +831,8 @@ int main(int argc, char* argv[]) {
   cyth_run(vm);
 
   int (*sum)(int, int) = (int (*)(int, int)) cyth_get_function(vm, "sum.int(int, int)");
-  int result = sum(10, 20);
 
+  int result = sum(10, 20);
   if (!cyth_error(vm))
     printf("The sum is %d\n", result);
 
@@ -982,11 +986,11 @@ int main(int argc, char* argv[]) {
   cyth_load_string(vm, "example.cy", "class Node\n"
                                      "  int value\n"
                                      "  Node next\n"
-                                     ""
+
                                      "  void __init__(int value, Node next)\n"
                                      "    this.value = value\n"
                                      "    this.next = next\n"
-                                     ""
+
                                      "printList(createList())");
   cyth_compile(vm);
   cyth_run(vm);

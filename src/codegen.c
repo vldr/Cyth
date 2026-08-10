@@ -3394,7 +3394,7 @@ static const char* generate_array_has_next_function(DataType this_data_type)
 
   BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
 
-  const char* name = memory_sprintf("array.hasNext.%d", this_type);
+  const char* name = memory_sprintf("array.has_next.%d", this_type);
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
@@ -3430,7 +3430,7 @@ static const char* generate_string_has_next_function(DataType this_data_type)
 
   BinaryenType this_type = data_type_to_binaryen_type(this_data_type);
 
-  const char* name = memory_sprintf("string.hasNext.%d", this_type);
+  const char* name = memory_sprintf("string.has_next.%d", this_type);
 
   if (!BinaryenGetFunction(codegen.module, name))
   {
@@ -3488,10 +3488,10 @@ static const char* generate_function_internal(DataType data_type)
     return generate_begin_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.next") == 0 || strcmp(name, "string.next") == 0)
     return generate_next_function(array_at(&data_type.function_internal.parameter_types, 0));
-  else if (strcmp(name, "array.hasNext") == 0)
+  else if (strcmp(name, "array.has_next") == 0)
     return generate_array_has_next_function(
       array_at(&data_type.function_internal.parameter_types, 0));
-  else if (strcmp(name, "string.hasNext") == 0)
+  else if (strcmp(name, "string.has_next") == 0)
     return generate_string_has_next_function(
       array_at(&data_type.function_internal.parameter_types, 0));
 

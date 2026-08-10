@@ -3099,7 +3099,7 @@ static DataType check_access_expression(AccessExpr* expression)
     else if (strcmp("__hasNext__", name) == 0)
     {
       expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
-      expression->data_type.function_internal.name = "array.hasNext";
+      expression->data_type.function_internal.name = "array.has_next";
       expression->data_type.function_internal.this = expression->expr;
       expression->data_type.function_internal.return_type = ALLOC(DataType);
       expression->data_type.function_internal.return_type->type = TYPE_BOOL;
@@ -3321,7 +3321,7 @@ static DataType check_access_expression(AccessExpr* expression)
     else if (strcmp("__hasNext__", name) == 0)
     {
       expression->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
-      expression->data_type.function_internal.name = "string.hasNext";
+      expression->data_type.function_internal.name = "string.has_next";
       expression->data_type.function_internal.this = expression->expr;
       expression->data_type.function_internal.return_type = ALLOC(DataType);
       expression->data_type.function_internal.return_type->type = TYPE_BOOL;

@@ -4246,17 +4246,16 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
               } else if (HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_FIND, mapping)) {
                 location->next = mapping.value;
                 break;
-              } else {
-                VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, location->next));
-                int next_location = VARR_LENGTH(MIR_location_t, locations);
-
-                mapping.value = next_location;
-                HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
-
-                location->next = next_location;
               }
 
-              location = MIR_get_location(ctx, location->next);
+              int new_location = VARR_LENGTH(MIR_location_t, locations) + 1;
+              location->next = new_location;
+              mapping.value = new_location;
+  
+              VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, mapping.key));
+              HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
+  
+              location = MIR_get_location(ctx, new_location);
             }
           }
         }
@@ -4291,17 +4290,16 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
             } else if (HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_FIND, mapping)) {
               location->next = mapping.value;
               break;
-            } else {
-              VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, location->next));
-              int next_location = VARR_LENGTH(MIR_location_t, locations);
-
-              mapping.value = next_location;
-              HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
-
-              location->next = next_location;
             }
 
-            location = MIR_get_location(ctx, location->next);
+            int new_location = VARR_LENGTH(MIR_location_t, locations) + 1;
+            location->next = new_location;
+            mapping.value = new_location;
+
+            VARR_PUSH(MIR_location_t, locations, *MIR_get_location(ctx, mapping.key));
+            HTAB_DO (MIR_location_map_t, location_map, mapping, HTAB_INSERT, mapping);
+
+            location = MIR_get_location(ctx, new_location);
           }
         }
       }

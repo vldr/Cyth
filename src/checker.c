@@ -31,6 +31,7 @@ static struct
   TokenLink* template;
   WhileStmt* loop;
   AssignExpr* assignment;
+  CallExpr* call;
 
   bool error;
   int errors;
@@ -2590,10 +2591,10 @@ static DataType check_variable_expression(VarExpr* expression)
 
   expand_template_types(expression->template_types, &expression->data_type, expression->name);
 
-  if (expression->data_type.type != TYPE_FUNCTION &&
-      expression->data_type.type != TYPE_FUNCTION_MEMBER &&
-      expression->data_type.type != TYPE_FUNCTION_GROUP &&
-      expression->data_type.type != TYPE_PROTOTYPE)
+  if (!checker.call || (expression->data_type.type != TYPE_FUNCTION &&
+                        expression->data_type.type != TYPE_FUNCTION_MEMBER &&
+                        expression->data_type.type != TYPE_FUNCTION_GROUP &&
+                        expression->data_type.type != TYPE_PROTOTYPE))
     link(expression->name, variable->name, expression->name.length);
 
   return expression->data_type;
@@ -2685,8 +2686,13 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
 static DataType check_call_expression(CallExpr* expression)
 {
+  CallExpr* previous_call = checker.call;
+  checker.call = expression;
+
   Expr* callee = expression->callee;
   DataType callee_data_type = check_expression(callee);
+
+  checker.call = previous_call;
 
   if (callee_data_type.type == TYPE_ALIAS && callee_data_type.alias.data_type->type == TYPE_OBJECT)
   {
@@ -4302,6 +4308,28 @@ static bool analyze_statements(ArrayStmt statements)
   return false;
 }
 
+static void init_globals(void)
+{
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = TOKEN_EMPTY();
+  variable->type = DATA_TYPE_TOKEN_EMPTY();
+  variable->function = NULL;
+  variable->initializer = NULL;
+  variable->scope = SCOPE_GLOBAL;
+  variable->index = -1;
+  variable->data_type = DATA_TYPE(TYPE_FUNCTION_INTERNAL);
+  variable->data_type.function_internal.name = "panic";
+  variable->data_type.function_internal.this = NULL;
+  variable->data_type.function_internal.return_type = ALLOC(DataType);
+  variable->data_type.function_internal.return_type->type = TYPE_VOID;
+
+  array_init(&variable->data_type.function_internal.parameter_types);
+  array_add(&variable->data_type.function_internal.parameter_types, DATA_TYPE(TYPE_STRING));
+
+  environment_set_variable(checker.environment, variable->data_type.function_internal.name,
+                           variable);
+}
+
 void checker_init(ArrayStmt statements,
                   void (*error_callback)(const char* filename, int start_line, int start_column,
                                          int end_line, int end_column, const char* message),
@@ -4316,6 +4344,7 @@ void checker_init(ArrayStmt statements,
   checker.loop = NULL;
   checker.cond = NULL;
   checker.assignment = NULL;
+  checker.call = NULL;
   checker.statements = statements;
 
   checker.errors = 0;
@@ -4328,6 +4357,8 @@ void checker_init(ArrayStmt statements,
 
   array_init(&checker.global_locals);
   array_init(&checker.literal_arrays);
+
+  init_globals();
 }
 
 int checker_errors(void)

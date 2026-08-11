@@ -3138,6 +3138,23 @@ static const char* generate_array_to_string_function(DataType this_data_type)
 #undef CONSTANT
 }
 
+static const char* generate_panic_function(void)
+{
+  const char* name = "panic";
+
+  if (!BinaryenGetFunction(codegen.module, name))
+  {
+    BinaryenType params_list[] = { codegen.string_type };
+    BinaryenType params =
+      BinaryenTypeCreate(params_list, sizeof(params_list) / sizeof_ptr(params_list));
+
+    BinaryenAddFunction(codegen.module, name, params, BinaryenTypeNone(), NULL, 0,
+                        BinaryenUnreachable(codegen.module));
+  }
+
+  return name;
+}
+
 static const char* generate_int_hash_function(void)
 {
   const char* name = "int.hash";
@@ -3495,6 +3512,8 @@ static const char* generate_function_internal(DataType data_type)
     return generate_string_has_next_function(
       array_at(&data_type.function_internal.parameter_types, 0));
 
+  else if (strcmp(name, "panic") == 0)
+    return generate_panic_function();
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function();
   else if (strcmp(name, "float.sqrt") == 0)

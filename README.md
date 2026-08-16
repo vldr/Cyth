@@ -680,7 +680,7 @@ For the first argument, you provide the Cyth VM instance that you previously cre
 
 The signature argument can be a bit tricky. A function signature is just a Cyth function without a body.
 
-For following example, we want to add a `print` function that prints an integer to the terminal. That means this function has to accept an `int` and return nothing, `void`, so the signature would be: `void print(int input)`
+For example, let's add a `print` function that prints an integer to the terminal. That means this function has to accept an `int` and return nothing, `void`, so the signature would be: `void print(int input)`
 
 As for the last argument, we simply get the address of the function that will be called by Cyth and cast it to a `uintptr_t`. This cast is unfortunate, but officially in C, there is no way to pass function pointers as `void*`.
 

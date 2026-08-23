@@ -96,6 +96,9 @@ typedef enum
   TOKEN_BREAK,
   TOKEN_NAN,
   TOKEN_INFINITY,
+  TOKEN_MATCH,
+  TOKEN_CASE,
+  TOKEN_DEFAULT,
 
   TOKEN_EOF
 } TokenKind;

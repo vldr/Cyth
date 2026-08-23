@@ -221,7 +221,11 @@ async function activate(context) {
         action: { indentAction: vscode.IndentAction.Indent },
       },
       {
-        beforeText: /^\s*(class|for|while|if|import)\s+.*$/,
+        beforeText: /^\s*(class|for|while|if|match|case)\s+.*$/,
+        action: { indentAction: vscode.IndentAction.Indent },
+      },
+      {
+        beforeText: /^\s*(default)\s*$/,
         action: { indentAction: vscode.IndentAction.Indent },
       },
       {

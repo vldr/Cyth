@@ -4656,6 +4656,81 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
                        BinaryenTypeNone());
 }
 
+static BinaryenExpressionRef generate_match_statement(MatchStmt* statement)
+{
+  BinaryenExpressionRef expression = generate_expression(statement->expression);
+
+  if (statement->data_type.type == TYPE_ANY)
+  {
+    BinaryenIndex expression_index = BinaryenFunctionAddVar(
+      BinaryenGetFunction(codegen.module, codegen.function), BinaryenTypeAnyref());
+
+    ArrayBinaryenExpressionRef block_list;
+    array_init(&block_list);
+    array_add(&block_list, BinaryenLocalSet(codegen.module, expression_index, expression));
+
+    BinaryenExpressionRef chain = generate_statements(&statement->default_body);
+
+    for (unsigned int i = statement->match_bodies.size; i > 0; i--)
+    {
+      ArrayStmt body = statement->match_bodies.elems[i - 1];
+      VarStmt* variable_statement = statement->match_types.elems[i - 1];
+
+      ArrayBinaryenExpressionRef block_list;
+      array_init(&block_list);
+      array_add(
+        &block_list,
+        BinaryenLocalSet(
+          codegen.module, variable_statement->index,
+          BinaryenRefCast(codegen.module,
+                          BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref()),
+                          data_type_to_binaryen_type(variable_statement->data_type))));
+      array_add(&block_list, generate_statements(&body));
+      BinaryenExpressionRef case_block =
+        BinaryenBlock(codegen.module, NULL, block_list.elems, block_list.size, BinaryenTypeAuto());
+
+      BinaryenExpressionRef condition = BinaryenSelect(
+        codegen.module,
+        BinaryenRefIsNull(codegen.module,
+                          BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref())),
+        BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
+        BinaryenRefTest(codegen.module,
+                        BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref()),
+                        data_type_to_binaryen_type(variable_statement->data_type)));
+
+      chain = BinaryenIf(codegen.module, condition, case_block, chain);
+    }
+
+    array_add(&block_list, chain);
+
+    return BinaryenBlock(codegen.module, NULL, block_list.elems, block_list.size,
+                         BinaryenTypeAuto());
+  }
+  else
+  {
+    ArrayStmt body;
+    array_foreach(&statement->match_bodies, body)
+    {
+      VarStmt* variable_statement = statement->match_types.elems[_i];
+      DataType data_type = variable_statement->data_type;
+
+      if (equal_data_type(statement->data_type, data_type))
+      {
+        ArrayBinaryenExpressionRef block_list;
+        array_init(&block_list);
+        array_add(&block_list,
+                  BinaryenLocalSet(codegen.module, variable_statement->index, expression));
+        array_add(&block_list, generate_statements(&body));
+
+        return BinaryenBlock(codegen.module, NULL, block_list.elems, block_list.size,
+                             BinaryenTypeNone());
+      }
+    }
+
+    return generate_statements(&statement->default_body);
+  }
+}
+
 static BinaryenExpressionRef generate_return_statement(ReturnStmt* statement)
 {
   BinaryenExpressionRef expression = NULL;
@@ -4766,10 +4841,12 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
   }
   else
   {
-    BinaryenExpressionRef body = generate_statements(&statement->body);
     BinaryenFunctionRef func = BinaryenAddFunction(codegen.module, name, params, results,
-                                                   variable_types.elems, variable_types.size, body);
+                                                   variable_types.elems, variable_types.size, NULL);
     BinaryenAddFunctionExport(codegen.module, name, name);
+
+    BinaryenExpressionRef body = generate_statements(&statement->body);
+    BinaryenFunctionSetBody(func, body);
 
     ArrayTypeBuilderSubtype subtypes;
     array_init(&subtypes);
@@ -4898,11 +4975,13 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
 
     BinaryenType initializer_params =
       BinaryenTypeCreate(parameter_types.elems, parameter_types.size);
-    BinaryenExpressionRef initializer = BinaryenBlock(codegen.module, NULL, initializer_body.elems,
-                                                      initializer_body.size, statement->ref);
 
-    BinaryenAddFunction(codegen.module, initalizer_name, initializer_params, statement->ref, NULL,
-                        0, initializer);
+    BinaryenFunctionRef function = BinaryenAddFunction(
+      codegen.module, initalizer_name, initializer_params, statement->ref, NULL, 0, NULL);
+
+    BinaryenExpressionRef body = BinaryenBlock(codegen.module, NULL, initializer_body.elems,
+                                               initializer_body.size, statement->ref);
+    BinaryenFunctionSetBody(function, body);
     BinaryenAddFunctionExport(codegen.module, initalizer_name, initalizer_name);
 
     codegen.function = previous_function;
@@ -5048,6 +5127,8 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_if_statement(&statement->cond);
   case STMT_WHILE:
     return generate_while_statement(&statement->loop);
+  case STMT_MATCH:
+    return generate_match_statement(&statement->match);
   case STMT_RETURN:
     return generate_return_statement(&statement->ret);
   case STMT_CONTINUE:
@@ -5177,8 +5258,6 @@ int cyth_wasm_compile(int compile, int logging)
   map_init_strbuf_int(&codegen.string_constants, 0, 0);
   map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
 
-  BinaryenExpressionRef body = generate_statements(&codegen.statements);
-
   VarStmt* statement;
   ArrayVarStmt statements = checker_global_locals();
   array_foreach(&statements, statement)
@@ -5187,8 +5266,13 @@ int cyth_wasm_compile(int compile, int logging)
     array_add(&codegen.global_local_types, type);
   }
 
-  BinaryenAddFunction(codegen.module, codegen.function, BinaryenTypeNone(), BinaryenTypeNone(),
-                      codegen.global_local_types.elems, codegen.global_local_types.size, body);
+  BinaryenFunctionRef start_function =
+    BinaryenAddFunction(codegen.module, codegen.function, BinaryenTypeNone(), BinaryenTypeNone(),
+                        codegen.global_local_types.elems, codegen.global_local_types.size, NULL);
+
+  BinaryenExpressionRef body = generate_statements(&codegen.statements);
+  BinaryenFunctionSetBody(start_function, body);
+
   BinaryenAddFunctionExport(codegen.module, codegen.function, codegen.function);
   BinaryenModuleSetFeatures(codegen.module, BinaryenFeatureReferenceTypes() | BinaryenFeatureGC() |
                                               BinaryenFeatureNontrappingFPToInt());

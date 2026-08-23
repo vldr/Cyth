@@ -547,12 +547,15 @@ class Editor {
           action: { indentAction: monaco.languages.IndentAction.None },
         },
         {
-          beforeText:
-            /^\s*[a-zA-Z_][a-zA-Z_0-9]*\s+[a-zA-Z_][a-zA-Z_0-9]*\(.*\)\s*$/,
+          beforeText: /^\s*[a-zA-Z_][a-zA-Z_0-9]*\s+[a-zA-Z_][a-zA-Z_0-9]*\(.*\)\s*$/,
           action: { indentAction: monaco.languages.IndentAction.Indent },
         },
         {
-          beforeText: /^\s*(class|for|while|if|import)\s+.*$/,
+          beforeText: /^\s*(class|for|while|if|match|case)\s+.*$/,
+          action: { indentAction: monaco.languages.IndentAction.Indent },
+        },
+        {
+          beforeText: /^\s*(default)\s*$/,
           action: { indentAction: monaco.languages.IndentAction.Indent },
         },
         {
@@ -583,7 +586,7 @@ class Editor {
         "inf",
         "nan",
       ],
-      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in", "is"],
+      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in", "is", "default", "match", "case"],
       operators: [
         "=",
         ">",

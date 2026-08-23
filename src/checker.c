@@ -30,6 +30,7 @@ static struct
   IfStmt* cond;
   TokenLink* template;
   WhileStmt* loop;
+  MatchStmt* match;
   AssignExpr* assignment;
   CallExpr* call;
 
@@ -336,6 +337,16 @@ static void error_ambiguous_call(Token token, const char* name)
   error(token, memory_sprintf("Call of overloaded '%s' is ambiguous; "
                               "parameter types conflict with another function.",
                               name));
+}
+
+static void error_cannot_cast_to_any(Token token, DataType data_type)
+{
+  error(token, memory_sprintf("Cannot cast 'any' to '%s'.", data_type_to_string(data_type)));
+}
+
+static void error_case_already_exists(Token token, DataType data_type)
+{
+  error(token, memory_sprintf("A case for '%s' already exists.", data_type_to_string(data_type)));
 }
 
 static inline int align(int value, int alignment)
@@ -854,12 +865,14 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
   WhileStmt* previous_loop = checker.loop;
+  MatchStmt* previous_match = checker.match;
   IfStmt* previous_cond = checker.cond;
   Environment* previous_environment = checker.environment;
 
   checker.class = NULL;
   checker.function = NULL;
   checker.loop = NULL;
+  checker.match = NULL;
   checker.cond = NULL;
   checker.environment = checker.global_environment;
 
@@ -900,6 +913,7 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.class = previous_class;
   checker.function = previous_function;
   checker.loop = previous_loop;
+  checker.match = previous_match;
   checker.cond = previous_cond;
   checker.environment = previous_environment;
   checker.template = checker.template->previous;
@@ -958,6 +972,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   ClassStmt* previous_class = checker.class;
   FuncStmt* previous_function = checker.function;
   WhileStmt* previous_loop = checker.loop;
+  MatchStmt* previous_match = checker.match;
   IfStmt* previous_cond = checker.cond;
 
   Environment* previous_environment = checker.environment;
@@ -965,6 +980,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.class = template.function_template.function->class;
   checker.function = template.function_template.function->function;
   checker.loop = template.function_template.function->loop;
+  checker.match = template.function_template.function->match;
   checker.cond = template.function_template.function->cond;
   checker.environment = template.function_template.function->environment;
 
@@ -990,7 +1006,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
     environment_set_variable(checker.environment, variable->name.lexeme, variable);
   }
 
-  if (!checker.function && !checker.loop && !checker.cond)
+  if (!checker.function && !checker.loop && !checker.match && !checker.cond)
     init_function_declaration(function_statement);
 
   check_function_declaration(function_statement);
@@ -998,6 +1014,7 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.class = previous_class;
   checker.function = previous_function;
   checker.loop = previous_loop;
+  checker.match = previous_match;
   checker.cond = previous_cond;
   checker.environment = previous_environment;
   checker.template = checker.template->previous;
@@ -1689,7 +1706,7 @@ static void init_function_declaration(FuncStmt* statement)
   statement->name.lexeme = function_data_type_to_string(name, statement->function_data_type);
   statement->name.length = strlen(statement->name.lexeme);
 
-  if (checker.function || checker.loop || checker.cond)
+  if (checker.function || checker.loop || checker.match || checker.cond)
   {
     statement->name.lexeme =
       memory_sprintf("%s[%d:%d]", statement->name.lexeme, statement->name.start_line,
@@ -1811,6 +1828,7 @@ static void init_function_template_declaration(FuncTemplateStmt* statement)
   statement->function = checker.function;
   statement->class = checker.class;
   statement->loop = checker.loop;
+  statement->match = checker.match;
   statement->cond = checker.cond;
   statement->environment = environment_init(checker.environment);
 
@@ -3913,9 +3931,8 @@ static void check_if_statement(IfStmt* statement)
   }
 
   IfStmt* previous_cond = checker.cond;
-
-  checker.environment = environment_init(checker.environment);
   checker.cond = statement;
+  checker.environment = environment_init(checker.environment);
 
   Stmt* body_statement;
   array_foreach(&statement->then_branch, body_statement)
@@ -3962,8 +3979,8 @@ static void check_while_statement(WhileStmt* statement)
   }
 
   WhileStmt* previous_loop = checker.loop;
-  checker.environment = environment_init(checker.environment);
   checker.loop = statement;
+  checker.environment = environment_init(checker.environment);
 
   Stmt* body_statement;
   array_foreach(&statement->body, body_statement)
@@ -4007,6 +4024,73 @@ static void check_variable_declaration(VarStmt* statement)
                           statement->initializer_data_type);
     }
   }
+}
+
+static void check_match_statement(MatchStmt* statement)
+{
+  MatchStmt* previous_match = checker.match;
+  checker.match = statement;
+
+  DataType data_type = check_expression(statement->expression);
+  statement->data_type = data_type;
+
+  if (statement->data_type.type == TYPE_VOID)
+  {
+    error_type_cannot_be_void(statement->keyword);
+    checker.error = false;
+  }
+
+  MapSInt type_set;
+  map_init_sint(&type_set, 0, 0);
+
+  ArrayStmt body;
+  array_foreach(&statement->match_bodies, body)
+  {
+    checker.environment = environment_init(checker.environment);
+
+    VarStmt* variable_statement = statement->match_types.elems[_i];
+    check_variable_declaration(variable_statement);
+
+    DataType variable_data_type = variable_statement->data_type;
+    if (data_type.type == TYPE_ANY && variable_data_type.type != TYPE_STRING &&
+        variable_data_type.type != TYPE_ARRAY && variable_data_type.type != TYPE_OBJECT)
+    {
+      error_cannot_cast_to_any(variable_statement->type.token, variable_data_type);
+      checker.error = false;
+    }
+    else
+    {
+      const char* variable_data_type_string = data_type_to_string(variable_data_type);
+      if (map_get_sint(&type_set, variable_data_type_string))
+      {
+        error_case_already_exists(variable_statement->type.token, variable_data_type);
+        checker.error = false;
+      }
+      else
+      {
+        map_put_sint(&type_set, variable_data_type_string, true);
+      }
+    }
+
+    Stmt* body_statement;
+    array_foreach(&body, body_statement)
+    {
+      check_statement(body_statement, true);
+    }
+
+    checker.environment = checker.environment->parent;
+  }
+
+  checker.environment = environment_init(checker.environment);
+
+  Stmt* body_statement;
+  array_foreach(&statement->default_body, body_statement)
+  {
+    check_statement(body_statement, true);
+  }
+
+  checker.environment = checker.environment->parent;
+  checker.match = previous_match;
 }
 
 static void check_get_function_declaration(FuncStmt* function)
@@ -4087,7 +4171,7 @@ static void check_binary_overload_function_declaration(FuncStmt* function, const
 
 static void check_function_declaration(FuncStmt* statement)
 {
-  if (checker.function || checker.loop || checker.cond)
+  if (checker.function || checker.loop || checker.match || checker.cond)
   {
     init_function_declaration(statement);
   }
@@ -4167,7 +4251,7 @@ static void check_function_declaration(FuncStmt* statement)
 
 static void check_class_declaration(ClassStmt* statement)
 {
-  if (checker.function || checker.loop || checker.class || checker.cond)
+  if (checker.function || checker.loop || checker.match || checker.class || checker.cond)
   {
     error_unexpected_class(statement->name);
     return;
@@ -4239,6 +4323,9 @@ static void check_statement(Stmt* statement, bool synchronize)
   case STMT_WHILE:
     check_while_statement(&statement->loop);
     return;
+  case STMT_MATCH:
+    check_match_statement(&statement->match);
+    return;
   case STMT_RETURN:
     check_return_statement(&statement->ret);
     return;
@@ -4258,7 +4345,7 @@ static void check_statement(Stmt* statement, bool synchronize)
     check_class_declaration(&statement->class);
     return;
   case STMT_FUNCTION_TEMPLATE_DECL:
-    if (checker.function || checker.loop || checker.cond)
+    if (checker.function || checker.loop || checker.match || checker.cond)
       init_function_template_declaration(&statement->func_template);
 
     return;
@@ -4280,6 +4367,20 @@ static bool analyze_statement(Stmt* statement)
   case STMT_IF:
     return analyze_statements(statement->cond.then_branch) &&
            analyze_statements(statement->cond.else_branch);
+
+  case STMT_MATCH: {
+    ArrayStmt body;
+    array_foreach(&statement->match.match_bodies, body)
+    {
+      if (!analyze_statements(body))
+        return false;
+    }
+
+    if (!analyze_statements(statement->match.default_body))
+      return false;
+
+    return true;
+  }
 
   case STMT_WHILE:
   case STMT_EXPR:
@@ -4342,6 +4443,7 @@ void checker_init(ArrayStmt statements,
   checker.class = NULL;
   checker.class_template = NULL;
   checker.loop = NULL;
+  checker.match = NULL;
   checker.cond = NULL;
   checker.assignment = NULL;
   checker.call = NULL;

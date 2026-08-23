@@ -398,6 +398,7 @@ static void synchronize(void)
     case TOKEN_CLASS:
     case TOKEN_FOR:
     case TOKEN_WHILE:
+    case TOKEN_MATCH:
     case TOKEN_IF:
     case TOKEN_BREAK:
     case TOKEN_CONTINUE:
@@ -1001,6 +1002,7 @@ static Stmt* function_template_declaration_statement(DataTypeToken type, Token n
   stmt->func_template.class = NULL;
   stmt->func_template.function = NULL;
   stmt->func_template.loop = NULL;
+  stmt->func_template.match = NULL;
   stmt->func_template.cond = NULL;
   stmt->func_template.environment = NULL;
   stmt->func_template.tokens = parser.tokens;
@@ -1592,6 +1594,115 @@ static Stmt* for_statement(void)
   return stmt;
 }
 
+static Stmt* match_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_MATCH;
+  stmt->match.keyword = advance();
+  stmt->match.expression = expression();
+
+  array_init(&stmt->match.match_bodies);
+  array_init(&stmt->match.match_types);
+  array_init(&stmt->match.default_body);
+
+  consume(TOKEN_NEWLINE, "Expected a newline after 'match' keyword.");
+
+  bool has_default_case = false;
+  bool invalid = false;
+  Token invalid_start_token;
+
+  if (match(TOKEN_INDENT))
+  {
+    while (!eof() && !check(TOKEN_DEDENT))
+    {
+      Token previous_token = previous();
+
+      if (match(TOKEN_CASE))
+      {
+        if (invalid)
+        {
+          error(combine_tokens(invalid_start_token, previous_token),
+                "Expected 'case' or 'default' inside match.");
+
+          invalid = false;
+          parser.error = false;
+        }
+
+        DataTypeToken type = consume_data_type("Expected a type after 'case'.");
+
+        Stmt* parameter = STMT();
+        parameter->type = STMT_VARIABLE_DECL;
+        parameter->var.type = type;
+        parameter->var.index = -1;
+        parameter->var.initializer = NULL;
+        parameter->var.function = NULL;
+        parameter->var.scope = SCOPE_NONE;
+
+        if (stmt->match.expression->type == EXPR_VAR && check(TOKEN_NEWLINE))
+          parameter->var.name = stmt->match.expression->var.name;
+        else
+          parameter->var.name = consume(TOKEN_IDENTIFIER, "Expected a name after type.");
+
+        consume(TOKEN_NEWLINE, "Expected a newline after type.");
+
+        ArrayStmt body;
+        array_init(&body);
+
+        if (check(TOKEN_INDENT))
+          statements(&body);
+
+        array_add(&stmt->match.match_bodies, body);
+        array_add(&stmt->match.match_types, &parameter->var);
+      }
+      else if (match(TOKEN_DEFAULT))
+      {
+        if (invalid)
+        {
+          error(combine_tokens(invalid_start_token, previous_token),
+                "Expected 'case' or 'default' inside match.");
+
+          invalid = false;
+          parser.error = false;
+        }
+
+        if (has_default_case)
+        {
+          error(previous(), "Cannot have multiple 'default' cases.");
+          parser.error = false;
+        }
+
+        consume(TOKEN_NEWLINE, "Expected a newline after 'default'.");
+
+        if (check(TOKEN_INDENT))
+          statements(&stmt->match.default_body);
+
+        has_default_case = true;
+      }
+      else
+      {
+        if (!invalid)
+        {
+          invalid_start_token = peek();
+          invalid = true;
+        }
+
+        advance();
+      }
+    }
+
+    if (invalid)
+    {
+      error(combine_tokens(invalid_start_token, previous()),
+            "Expected 'case' or 'default' inside match.");
+      parser.error = false;
+    }
+
+    consume(TOKEN_DEDENT, "Expected a dedent.");
+  }
+
+  return stmt;
+}
+
 static void statement(ArrayStmt* stmts)
 {
   if (is_data_type_and_identifier())
@@ -1636,6 +1747,9 @@ static void statement(ArrayStmt* stmts)
       break;
     case TOKEN_FOR:
       array_add(stmts, for_statement());
+      break;
+    case TOKEN_MATCH:
+      array_add(stmts, match_statement());
       break;
     case TOKEN_INDENT:
       statements(stmts);

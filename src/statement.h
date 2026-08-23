@@ -13,6 +13,7 @@ array_def(struct _VAR_STMT*, VarStmt);
 array_def(struct _CLASS_STMT*, ClassStmt);
 array_def(struct _FUNC_STMT*, FuncStmt);
 array_def(struct _FUNC_TEMPLATE_STMT*, FuncTemplateStmt);
+array_def(ArrayStmt, StmtStmt);
 
 typedef struct _EXPR_STMT
 {
@@ -89,6 +90,7 @@ typedef struct _FUNC_TEMPLATE_STMT
   struct _FUNC_STMT* function;
   struct _WHILE_STMT* loop;
   struct _IF_STMT* cond;
+  struct _MATCH_STMT* match;
   struct _ENVIRONMENT* environment;
 
   ArrayToken types;
@@ -146,6 +148,17 @@ typedef struct _CLASS_TEMPLATE_STMT
   ArrayClassStmt classes;
 } ClassTemplateStmt;
 
+typedef struct _MATCH_STMT
+{
+  Token keyword;
+  DataType data_type;
+  Expr* expression;
+
+  ArrayStmtStmt match_bodies;
+  ArrayVarStmt match_types;
+  ArrayStmt default_body;
+} MatchStmt;
+
 struct _STMT
 {
   enum
@@ -156,6 +169,7 @@ struct _STMT
     STMT_BREAK,
     STMT_IF,
     STMT_WHILE,
+    STMT_MATCH,
     STMT_FUNCTION_DECL,
     STMT_FUNCTION_TEMPLATE_DECL,
     STMT_VARIABLE_DECL,
@@ -174,6 +188,7 @@ struct _STMT
     BreakStmt brk;
     ContinueStmt cont;
     ClassStmt class;
+    MatchStmt match;
     ClassTemplateStmt class_template;
   };
 };

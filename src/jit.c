@@ -35,6 +35,7 @@ array_def(MIR_var_t, MIR_var_t);
 array_def(MIR_op_t, MIR_op_t);
 array_def(MIR_reg_t, MIR_reg_t);
 array_def(MIR_item_t, MIR_item_t);
+array_def(MIR_label_t, MIR_label_t);
 
 typedef void (*Start)(void);
 typedef int (*CySetJMP)(jmp_buf buf);
@@ -5032,6 +5033,127 @@ static void generate_while_statement(CyVM* vm, WhileStmt* statement)
   vm->break_label = previous_break_label;
 }
 
+static void generate_match_statement(CyVM* vm, MatchStmt* statement)
+{
+  MIR_reg_t expr =
+    _MIR_new_temp_reg(vm->ctx, data_type_to_mir_type(statement->data_type), vm->function->u.func);
+
+  if (statement->data_type.type == TYPE_ANY)
+  {
+    const MIR_label_t default_label = MIR_new_label(vm->ctx);
+    const MIR_label_t finish_label = MIR_new_label(vm->ctx);
+
+    if (statement->match_bodies.size)
+    {
+      uint64_t minimum_id = UINT64_MAX;
+      uint64_t maximum_id = 0;
+
+      ArrayStmt body;
+      array_foreach(&statement->match_bodies, body)
+      {
+        DataType data_type = statement->match_types.elems[_i]->data_type;
+        uint64_t id = data_type_to_typeid(vm, data_type);
+
+        if (id < minimum_id)
+          minimum_id = id;
+
+        if (id > maximum_id)
+          maximum_id = id;
+      }
+
+      const uint64_t count = maximum_id - minimum_id + 1;
+
+      ArrayMIR_label_t labels;
+      array_init(&labels);
+
+      for (uint64_t i = 0; i < count; i++)
+        array_add(&labels, default_label);
+
+      array_foreach(&statement->match_bodies, body)
+      {
+        DataType data_type = statement->match_types.elems[_i]->data_type;
+        uint64_t id = data_type_to_typeid(vm, data_type);
+
+        labels.elems[id - minimum_id] = MIR_new_label(vm->ctx);
+      }
+
+      {
+        generate_expression(vm, expr, statement->expression);
+
+        MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, id),
+                                     MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 48)));
+
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, MIR_SUB, MIR_new_reg_op(vm->ctx, id),
+                                     MIR_new_reg_op(vm->ctx, id),
+                                     MIR_new_int_op(vm->ctx, minimum_id)));
+
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, MIR_UBGE, MIR_new_label_op(vm->ctx, default_label),
+                                     MIR_new_reg_op(vm->ctx, id), MIR_new_int_op(vm->ctx, count)));
+
+        ArrayMIR_op_t arguments;
+        array_init(&arguments);
+        array_add(&arguments, MIR_new_reg_op(vm->ctx, id));
+
+        MIR_label_t label;
+        array_foreach(&labels, label)
+        {
+          array_add(&arguments, MIR_new_label_op(vm->ctx, label));
+        }
+
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn_arr(vm->ctx, MIR_SWITCH, arguments.size, arguments.elems));
+      }
+
+      array_foreach(&statement->match_bodies, body)
+      {
+        VarStmt* variable_statement = statement->match_types.elems[_i];
+        DataType data_type = variable_statement->data_type;
+        uint64_t id = data_type_to_typeid(vm, data_type);
+
+        MIR_append_insn(vm->ctx, vm->function, labels.elems[id - minimum_id]);
+        MIR_append_insn(
+          vm->ctx, vm->function,
+          MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, variable_statement->reg),
+                       MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
+
+        generate_statements(vm, &body);
+
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, finish_label)));
+      }
+    }
+
+    MIR_append_insn(vm->ctx, vm->function, default_label);
+
+    generate_statements(vm, &statement->default_body);
+
+    MIR_append_insn(vm->ctx, vm->function, finish_label);
+  }
+  else
+  {
+    ArrayStmt body;
+    array_foreach(&statement->match_bodies, body)
+    {
+      VarStmt* variable_statement = statement->match_types.elems[_i];
+      DataType data_type = variable_statement->data_type;
+
+      if (equal_data_type(statement->data_type, data_type))
+      {
+        generate_expression(vm, variable_statement->reg, statement->expression);
+        generate_statements(vm, &body);
+
+        return;
+      }
+    }
+
+    generate_statements(vm, &statement->default_body);
+  }
+}
+
 static void generate_return_statement(CyVM* vm, ReturnStmt* statement)
 {
   if (statement->expr)
@@ -5302,6 +5424,9 @@ static void generate_statement(CyVM* vm, Stmt* statement)
     return;
   case STMT_WHILE:
     generate_while_statement(vm, &statement->loop);
+    return;
+  case STMT_MATCH:
+    generate_match_statement(vm, &statement->match);
     return;
   case STMT_RETURN:
     generate_return_statement(vm, &statement->ret);

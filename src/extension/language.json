@@ -81,7 +81,7 @@
       "patterns": [
         {
           "name": "keyword.control.cyth",
-          "match": "\\b(return|for|while|break|continue|if|else|in|is)\\b"
+          "match": "\\b(return|for|while|break|continue|if|else|in|is|match|case|default)\\b"
         }
       ]
     },

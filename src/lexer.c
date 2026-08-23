@@ -442,6 +442,9 @@ static void literal(void)
     switch (lexer.start[1])
     {
     default:
+      KEYWORD_GROUP('a')
+      KEYWORD("case", TOKEN_CASE)
+
       KEYWORD_GROUP('l')
       KEYWORD("class", TOKEN_CLASS)
 
@@ -451,6 +454,9 @@ static void literal(void)
       KEYWORD_GROUP('h')
       KEYWORD("char", TOKEN_IDENTIFIER_CHAR)
     }
+
+    KEYWORD_GROUP('d')
+    KEYWORD("default", TOKEN_DEFAULT)
 
     KEYWORD_GROUP('e')
     KEYWORD("else", TOKEN_ELSE)
@@ -492,6 +498,9 @@ static void literal(void)
       KEYWORD_GROUP('s')
       KEYWORD("is", TOKEN_IS)
     }
+
+    KEYWORD_GROUP('m')
+    KEYWORD("match", TOKEN_MATCH)
 
     KEYWORD_GROUP('n')
     switch (lexer.start[1])
@@ -962,6 +971,9 @@ void lexer_print(void)
       "TOKEN_BREAK",
       "TOKEN_NAN",
       "TOKEN_INFINITY",
+      "TOKEN_MATCH",
+      "TOKEN_CASE",
+      "TOKEN_DEFAULT",
 
       "TOKEN_EOF",
     };

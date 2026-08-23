@@ -3,14 +3,14 @@ int stringIndexOf(string s, string target)
         return 0
 
     for int i = 0; i <= s.length - target.length; i += 1
-        bool match = true
+        bool mismatch = true
 
         for char c in target
             if s[i + it] != c
-                match = false
+                mismatch = false
                 break
 
-        if match
+        if mismatch
             return i
 
     return -1

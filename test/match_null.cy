@@ -1,5 +1,4 @@
 class Value
-  int value
 
 any nullValue
 

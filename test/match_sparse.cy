@@ -1,20 +1,9 @@
 class Type1
-  int field
-
 class Type2
-  float field
-
 class Type3
-  int[] field
-  
 class Type4
-  string field
-
 class Type5
-  string[] field
-
 class Type6
-  any field
 
 any type1 = Type1()
 any type2 = Type2()

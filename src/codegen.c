@@ -67,6 +67,8 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type);
 static BinaryenType data_type_to_temporary_binaryen_type(TypeBuilderRef type_builder_ref,
                                                          ArrayTypeBuilderSubtype* subtypes,
                                                          DataType data_type);
+static void finalize_type_builder(ArrayTypeBuilderSubtype* subtypes,
+                                  TypeBuilderRef type_builder_ref);
 
 static struct
 {
@@ -77,6 +79,7 @@ static struct
   ArrayBinaryenType global_local_types;
   MapStringBinaryenHeapType heap_types;
   BinaryenHeapType string_heap_type;
+  BinaryenHeapType char_array_heap_type;
   BinaryenType string_type;
   MapStrbufInt string_constants;
   ArrayDebugInfo debug_info;
@@ -2368,6 +2371,8 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
                                                           ArrayTypeBuilderSubtype* subtypes,
                                                           DataType data_type)
 {
+  assert(subtypes);
+
   const char* key = data_type_to_string(data_type);
   BinaryenHeapType array_binaryen_type =
     map_get_string_binaryen_heap_type(&codegen.heap_types, key);
@@ -2411,22 +2416,17 @@ static BinaryenHeapType generate_array_heap_binaryen_type(TypeBuilderRef type_bu
     TypeBuilderSetStructType(type_builder, offset + 1, field_types, field_packed_types,
                              field_mutables, sizeof(field_types) / sizeof_ptr(field_types));
 
-    if (type_builder_ref)
-    {
-      TypeBuilderSubtype subtype = { .type = SUBTYPE_ARRAY, .index = offset + 1, .key = key };
-      array_add(subtypes, subtype);
+    TypeBuilderSubtype subtype = { .type = SUBTYPE_ARRAY, .index = offset + 1, .key = key };
+    array_add(subtypes, subtype);
 
-      array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
-    }
-    else
-    {
-      BinaryenHeapType heap_types[2];
-      TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
-
-      array_binaryen_type = heap_types[1];
-    }
-
+    array_binaryen_type = TypeBuilderGetTempHeapType(type_builder, offset + 1);
     map_put_string_binaryen_heap_type(&codegen.heap_types, key, array_binaryen_type);
+
+    if (!type_builder_ref)
+    {
+      finalize_type_builder(subtypes, type_builder);
+      array_binaryen_type = map_get_string_binaryen_heap_type(&codegen.heap_types, key);
+    }
   }
 
   return array_binaryen_type;
@@ -2469,29 +2469,27 @@ static BinaryenHeapType generate_function_heap_binaryen_type(TypeBuilderRef type
     array_foreach(&parameter_types, parameter_type)
     {
       array_add(&parameter_binaryen_types,
-                data_type_to_temporary_binaryen_type(type_builder_ref, subtypes, parameter_type));
+                data_type_to_temporary_binaryen_type(type_builder, subtypes, parameter_type));
     }
 
-    BinaryenType param_types =
-      BinaryenTypeCreate(parameter_binaryen_types.elems, parameter_binaryen_types.size);
+    BinaryenType param_types = TypeBuilderGetTempTupleType(
+      type_builder, parameter_binaryen_types.elems, parameter_binaryen_types.size);
 
     TypeBuilderSetSignatureType(
       type_builder, offset, param_types,
-      data_type_to_temporary_binaryen_type(type_builder_ref, subtypes, return_data_type));
+      data_type_to_temporary_binaryen_type(type_builder, subtypes, return_data_type));
 
-    if (type_builder_ref)
-    {
-      TypeBuilderSubtype subtype = { .type = SUBTYPE_FUNCTION, .index = offset, .key = key };
-      array_add(subtypes, subtype);
+    TypeBuilderSubtype subtype = { .type = SUBTYPE_FUNCTION, .index = offset, .key = key };
+    array_add(subtypes, subtype);
 
-      function_binaryen_heap_type = TypeBuilderGetTempHeapType(type_builder, offset);
-    }
-    else
-    {
-      TypeBuilderBuildAndDispose(type_builder, &function_binaryen_heap_type, NULL, NULL);
-    }
-
+    function_binaryen_heap_type = TypeBuilderGetTempHeapType(type_builder, offset);
     map_put_string_binaryen_heap_type(&codegen.heap_types, key, function_binaryen_heap_type);
+
+    if (!type_builder_ref)
+    {
+      finalize_type_builder(subtypes, type_builder);
+      function_binaryen_heap_type = map_get_string_binaryen_heap_type(&codegen.heap_types, key);
+    }
   }
 
   return function_binaryen_heap_type;
@@ -2499,6 +2497,9 @@ static BinaryenHeapType generate_function_heap_binaryen_type(TypeBuilderRef type
 
 static BinaryenType data_type_to_binaryen_type(DataType data_type)
 {
+  ArrayTypeBuilderSubtype subtypes;
+  array_init(&subtypes);
+
   switch (data_type.type)
   {
   case TYPE_VOID:
@@ -2511,13 +2512,15 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
   case TYPE_FUNCTION_INTERNAL:
-  case TYPE_FUNCTION_POINTER: {
-    ArrayTypeBuilderSubtype subtypes;
-    array_init(&subtypes);
-
+  case TYPE_FUNCTION_POINTER:
     return BinaryenTypeFromHeapType(
       generate_function_heap_binaryen_type(NULL, &subtypes, data_type), true);
-  }
+  case TYPE_ARRAY:
+    return BinaryenTypeFromHeapType(generate_array_heap_binaryen_type(NULL, &subtypes, data_type),
+                                    true);
+  case TYPE_OBJECT:
+    assert(data_type.class->ref);
+    return data_type.class->ref;
   case TYPE_NULL:
     return *data_type.null_function ? BinaryenTypeNullFuncref() : BinaryenTypeAnyref();
   case TYPE_ANY:
@@ -2530,18 +2533,6 @@ static BinaryenType data_type_to_binaryen_type(DataType data_type)
     return BinaryenTypeFloat32();
   case TYPE_STRING:
     return codegen.string_type;
-  case TYPE_OBJECT:
-    if (!data_type.class->ref)
-    {
-      ArrayTypeBuilderSubtype subtypes;
-      array_init(&subtypes);
-
-      generate_class_declaration(data_type.class, NULL, &subtypes);
-    }
-
-    return data_type.class->ref;
-  case TYPE_ARRAY:
-    return BinaryenTypeFromHeapType(generate_array_heap_binaryen_type(NULL, NULL, data_type), true);
   default:
     UNREACHABLE("Unhandled data type");
   }
@@ -2592,6 +2583,9 @@ static BinaryenPackedType data_type_to_binaryen_packed_type(DataType data_type)
 
 static BinaryenExpressionRef generate_default_initialization(DataType data_type)
 {
+  ArrayTypeBuilderSubtype subtypes;
+  array_init(&subtypes);
+
   switch (data_type.type)
   {
   case TYPE_INTEGER:
@@ -2603,30 +2597,18 @@ static BinaryenExpressionRef generate_default_initialization(DataType data_type)
   case TYPE_FUNCTION:
   case TYPE_FUNCTION_MEMBER:
   case TYPE_FUNCTION_INTERNAL:
-  case TYPE_FUNCTION_POINTER: {
-    ArrayTypeBuilderSubtype subtypes;
-    array_init(&subtypes);
-
+  case TYPE_FUNCTION_POINTER:
     return BinaryenRefNull(codegen.module, data_type_to_binaryen_type(data_type));
-  }
-  case TYPE_OBJECT: {
-    if (!data_type.class->ref)
-    {
-      ArrayTypeBuilderSubtype subtypes;
-      array_init(&subtypes);
-
-      generate_class_declaration(data_type.class, NULL, &subtypes);
-    }
-
+  case TYPE_ARRAY:
+    return BinaryenStructNew(codegen.module, NULL, 0,
+                             generate_array_heap_binaryen_type(NULL, &subtypes, data_type));
+  case TYPE_OBJECT:
+    assert(data_type.class->ref);
     return BinaryenRefNull(codegen.module, data_type.class->ref);
-  }
   case TYPE_ANY:
     return BinaryenRefNull(codegen.module, BinaryenTypeAnyref());
   case TYPE_STRING:
     return generate_string_literal_expression("", 0);
-  case TYPE_ARRAY:
-    return BinaryenStructNew(codegen.module, NULL, 0,
-                             generate_array_heap_binaryen_type(NULL, NULL, data_type));
   default:
     UNREACHABLE("Unexpected default initializer");
   }
@@ -3480,70 +3462,88 @@ static const char* generate_function_internal(DataType data_type)
   assert(data_type.type == TYPE_FUNCTION_INTERNAL);
 
   const char* name = data_type.function_internal.name;
+  const char* function_name = NULL;
 
   if (strcmp(name, "array.push") == 0)
-    return generate_array_push_function(array_at(&data_type.function_internal.parameter_types, 0),
-                                        array_at(&data_type.function_internal.parameter_types, 1));
-  if (strcmp(name, "array.push_string") == 0)
-    return generate_array_push_string_function(
+    function_name =
+      generate_array_push_function(array_at(&data_type.function_internal.parameter_types, 0),
+                                   array_at(&data_type.function_internal.parameter_types, 1));
+  else if (strcmp(name, "array.push_string") == 0)
+    function_name = generate_array_push_string_function(
       array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.to_string") == 0)
-    return generate_array_to_string_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_to_string_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.pop") == 0)
-    return generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_pop_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.clear") == 0)
-    return generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_clear_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.reserve") == 0)
-    return generate_array_reserve_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_reserve_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.remove") == 0)
-    return generate_array_remove_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_remove_function(array_at(&data_type.function_internal.parameter_types, 0));
 
   else if (strcmp(name, "array.begin") == 0 || strcmp(name, "string.begin") == 0)
-    return generate_begin_function(array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_begin_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.next") == 0 || strcmp(name, "string.next") == 0)
-    return generate_next_function(array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_next_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "array.has_next") == 0)
-    return generate_array_has_next_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_array_has_next_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "string.has_next") == 0)
-    return generate_string_has_next_function(
-      array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_string_has_next_function(array_at(&data_type.function_internal.parameter_types, 0));
 
   else if (strcmp(name, "panic") == 0)
-    return generate_panic_function();
+    function_name = generate_panic_function();
   else if (strcmp(name, "int.hash") == 0)
-    return generate_int_hash_function();
+    function_name = generate_int_hash_function();
   else if (strcmp(name, "float.sqrt") == 0)
-    return generate_float_sqrt_function();
+    function_name = generate_float_sqrt_function();
   else if (strcmp(name, "float.hash") == 0)
-    return generate_float_hash_function();
+    function_name = generate_float_hash_function();
   else if (strcmp(name, "string.hash") == 0)
-    return generate_string_hash_function();
+    function_name = generate_string_hash_function();
   else if (strcmp(name, "string.index_of") == 0)
-    return generate_string_index_of_function();
+    function_name = generate_string_index_of_function();
   else if (strcmp(name, "string.count") == 0)
-    return generate_string_count_function();
+    function_name = generate_string_count_function();
   else if (strcmp(name, "string.replace") == 0)
-    return generate_string_replace_function();
+    function_name = generate_string_replace_function();
   else if (strcmp(name, "string.trim") == 0)
-    return generate_string_trim_function();
+    function_name = generate_string_trim_function();
   else if (strcmp(name, "string.starts_with") == 0)
-    return generate_string_starts_with_function();
+    function_name = generate_string_starts_with_function();
   else if (strcmp(name, "string.ends_with") == 0)
-    return generate_string_ends_with_function();
+    function_name = generate_string_ends_with_function();
   else if (strcmp(name, "string.contains") == 0)
-    return generate_string_contains_function();
+    function_name = generate_string_contains_function();
   else if (strcmp(name, "string.split") == 0)
-    return generate_string_split_function(*data_type.function_internal.return_type);
+    function_name = generate_string_split_function(*data_type.function_internal.return_type);
   else if (strcmp(name, "string.join") == 0)
-    return generate_string_join_function(array_at(&data_type.function_internal.parameter_types, 0));
+    function_name =
+      generate_string_join_function(array_at(&data_type.function_internal.parameter_types, 0));
   else if (strcmp(name, "string.to_array") == 0)
-    return generate_string_to_array_function(*data_type.function_internal.return_type);
+    function_name = generate_string_to_array_function(*data_type.function_internal.return_type);
   else
     UNREACHABLE("Unexpected internal function");
+
+  if (function_name)
+  {
+    ArrayTypeBuilderSubtype subtypes;
+    array_init(&subtypes);
+
+    BinaryenFunctionSetType(BinaryenGetFunction(codegen.module, function_name),
+                            generate_function_heap_binaryen_type(NULL, &subtypes, data_type));
+  }
+
+  return function_name;
 }
 
 static BinaryenExpressionRef generate_function_pointer(DataType data_type)
@@ -4504,7 +4504,10 @@ static BinaryenExpressionRef generate_index_expression(IndexExpr* expression)
 
 static BinaryenExpressionRef generate_array_expression(LiteralArrayExpr* expression)
 {
-  BinaryenHeapType type = generate_array_heap_binaryen_type(NULL, NULL, expression->data_type);
+  ArrayTypeBuilderSubtype subtypes;
+  array_init(&subtypes);
+
+  BinaryenHeapType type = generate_array_heap_binaryen_type(NULL, &subtypes, expression->data_type);
   BinaryenHeapType array_type = BinaryenTypeGetHeapType(BinaryenStructTypeGetFieldType(type, 0));
 
   ArrayBinaryenExpressionRef values;
@@ -4849,7 +4852,6 @@ static BinaryenExpressionRef generate_function_declaration(FuncStmt* statement)
 
     BinaryenHeapType heap_type =
       generate_function_heap_binaryen_type(NULL, &subtypes, statement->function_data_type);
-
     BinaryenFunctionSetType(func, heap_type);
   }
 
@@ -4988,77 +4990,15 @@ static void generate_class_body_declaration(ClassStmt* statement, BinaryenHeapTy
   codegen.class = previous_class;
 }
 
-static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
-                                                        TypeBuilderRef type_builder_ref,
-                                                        ArrayTypeBuilderSubtype* subtypes)
+static void finalize_type_builder(ArrayTypeBuilderSubtype* subtypes,
+                                  TypeBuilderRef type_builder_ref)
 {
-  if (statement->ref)
-    return NULL;
-
-  TypeBuilderRef type_builder;
-  BinaryenIndex index;
-
-  if (type_builder_ref)
+  if (subtypes->size)
   {
-    type_builder = type_builder_ref;
-    index = TypeBuilderGetSize(type_builder);
-
-    TypeBuilderGrow(type_builder, 1);
-  }
-  else
-  {
-    type_builder = TypeBuilderCreate(1);
-    index = 0;
-  }
-
-  BinaryenHeapType temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, index);
-  BinaryenType temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, true);
-
-  statement->ref = temporary_type;
-
-  ArrayBinaryenType types;
-  ArrayBinaryenPackedType packed_types;
-  ArrayBool mutables;
-
-  array_init(&types);
-  array_init(&packed_types);
-  array_init(&mutables);
-
-  VarStmt* variable;
-  array_foreach(&statement->variables, variable)
-  {
-    BinaryenType type =
-      data_type_to_temporary_binaryen_type(type_builder, subtypes, variable->data_type);
-
-    BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
-    bool mutable = true;
-
-    array_add(&types, type);
-    array_add(&packed_types, packed_type);
-    array_add(&mutables, mutable);
-  }
-
-  TypeBuilderSetStructType(type_builder, index, types.elems, packed_types.elems, mutables.elems,
-                           types.size);
-
-  if (type_builder_ref)
-  {
-    TypeBuilderSubtype subtype = { .type = SUBTYPE_CLASS, .index = index, .class = statement };
-    array_add(subtypes, subtype);
-  }
-  else
-  {
-    if (array_size(subtypes))
-    {
-      assert(TypeBuilderGetSize(type_builder) <= 128);
-      TypeBuilderCreateRecGroup(type_builder, 0, TypeBuilderGetSize(type_builder));
-    }
-
-    BinaryenHeapType heap_types[128];
-    TypeBuilderBuildAndDispose(type_builder, heap_types, 0, 0);
-
-    BinaryenType type = BinaryenTypeFromHeapType(heap_types[0], true);
-    statement->ref = type;
+    BinaryenHeapType* heap_types =
+      alloca(sizeof(BinaryenHeapType) * TypeBuilderGetSize(type_builder_ref));
+    TypeBuilderCreateRecGroup(type_builder_ref, 0, TypeBuilderGetSize(type_builder_ref));
+    TypeBuilderBuildAndDispose(type_builder_ref, heap_types, 0, 0);
 
     TypeBuilderSubtype subtype;
     array_foreach(subtypes, subtype)
@@ -5092,22 +5032,70 @@ static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
         generate_class_body_declaration(subtype.class, heap_type);
       }
     }
-
-    generate_class_body_declaration(statement, heap_types[0]);
   }
+  else
+  {
+    TypeBuilderBuildAndDispose(type_builder_ref, NULL, 0, 0);
+  }
+}
+
+static BinaryenExpressionRef generate_class_declaration(ClassStmt* statement,
+                                                        TypeBuilderRef type_builder_ref,
+                                                        ArrayTypeBuilderSubtype* subtypes)
+{
+  assert(type_builder_ref);
+
+  if (statement->ref)
+    return NULL;
+
+  TypeBuilderRef type_builder = type_builder_ref;
+  BinaryenIndex index = TypeBuilderGetSize(type_builder);
+  TypeBuilderGrow(type_builder, 1);
+
+  BinaryenHeapType temporary_heap_type = TypeBuilderGetTempHeapType(type_builder, index);
+  BinaryenType temporary_type = TypeBuilderGetTempRefType(type_builder, temporary_heap_type, true);
+
+  statement->ref = temporary_type;
+
+  ArrayBinaryenType types;
+  ArrayBinaryenPackedType packed_types;
+  ArrayBool mutables;
+
+  array_init(&types);
+  array_init(&packed_types);
+  array_init(&mutables);
+
+  VarStmt* variable;
+  array_foreach(&statement->variables, variable)
+  {
+    BinaryenType type =
+      data_type_to_temporary_binaryen_type(type_builder, subtypes, variable->data_type);
+
+    BinaryenPackedType packed_type = BinaryenPackedTypeNotPacked();
+    bool mutable = true;
+
+    array_add(&types, type);
+    array_add(&packed_types, packed_type);
+    array_add(&mutables, mutable);
+  }
+
+  TypeBuilderSetStructType(type_builder, index, types.elems, packed_types.elems, mutables.elems,
+                           types.size);
+
+  TypeBuilderSubtype subtype = { .type = SUBTYPE_CLASS, .index = index, .class = statement };
+  array_add(subtypes, subtype);
 
   return NULL;
 }
 
-static BinaryenExpressionRef generate_class_template_declaration(ClassTemplateStmt* statement)
+static BinaryenExpressionRef generate_class_template_declaration(ClassTemplateStmt* statement,
+                                                                 TypeBuilderRef type_builder_ref,
+                                                                 ArrayTypeBuilderSubtype* subtypes)
 {
   ClassStmt* class_declaration;
   array_foreach(&statement->classes, class_declaration)
   {
-    ArrayTypeBuilderSubtype subtypes;
-    array_init(&subtypes);
-
-    generate_class_declaration(class_declaration, NULL, &subtypes);
+    generate_class_declaration(class_declaration, type_builder_ref, subtypes);
   }
 
   return NULL;
@@ -5135,20 +5123,14 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_variable_declaration(&statement->var);
   case STMT_FUNCTION_DECL:
     return generate_function_declaration(&statement->func);
-  case STMT_CLASS_TEMPLATE_DECL:
-    return generate_class_template_declaration(&statement->class_template);
   case STMT_FUNCTION_TEMPLATE_DECL:
     return generate_function_template_declaration(&statement->func_template);
-  case STMT_CLASS_DECL: {
-    ArrayTypeBuilderSubtype subtypes;
-    array_init(&subtypes);
-
-    return generate_class_declaration(&statement->class, NULL, &subtypes);
+  case STMT_CLASS_TEMPLATE_DECL:
+  case STMT_CLASS_DECL:
+    return NULL;
   }
 
-  default:
-    UNREACHABLE("Unhandled statement");
-  }
+  UNREACHABLE("Unhandled statement");
 }
 
 static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
@@ -5168,6 +5150,33 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
     BinaryenBlock(codegen.module, NULL, list.elems, list.size, BinaryenTypeAuto());
 
   return block;
+}
+
+static void generate_class_statements(ArrayStmt* statements)
+{
+  TypeBuilderRef type_builder = TypeBuilderCreate(0);
+  ArrayTypeBuilderSubtype subtypes;
+  array_init(&subtypes);
+
+  Stmt* statement;
+  array_foreach(statements, statement)
+  {
+    switch (statement->type)
+    {
+    case STMT_CLASS_TEMPLATE_DECL:
+      generate_class_template_declaration(&statement->class_template, type_builder, &subtypes);
+      break;
+
+    case STMT_CLASS_DECL:
+      generate_class_declaration(&statement->class, type_builder, &subtypes);
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  finalize_type_builder(&subtypes, type_builder);
 }
 
 void cyth_wasm_init(void)
@@ -5246,13 +5255,27 @@ int cyth_wasm_compile(int compile, int logging)
   array_init(&codegen.debug_info);
   array_init(&codegen.global_local_types);
 
-  TypeBuilderRef type_builder = TypeBuilderCreate(1);
-  TypeBuilderSetArrayType(type_builder, 0, BinaryenTypeInt32(), BinaryenPackedTypeInt8(), true);
-  TypeBuilderBuildAndDispose(type_builder, &codegen.string_heap_type, 0, 0);
-
-  codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, false);
   map_init_strbuf_int(&codegen.string_constants, 0, 0);
   map_init_string_binaryen_heap_type(&codegen.heap_types, 0, 0);
+
+  {
+    TypeBuilderRef type_builder = TypeBuilderCreate(1);
+    TypeBuilderSetArrayType(type_builder, 0, BinaryenTypeInt32(), BinaryenPackedTypeInt8(), true);
+    TypeBuilderBuildAndDispose(type_builder, &codegen.string_heap_type, 0, 0);
+    codegen.string_type = BinaryenTypeFromHeapType(codegen.string_heap_type, true);
+  }
+
+  {
+    TypeBuilderRef type_builder = TypeBuilderCreate(1);
+    TypeBuilderSetStructType(
+      type_builder, 0, (BinaryenType[]){ codegen.string_type, BinaryenTypeInt32() },
+      (BinaryenPackedType[]){ BinaryenPackedTypeNotPacked(), BinaryenPackedTypeNotPacked() },
+      (bool[]){ true, true }, 2);
+    TypeBuilderBuildAndDispose(type_builder, &codegen.char_array_heap_type, 0, 0);
+    map_put_string_binaryen_heap_type(&codegen.heap_types, "char[]", codegen.char_array_heap_type);
+  }
+
+  generate_class_statements(&codegen.statements);
 
   VarStmt* statement;
   ArrayVarStmt statements = checker_global_locals();

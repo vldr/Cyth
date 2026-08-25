@@ -5,4 +5,4 @@ log((string)myType)
 #> Invalid type cast to string.
 #>   at <start>:3:6
 
-#< RuntimeError: unreachable
+#< RuntimeError: illegal cast

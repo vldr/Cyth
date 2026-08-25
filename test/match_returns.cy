@@ -1,8 +1,5 @@
 class Result
-  int value
-
 class Other
-  string value
 
 int complete(any value)
   match value

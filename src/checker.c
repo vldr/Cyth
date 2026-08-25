@@ -1723,6 +1723,13 @@ static void init_function_declaration(FuncStmt* statement)
       memory_sprintf("%s[%d:%d]", statement->name.lexeme, statement->name.start_line,
                      statement->name.start_column);
     statement->name.length = strlen(statement->name.lexeme);
+
+    if (checker.class)
+    {
+      statement->name.lexeme =
+        memory_sprintf("%s.%s", checker.class->name.lexeme, statement->name.lexeme);
+      statement->name.length = strlen(statement->name.lexeme);
+    }
   }
 
   if (environment_check_variable(checker.environment, name))

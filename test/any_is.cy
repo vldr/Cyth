@@ -32,10 +32,12 @@ log(test[2] is string)
 
 log(test[0] is Apple)
 log(test[1] is Apple)
+log(test[1] is Apple2)
 log(test[2] is Apple)
 
 # 0
 # 1
+# 0
 # 0
 
 log(test[0] is int[])

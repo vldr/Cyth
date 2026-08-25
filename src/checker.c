@@ -349,6 +349,17 @@ static void error_case_already_exists(Token token, DataType data_type)
   error(token, memory_sprintf("A case for '%s' already exists.", data_type_to_string(data_type)));
 }
 
+static void error_only_any_and_template_type(Token token, DataType data_type)
+{
+  error(token, memory_sprintf("Cannot match on '%s', only 'any' and template types are supported.",
+                              data_type_to_string(data_type)));
+}
+
+static void error_name_cannot_appear_after_type_when_template_type(Token token)
+{
+  error(token, memory_sprintf("A name cannot be appear here when matching on a template type."));
+}
+
 static inline int align(int value, int alignment)
 {
   return ((value + alignment - 1) / alignment) * alignment;
@@ -2631,8 +2642,8 @@ static DataType check_assignment_expression(AssignExpr* expression)
 
   checker.assignment = previous_assignment;
 
-  if (target_data_type.type == TYPE_VOID || target_data_type.type == TYPE_PROTOTYPE ||
-      target_data_type.type == TYPE_PROTOTYPE_TEMPLATE ||
+  if (target_data_type.type == TYPE_VOID || target_data_type.type == TYPE_ALIAS ||
+      target_data_type.type == TYPE_PROTOTYPE || target_data_type.type == TYPE_PROTOTYPE_TEMPLATE ||
       target_data_type.type == TYPE_FUNCTION_TEMPLATE || target_data_type.type == TYPE_FUNCTION ||
       target_data_type.type == TYPE_FUNCTION_MEMBER ||
       target_data_type.type == TYPE_FUNCTION_GROUP ||
@@ -4028,17 +4039,17 @@ static void check_variable_declaration(VarStmt* statement)
 
 static void check_match_statement(MatchStmt* statement)
 {
-  MatchStmt* previous_match = checker.match;
-  checker.match = statement;
-
   DataType data_type = check_expression(statement->expression);
   statement->data_type = data_type;
 
-  if (statement->data_type.type == TYPE_VOID)
+  if (data_type.type != TYPE_ANY && data_type.type != TYPE_ALIAS)
   {
-    error_type_cannot_be_void(statement->keyword);
-    checker.error = false;
+    error_only_any_and_template_type(statement->keyword, data_type);
+    return;
   }
+
+  MatchStmt* previous_match = checker.match;
+  checker.match = statement;
 
   MapSInt type_set;
   map_init_sint(&type_set, 0, 0);
@@ -4051,24 +4062,40 @@ static void check_match_statement(MatchStmt* statement)
     VarStmt* variable_statement = statement->match_types.elems[_i];
     check_variable_declaration(variable_statement);
 
-    DataType variable_data_type = variable_statement->data_type;
-    if (data_type.type == TYPE_ANY && variable_data_type.type != TYPE_STRING &&
-        variable_data_type.type != TYPE_ARRAY && variable_data_type.type != TYPE_OBJECT)
+    const char* variable_data_type_string = data_type_to_string(variable_statement->data_type);
+    if (map_get_sint(&type_set, variable_data_type_string))
     {
-      error_cannot_cast_to_any(variable_statement->type.token, variable_data_type);
+      error_case_already_exists(variable_statement->type.token, variable_statement->data_type);
       checker.error = false;
     }
     else
     {
-      const char* variable_data_type_string = data_type_to_string(variable_data_type);
-      if (map_get_sint(&type_set, variable_data_type_string))
+      map_put_sint(&type_set, variable_data_type_string, true);
+    }
+
+    if (data_type.type == TYPE_ALIAS)
+    {
+      checker.environment = checker.environment->parent;
+
+      if (memcmp(&variable_statement->name, &statement->expression->var.name, sizeof(Token)) != 0)
       {
-        error_case_already_exists(variable_statement->type.token, variable_data_type);
+        error_name_cannot_appear_after_type_when_template_type(variable_statement->name);
         checker.error = false;
       }
-      else
+
+      if (!equal_data_type(variable_statement->data_type, *data_type.alias.data_type))
       {
-        map_put_sint(&type_set, variable_data_type_string, true);
+        continue;
+      }
+    }
+    else
+    {
+      if (variable_statement->data_type.type != TYPE_STRING &&
+          variable_statement->data_type.type != TYPE_ARRAY &&
+          variable_statement->data_type.type != TYPE_OBJECT)
+      {
+        error_cannot_cast_to_any(variable_statement->type.token, variable_statement->data_type);
+        checker.error = false;
       }
     }
 
@@ -4078,7 +4105,10 @@ static void check_match_statement(MatchStmt* statement)
       check_statement(body_statement, true);
     }
 
-    checker.environment = checker.environment->parent;
+    if (data_type.type == TYPE_ANY)
+    {
+      checker.environment = checker.environment->parent;
+    }
   }
 
   checker.environment = environment_init(checker.environment);

@@ -1,8 +1,8 @@
 class Value
 
-int produce()
+any produce()
   log("produce")
-  return 1
+  return null
 
 match produce()
 log("after static")
@@ -19,4 +19,5 @@ match produce()
 
 # after static
 # after any
+# produce
 # default

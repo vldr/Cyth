@@ -5035,9 +5035,6 @@ static void generate_while_statement(CyVM* vm, WhileStmt* statement)
 
 static void generate_match_statement(CyVM* vm, MatchStmt* statement)
 {
-  MIR_reg_t expr =
-    _MIR_new_temp_reg(vm->ctx, data_type_to_mir_type(statement->data_type), vm->function->u.func);
-
   if (statement->data_type.type == TYPE_ANY)
   {
     const MIR_label_t default_label = MIR_new_label(vm->ctx);
@@ -5077,8 +5074,11 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
         labels.elems[id - minimum_id] = MIR_new_label(vm->ctx);
       }
 
+      MIR_reg_t expr = _MIR_new_temp_reg(vm->ctx, data_type_to_mir_type(statement->data_type),
+                                         vm->function->u.func);
+      generate_expression(vm, expr, statement->expression);
+
       {
-        generate_expression(vm, expr, statement->expression);
 
         MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
         MIR_append_insn(vm->ctx, vm->function,
@@ -5139,13 +5139,11 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
     array_foreach(&statement->match_bodies, body)
     {
       VarStmt* variable_statement = statement->match_types.elems[_i];
-      DataType data_type = variable_statement->data_type;
+      DataType variable_data_type = variable_statement->data_type;
 
-      if (equal_data_type(statement->data_type, data_type))
+      if (equal_data_type(*statement->data_type.alias.data_type, variable_data_type))
       {
-        generate_expression(vm, variable_statement->reg, statement->expression);
         generate_statements(vm, &body);
-
         return;
       }
     }

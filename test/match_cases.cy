@@ -23,11 +23,5 @@ match other
 
 log("continued")
 
-int number = 10
-match number
-  case int
-    log(number)
-
 # hello world
 # continued
-# 10

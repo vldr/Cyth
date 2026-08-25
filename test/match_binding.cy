@@ -1,20 +1,18 @@
-int source = 10
 
-match source
-  case int binding
-    binding = 20
-    log(binding)
+void func<T>()
+  T source = 10
 
-log(source)
+  match T
+    case int
+      source = 50
+    case float
+      source = 12.625
 
-match source
-  case int
-    source = 50
-    log(source)
+  log(source)
 
-log(source)
 
-# 20
-# 10
+func<int>()
+func<float>()
+
 # 50
-# 10
+# 12.625

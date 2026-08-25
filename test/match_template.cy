@@ -6,7 +6,7 @@ class Box<T>
 
 class TemplateMatcher<T>
   int matches(T value)
-    match value
+    match T
       case int
         return 1
       case float
@@ -21,16 +21,16 @@ class TemplateMatcher<T>
         return 0
 
 int matches<T>(T value)
-  match value
-    case int matched
+  match T
+    case int
       return 1
-    case float matched
+    case float
       return 2
-    case string matched
+    case string
       return 3
-    case int[] matched
+    case int[]
       return 4
-    case Box<int> matched
+    case Box<int>
       return 5
     default
       return 0

@@ -4658,47 +4658,50 @@ static BinaryenExpressionRef generate_while_statement(WhileStmt* statement)
 
 static BinaryenExpressionRef generate_match_statement(MatchStmt* statement)
 {
-  BinaryenExpressionRef expression = generate_expression(statement->expression);
-
   if (statement->data_type.type == TYPE_ANY)
   {
-    BinaryenIndex expression_index = BinaryenFunctionAddVar(
-      BinaryenGetFunction(codegen.module, codegen.function), BinaryenTypeAnyref());
-
     ArrayBinaryenExpressionRef block_list;
     array_init(&block_list);
-    array_add(&block_list, BinaryenLocalSet(codegen.module, expression_index, expression));
 
     BinaryenExpressionRef chain = generate_statements(&statement->default_body);
 
-    for (unsigned int i = statement->match_bodies.size; i > 0; i--)
+    if (statement->match_bodies.size)
     {
-      ArrayStmt body = statement->match_bodies.elems[i - 1];
-      VarStmt* variable_statement = statement->match_types.elems[i - 1];
+      BinaryenExpressionRef expression = generate_expression(statement->expression);
+      BinaryenIndex expression_index = BinaryenFunctionAddVar(
+        BinaryenGetFunction(codegen.module, codegen.function), BinaryenTypeAnyref());
 
-      ArrayBinaryenExpressionRef block_list;
-      array_init(&block_list);
-      array_add(
-        &block_list,
-        BinaryenLocalSet(
-          codegen.module, variable_statement->index,
-          BinaryenRefCast(codegen.module,
+      array_add(&block_list, BinaryenLocalSet(codegen.module, expression_index, expression));
+
+      for (unsigned int i = statement->match_bodies.size; i > 0; i--)
+      {
+        ArrayStmt body = statement->match_bodies.elems[i - 1];
+        VarStmt* variable_statement = statement->match_types.elems[i - 1];
+
+        ArrayBinaryenExpressionRef block_list;
+        array_init(&block_list);
+        array_add(&block_list,
+                  BinaryenLocalSet(
+                    codegen.module, variable_statement->index,
+                    BinaryenRefCast(
+                      codegen.module,
+                      BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref()),
+                      data_type_to_binaryen_type(variable_statement->data_type))));
+        array_add(&block_list, generate_statements(&body));
+        BinaryenExpressionRef case_block = BinaryenBlock(codegen.module, NULL, block_list.elems,
+                                                         block_list.size, BinaryenTypeAuto());
+
+        BinaryenExpressionRef condition = BinaryenSelect(
+          codegen.module,
+          BinaryenRefIsNull(codegen.module, BinaryenLocalGet(codegen.module, expression_index,
+                                                             BinaryenTypeAnyref())),
+          BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
+          BinaryenRefTest(codegen.module,
                           BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref()),
-                          data_type_to_binaryen_type(variable_statement->data_type))));
-      array_add(&block_list, generate_statements(&body));
-      BinaryenExpressionRef case_block =
-        BinaryenBlock(codegen.module, NULL, block_list.elems, block_list.size, BinaryenTypeAuto());
+                          data_type_to_binaryen_type(variable_statement->data_type)));
 
-      BinaryenExpressionRef condition = BinaryenSelect(
-        codegen.module,
-        BinaryenRefIsNull(codegen.module,
-                          BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref())),
-        BinaryenConst(codegen.module, BinaryenLiteralInt32(0)),
-        BinaryenRefTest(codegen.module,
-                        BinaryenLocalGet(codegen.module, expression_index, BinaryenTypeAnyref()),
-                        data_type_to_binaryen_type(variable_statement->data_type)));
-
-      chain = BinaryenIf(codegen.module, condition, case_block, chain);
+        chain = BinaryenIf(codegen.module, condition, case_block, chain);
+      }
     }
 
     array_add(&block_list, chain);
@@ -4712,18 +4715,11 @@ static BinaryenExpressionRef generate_match_statement(MatchStmt* statement)
     array_foreach(&statement->match_bodies, body)
     {
       VarStmt* variable_statement = statement->match_types.elems[_i];
-      DataType data_type = variable_statement->data_type;
+      DataType variable_data_type = variable_statement->data_type;
 
-      if (equal_data_type(statement->data_type, data_type))
+      if (equal_data_type(*statement->data_type.alias.data_type, variable_data_type))
       {
-        ArrayBinaryenExpressionRef block_list;
-        array_init(&block_list);
-        array_add(&block_list,
-                  BinaryenLocalSet(codegen.module, variable_statement->index, expression));
-        array_add(&block_list, generate_statements(&body));
-
-        return BinaryenBlock(codegen.module, NULL, block_list.elems, block_list.size,
-                             BinaryenTypeNone());
+        return generate_statements(&body);
       }
     }
 

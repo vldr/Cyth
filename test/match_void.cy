@@ -4,4 +4,4 @@ void voidFunction()
 match voidFunction()
   default
 
-#! 4:1-4:6 The type cannot be void here.
+#! 4:1-4:6 Cannot match on 'void', only 'any' and template types are supported.

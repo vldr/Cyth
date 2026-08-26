@@ -1096,6 +1096,7 @@ static Stmt* class_template_declaration_statement(Token keyword, Token name)
 
   array_init(&stmt->class_template.types);
   array_init(&stmt->class_template.classes);
+  array_init(&stmt->class_template.links);
 
   Token start_token = advance();
 

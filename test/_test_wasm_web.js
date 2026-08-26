@@ -29,7 +29,7 @@ cyth._cyth_wasm_set_error_callback(
         startColumn,
         endLineNumber,
         endColumn,
-        message: cyth.UTF8ToString(message),
+        message: cyth.UTF8ToString(message).replaceAll("at " + cyth.UTF8ToString(filename) + ":", "at "),
       }),
     "viiiiii"
   )

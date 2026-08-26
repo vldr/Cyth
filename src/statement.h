@@ -13,7 +13,8 @@ array_def(struct _VAR_STMT*, VarStmt);
 array_def(struct _CLASS_STMT*, ClassStmt);
 array_def(struct _FUNC_STMT*, FuncStmt);
 array_def(struct _FUNC_TEMPLATE_STMT*, FuncTemplateStmt);
-array_def(ArrayStmt, StmtStmt);
+array_def(struct _TOKEN_LINK*, TokenLink);
+array_def(ArrayStmt, ArrayStmt);
 
 typedef struct _EXPR_STMT
 {
@@ -146,6 +147,7 @@ typedef struct _CLASS_TEMPLATE_STMT
   int count;
   ArrayToken types;
   ArrayClassStmt classes;
+  ArrayTokenLink links;
 } ClassTemplateStmt;
 
 typedef struct _MATCH_STMT
@@ -154,7 +156,7 @@ typedef struct _MATCH_STMT
   DataType data_type;
   Expr* expression;
 
-  ArrayStmtStmt match_bodies;
+  ArrayArrayStmt match_bodies;
   ArrayVarStmt match_types;
   ArrayStmt default_body;
 } MatchStmt;

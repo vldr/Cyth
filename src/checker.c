@@ -70,9 +70,11 @@ static void error(Token token, const char* message)
     TokenLink* template = checker.template;
     while (template)
     {
-      message =
-        memory_sprintf("%s\n* occurred when creating %s at %d:%d", message, template->token.lexeme,
-                       template->token.start_line, template->token.start_column);
+      message = memory_sprintf("%s\n* occurred when creating %s at %s%s%d:%d", message,
+                               template->token.lexeme,
+                               template->token.filename ? template->token.filename : "",
+                               template->token.filename ? ":" : "", template->token.start_line,
+                               template->token.start_column);
 
       template = template->previous;
     }
@@ -887,8 +889,11 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.cond = NULL;
   checker.environment = checker.global_environment;
 
-  TokenLink next_template = { .token = class_statement->name, .previous = checker.template };
-  checker.template = &next_template;
+  TokenLink* next_template = ALLOC(TokenLink);
+  next_template->token = class_statement->name;
+  next_template->previous = checker.template;
+
+  checker.template = next_template;
 
   init_class_declaration(class_statement);
 
@@ -919,6 +924,9 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   if (checker.class_template)
     check_class_declaration(class_statement);
 
+  array_add(&template.class_template->classes, class_statement);
+  array_add(&template.class_template->links, checker.template);
+
   template.class_template->count--;
 
   checker.class = previous_class;
@@ -928,8 +936,6 @@ static DataType class_template_to_data_type(DataType template, DataTypeToken tem
   checker.cond = previous_cond;
   checker.environment = previous_environment;
   checker.template = checker.template->previous;
-
-  array_add(&template.class_template->classes, class_statement);
 
   variable = environment_get_variable(checker.environment, name);
   assert(variable && variable->data_type.type == TYPE_PROTOTYPE);
@@ -995,8 +1001,11 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.cond = template.function_template.function->cond;
   checker.environment = template.function_template.function->environment;
 
-  TokenLink next_template = { .token = function_statement->name, .previous = checker.template };
-  checker.template = &next_template;
+  TokenLink* next_template = ALLOC(TokenLink);
+  next_template->token = function_statement->name;
+  next_template->previous = checker.template;
+
+  checker.template = next_template;
 
   for (unsigned int i = 0; i < template.function_template.function->types.size; i++)
   {
@@ -1022,6 +1031,8 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
 
   check_function_declaration(function_statement);
 
+  array_add(&template.function_template.function->functions, function_statement);
+
   checker.class = previous_class;
   checker.function = previous_function;
   checker.loop = previous_loop;
@@ -1029,8 +1040,6 @@ static DataType function_template_to_data_type(DataType template, DataTypeToken 
   checker.cond = previous_cond;
   checker.environment = previous_environment;
   checker.template = checker.template->previous;
-
-  array_add(&template.function_template.function->functions, function_statement);
 
   variable = environment_get_variable(template.function_template.function->environment, name);
   assert(variable && (variable->data_type.type == TYPE_FUNCTION ||
@@ -4333,12 +4342,12 @@ static void check_class_template_declaration(ClassTemplateStmt* statement)
   ClassStmt* class_statement;
   array_foreach(&statement->classes, class_statement)
   {
-    TokenLink next_template = { .token = class_statement->name, .previous = checker.template };
-    checker.template = &next_template;
+    TokenLink* previous_template = checker.template;
+    checker.template = statement->links.elems[_i];
 
     check_class_declaration(class_statement);
 
-    checker.template = checker.template->previous;
+    checker.template = previous_template;
   }
 
   checker.class_template = NULL;

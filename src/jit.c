@@ -4238,8 +4238,20 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                                    MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_OR, MIR_new_reg_op(vm->ctx, dest),
+                      MIR_new_insn(vm->ctx, MIR_NE, MIR_new_reg_op(vm->ctx, dest),
+                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_NEG, MIR_new_reg_op(vm->ctx, dest),
+                                   MIR_new_reg_op(vm->ctx, dest)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_OR, MIR_new_reg_op(vm->ctx, expr),
                                    MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, id)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
+                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_reg_op(vm->ctx, dest)));
       return;
     }
     case TYPE_NULL:

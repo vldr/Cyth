@@ -6,7 +6,7 @@ import child_process from "child_process";
 
 Error.stackTraceLimit = Infinity;
 
-const executable = process.argv[2];
+const executable = path.resolve(process.argv[2]);
 const files = await fs.readdir(import.meta.dirname);
 const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) : files.filter((f) => f.endsWith(".cy"));
 

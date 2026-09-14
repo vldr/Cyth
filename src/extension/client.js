@@ -96,7 +96,7 @@ async function activate(context) {
 
       for (const item of imports) {
         if (!cyth._cyth_wasm_load_function(encodeText(item), env))
-          throw new Error(`Failed to compile function: ${item}`);
+          vscode.window.showErrorMessage(`Failed to compile function: ${item}`);
       }
 
       for (const filename in files) {
@@ -105,11 +105,11 @@ async function activate(context) {
           continue;
 
         if (!cyth._cyth_wasm_load_string(encodeText(filenameUri), encodeText(files[filename])))
-          throw new Error(`Failed to compile: ${filename}`);
+          vscode.window.showErrorMessage(`Failed to compile: ${filename}`);
       }
 
-      if (cyth._cyth_wasm_load_string(encodeText(uri), encodeText(document.getText())))
-        cyth._cyth_wasm_compile(false, false);
+      cyth._cyth_wasm_load_string(encodeText(uri), encodeText(document.getText()));
+      cyth._cyth_wasm_compile(false, false);
 
     } catch (err) {
       vscode.window.showErrorMessage(`Cyth crashed: ${err}`);

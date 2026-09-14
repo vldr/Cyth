@@ -1704,6 +1704,34 @@ static Stmt* match_statement(void)
   return stmt;
 }
 
+static Stmt* import_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_IMPORT;
+  stmt->import.keyword = advance();
+  stmt->import.filename = TOKEN_EMPTY();
+
+  Token start_token = peek();
+  Expr* value = expression();
+  Token end_token = previous();
+
+  stmt->import.filename = combine_tokens(start_token, end_token);
+
+  if (value->type == EXPR_LITERAL && value->literal.data_type.type == TYPE_STRING)
+  {
+    stmt->import.filename.lexeme = value->literal.string.data;
+    stmt->import.filename.length = value->literal.string.length;
+  }
+  else
+  {
+    error(stmt->import.keyword, "Expected a string literal after 'import'.");
+  }
+
+  consume(TOKEN_NEWLINE, "Expected a newline after import statement.");
+
+  return stmt;
+}
+
 static void statement(ArrayStmt* stmts)
 {
   if (is_data_type_and_identifier())
@@ -1751,6 +1779,9 @@ static void statement(ArrayStmt* stmts)
       break;
     case TOKEN_MATCH:
       array_add(stmts, match_statement());
+      break;
+    case TOKEN_IMPORT:
+      array_add(stmts, import_statement());
       break;
     case TOKEN_INDENT:
       statements(stmts);

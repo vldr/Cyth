@@ -99,6 +99,7 @@ typedef enum
   TOKEN_MATCH,
   TOKEN_CASE,
   TOKEN_DEFAULT,
+  TOKEN_IMPORT,
 
   TOKEN_EOF
 } TokenKind;

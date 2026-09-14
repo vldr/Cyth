@@ -20,6 +20,7 @@
 #include <Windows.h>
 #else
 #define __USE_GNU
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 
@@ -29,6 +30,13 @@
 #include <sys/ucontext.h>
 #endif
 #endif
+
+#define cyth_static_string(name, value)                                                            \
+  static struct                                                                                    \
+  {                                                                                                \
+    int size;                                                                                      \
+    char data[sizeof(value)];                                                                      \
+  } name = { .size = sizeof(value) - 1, .data = value }
 
 array_def(MIR_type_t, MIR_type_t);
 array_def(MIR_var_t, MIR_var_t);
@@ -56,7 +64,8 @@ struct _CY_VM
   MIR_label_t break_label;
   Start start;
 
-  ArrayStmt statements;
+  ArrayArrayStmt statements_list;
+  MapSInt filenames;
   MapS64 typeids;
   MapStrbufMIR_item string_constants;
   MapMIR_item items;
@@ -85,6 +94,7 @@ struct _CY_VM
   void (*error_callback)(const char* filename, int start_line, int start_column, int end_line,
                          int end_column, const char* message);
   void (*panic_callback)(const char* filename, const char* function, int line, int column);
+  int (*import_callback)(CyVM* vm, const char* filename, const char* importer_filename);
 };
 
 static void generate_default_initialization(CyVM* vm, MIR_reg_t dest, DataType data_type);
@@ -111,6 +121,13 @@ static struct sigaction panic_sigsegv;
 static struct sigaction panic_sigfpe;
 static stack_t panic_sigstack;
 #endif
+
+static void error(CyVM* vm, Token token, const char* message)
+{
+  if (vm->error_callback)
+    vm->error_callback(token.filename ? token.filename : "", token.start_line, token.start_column,
+                       token.end_line, token.end_column, message);
+}
 
 static void panic(CyVM* vm, const char* what, uintptr_t pc, uintptr_t fp)
 {
@@ -288,6 +305,39 @@ static void error_callback(const char* filename, int start_line, int start_colum
 {
   fprintf(stderr, "%s%s%d:%d-%d:%d: error: %s\n", filename, *filename ? ":" : "", start_line,
           start_column, end_line, end_column, message);
+}
+
+static int import_callback(CyVM* vm, const char* filename, const char* importer_filename)
+{
+  if (!importer_filename)
+    importer_filename = "";
+
+  int last_index = 0;
+  int index = 0;
+  while (importer_filename[index] != '\0')
+  {
+    if (importer_filename[index] == '/' || importer_filename[index] == '\\')
+      last_index = index + 1;
+
+    index++;
+  }
+
+  bool absolute = false;
+
+#ifdef _WIN32
+  if (isalpha(filename[0]) && filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\'))
+    absolute = true;
+  else if ((filename[0] == '/' || filename[0] == '\\') &&
+           (filename[1] == '/' || filename[1] == '\\'))
+    absolute = true;
+#else
+  absolute = filename[0] == '/';
+#endif
+
+  const char* path =
+    absolute ? filename : memory_sprintf("%.*s%s", last_index, importer_filename, filename);
+
+  return cyth_load_file(vm, path);
 }
 
 static int string_equals(CyString* left, CyString* right)
@@ -5462,6 +5512,8 @@ static void generate_statement(CyVM* vm, Stmt* statement)
   case STMT_FUNCTION_TEMPLATE_DECL:
     generate_function_template_declaration(vm, &statement->func_template);
     return;
+  case STMT_IMPORT:
+    return;
   }
 
   UNREACHABLE("Unhandled statement");
@@ -5710,9 +5762,10 @@ CyVM* cyth_init(void)
   vm->error = 0;
   vm->error_callback = error_callback;
   vm->panic_callback = panic_callback;
+  vm->import_callback = import_callback;
   vm->thunk_addr = MIR_new_import(vm->ctx, "thunk_addr");
   vm->thunk_size = MIR_new_import(vm->ctx, "thunk_size");
-  array_init(&vm->statements);
+  array_init(&vm->statements_list);
 
   MIR_load_external(vm->ctx, "panic", (uintptr_t)panic);
   vm->panic.proto = MIR_new_proto_arr(vm->ctx, "panic.proto", 0, NULL, 4,
@@ -5817,13 +5870,14 @@ CyVM* cyth_init(void)
   map_init_strbuf_mir_item(&vm->string_constants, 0, 0);
   map_init_mir_item(&vm->items, 0, 0);
   map_init_s64(&vm->typeids, 0, 0);
+  map_init_sint(&vm->filenames, 0, 0);
 
   return vm;
 }
 
 int cyth_compile(CyVM* vm)
 {
-  checker_init(vm->statements, vm->error_callback, NULL);
+  checker_init(vm->statements_list, vm->error_callback, NULL);
   checker_validate();
 
   bool result = !checker_errors();
@@ -5842,8 +5896,16 @@ int cyth_compile(CyVM* vm)
         memory_sprintf("%s.%d", global_local->name.lexeme, global_local->index));
     }
 
-    init_statements(vm, &vm->statements);
-    generate_statements(vm, &vm->statements);
+    ArrayStmt statements;
+    array_foreach(&vm->statements_list, statements)
+    {
+      init_statements(vm, &statements);
+    }
+
+    array_foreach(&vm->statements_list, statements)
+    {
+      generate_statements(vm, &statements);
+    }
   }
 
   Function start = generate_function_wrapper(vm, vm->function->u.func, false);
@@ -5929,6 +5991,12 @@ void cyth_set_panic_callback(CyVM* vm,
   vm->panic_callback = panic_callback;
 }
 
+void cyth_set_import_callback(CyVM* vm, int (*import_callback)(CyVM* vm, const char* filename,
+                                                               const char* importer_filename))
+{
+  vm->import_callback = import_callback;
+}
+
 void cyth_set_logging(CyVM* vm, int logging)
 {
   vm->logging = logging;
@@ -5941,9 +6009,7 @@ int cyth_error(CyVM* vm)
 
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
 {
-  const char* signature_copy = memory_strdup(signature);
-
-  lexer_init(signature_copy, signature_copy, vm->error_callback);
+  lexer_init(signature, signature, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5955,13 +6021,25 @@ int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
   if (parser_errors() || statement == NULL)
     return false;
 
-  array_add(&vm->statements, statement);
+  ArrayStmt statements;
+  array_init(&statements);
+  array_add(&statements, statement);
+  array_add(&vm->statements_list, statements);
+
   return true;
 }
 
-int cyth_load_string(CyVM* vm, const char* filename, const char* string)
+int cyth_load_string(CyVM* vm, const char* filename, const char* source)
 {
-  lexer_init(filename, string, vm->error_callback);
+  if (filename)
+    filename = memory_strdup(filename);
+
+  if (map_get_sint(&vm->filenames, filename))
+    return true;
+
+  map_put_sint(&vm->filenames, filename, true);
+
+  lexer_init(filename, source, vm->error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
@@ -5976,44 +6054,51 @@ int cyth_load_string(CyVM* vm, const char* filename, const char* string)
   Stmt* statement;
   array_foreach(&statements, statement)
   {
-    array_add(&vm->statements, statement);
+    switch (statement->type)
+    {
+    case STMT_IMPORT:
+      if (!vm->import_callback)
+      {
+        error(vm, statement->import.keyword, "Import functionality is not enabled.");
+        return false;
+      }
+
+      if (!vm->import_callback(vm, statement->import.filename.lexeme,
+                               statement->import.filename.filename))
+      {
+        error(vm, statement->import.keyword,
+              memory_sprintf("Failed to import '%s'.", statement->import.filename.lexeme));
+        return false;
+      }
+
+      break;
+    default:
+      break;
+    }
   }
+
+  array_add(&vm->statements_list, statements);
 
   return true;
 }
 
 int cyth_load_file(CyVM* vm, const char* filename)
 {
-  bool result = false;
-  FILE* file = fopen(filename, "rb");
-  if (!file)
-    goto clean_up;
+#ifdef _WIN32
+  char path[_MAX_PATH];
+  if (_fullpath(path, filename, sizeof(path)) == NULL)
+    return false;
+#else
+  char path[PATH_MAX];
+  if (realpath(filename, path) == NULL)
+    return false;
+#endif
 
-  if (fseek(file, 0, SEEK_END) != 0)
-    goto clean_up_file;
+  char* source = memory_read_file(path);
+  if (!source)
+    return false;
 
-  long size = ftell(file);
-  if (size < 0)
-    goto clean_up_file;
-
-  rewind(file);
-
-  char* string = memory_alloc(size + 1);
-  if (!string)
-    goto clean_up_file;
-
-  size_t read_size = fread(string, 1, size, file);
-  if (read_size != (size_t)size)
-    goto clean_up_file;
-
-  string[size] = '\0';
-  result = cyth_load_string(vm, filename, string);
-
-clean_up_file:
-  fclose(file);
-
-clean_up:
-  return result;
+  return cyth_load_string(vm, path, source);
 }
 
 void* cyth_alloc(int atomic, uintptr_t size)

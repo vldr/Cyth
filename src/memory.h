@@ -11,6 +11,7 @@ char* memory_strdup(const char* cstr);
 char* memory_strldup(const char* str, size_t length);
 void* memory_memdup(void* data, size_t size);
 char* memory_sprintf(const char* format, ...);
+char* memory_read_file(const char* path);
 void memory_reset(void);
 void memory_free(void);
 

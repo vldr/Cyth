@@ -161,6 +161,12 @@ typedef struct _MATCH_STMT
   ArrayStmt default_body;
 } MatchStmt;
 
+typedef struct _IMPORT_STMT
+{
+  Token keyword;
+  Token filename;
+} ImportStmt;
+
 struct _STMT
 {
   enum
@@ -172,6 +178,7 @@ struct _STMT
     STMT_IF,
     STMT_WHILE,
     STMT_MATCH,
+    STMT_IMPORT,
     STMT_FUNCTION_DECL,
     STMT_FUNCTION_TEMPLATE_DECL,
     STMT_VARIABLE_DECL,
@@ -191,6 +198,7 @@ struct _STMT
     ContinueStmt cont;
     ClassStmt class;
     MatchStmt match;
+    ImportStmt import;
     ClassTemplateStmt class_template;
   };
 };

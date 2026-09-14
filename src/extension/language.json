@@ -81,7 +81,7 @@
       "patterns": [
         {
           "name": "keyword.control.cyth",
-          "match": "\\b(return|for|while|break|continue|if|else|in|is|match|case|default)\\b"
+          "match": "\\b(import|return|for|while|break|continue|if|else|in|is|match|case|default)\\b"
         }
       ]
     },
@@ -89,7 +89,7 @@
       "patterns": [
         {
           "name": "storage.type.cyth",
-          "match": "\\b(import|class|string|int|any|float|bool|char|void|null|true|false|this|and|or|not|inf|nan)\\b"
+          "match": "\\b(class|string|int|any|float|bool|char|void|null|true|false|this|and|or|not|inf|nan)\\b"
         }
       ]
     },

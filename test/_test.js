@@ -53,7 +53,7 @@ for (const filename of scripts) {
         } : line.replace("#> ", "#>").replace("#>", "").replaceAll("\r", "");
       });
 
-    const process = child_process.spawnSync(executable, ["-"], { input: text });
+    const process = child_process.spawnSync(executable, ["-"], { input: text, cwd: import.meta.dirname });
     const status = process.status;
     const output = process.stdout.toString();
     const errors = process.stderr

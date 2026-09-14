@@ -567,7 +567,6 @@ class Editor {
 
     monaco.languages.setMonarchTokensProvider("cyth", {
       types: [
-        "import",
         "class",
         "string",
         "int",
@@ -586,7 +585,7 @@ class Editor {
         "inf",
         "nan",
       ],
-      keywords: ["return", "for", "while", "break", "continue", "if", "else", "in", "is", "default", "match", "case"],
+      keywords: ["import", "return", "for", "while", "break", "continue", "if", "else", "in", "is", "default", "match", "case"],
       operators: [
         "=",
         ">",
@@ -799,9 +798,8 @@ class Editor {
     Module._cyth_wasm_load_function(this.encodeText("void clearImage(any image, int r, int g, int b)"), module);
     Module._cyth_wasm_load_function(this.encodeText("void setImagePixel(any image, int x, int y, int r, int g, int b)"), module);
     Module._cyth_wasm_load_function(this.encodeText("void drawImage(any image, int x, int y)"), module);
-
-    if (Module._cyth_wasm_load_string(0, text))
-      Module._cyth_wasm_compile(generate, false);
+    Module._cyth_wasm_load_string(0, text);
+    Module._cyth_wasm_compile(generate, false);
   }
 
   goto(lineNumber, column) {

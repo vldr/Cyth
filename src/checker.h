@@ -12,7 +12,7 @@ const char* data_type_to_string(DataType data_type);
 const char* function_data_type_to_string(const char* name, DataType data_type);
 DataType array_data_type_element(DataType array_data_type);
 
-void checker_init(ArrayStmt statements,
+void checker_init(ArrayArrayStmt statements_list,
                   void (*error_callback)(const char* filename, int start_line, int start_column,
                                          int end_line, int end_column, const char* message),
                   void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,

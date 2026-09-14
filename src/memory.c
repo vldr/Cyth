@@ -189,3 +189,37 @@ char* memory_sprintf(const char* format, ...)
 
   return result;
 }
+
+char* memory_read_file(const char* path)
+{
+  char* result = NULL;
+  FILE* file = fopen(path, "rb");
+  if (!file)
+    goto clean_up;
+
+  if (fseek(file, 0, SEEK_END) != 0)
+    goto clean_up_file;
+
+  long size = ftell(file);
+  if (size < 0)
+    goto clean_up_file;
+
+  rewind(file);
+
+  char* string = memory_alloc(size + 1);
+  if (!string)
+    goto clean_up_file;
+
+  size_t read_size = fread(string, 1, size, file);
+  if (read_size != (size_t)size)
+    goto clean_up_file;
+
+  string[size] = '\0';
+  result = string;
+
+clean_up_file:
+  fclose(file);
+
+clean_up:
+  return result;
+}

@@ -47,7 +47,7 @@ for (const filename of scripts) {
         } : line.replace("#< ", "#<").replace("#<", "").replaceAll("\r", "");
       });
 
-    const process = child_process.spawnSync(executable, ["wasm", "-"], { input: text });
+    const process = child_process.spawnSync(executable, ["wasm", "-"], { input: text, cwd: import.meta.dirname });
     const logs = [];
     const status = process.status;
     const bytecode = process.stdout;

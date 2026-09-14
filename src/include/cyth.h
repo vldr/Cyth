@@ -32,11 +32,11 @@ extern "C"
   // [filename] is the name to be associated with the provided source code (will appear in the error
   // callback).
   //
-  // [string] is the source code to be compiled.
+  // [source] is the source code to be compiled.
   //
-  // This function will return 1 if the file was successfully loaded, or return 0, if an error has
-  // occurred (which will also call the error callback).
-  int cyth_load_string(CyVM* vm, const char* filename, const char* string);
+  // This function will return 1 if the string was successfully loaded, or return 0, if an
+  // error has occurred (which will also call the error callback).
+  int cyth_load_string(CyVM* vm, const char* filename, const char* source);
 
   // Loads a file to compile.
   //
@@ -104,14 +104,15 @@ extern "C"
   //
   // It is 1, if the memory you're allocating does NOT contain any pointers.
   //
-  // If you're confused, just pass 0 always.
+  // If you're confused, just pass 0 always (though performance will suffer).
   //
   // [size] is the size in bytes to allocate.
   void* cyth_alloc(int atomic, uintptr_t size);
 
   // Sets the error callback function.
   //
-  // Using this function is optional, Cyth will use a default error callback function.
+  // Using this function is optional, Cyth will use a default error callback function that will
+  // print error messages to the terminal.
   //
   // [error_callback] will be called when a compilation error occurs.
   void cyth_set_error_callback(CyVM* vm,
@@ -121,7 +122,8 @@ extern "C"
 
   // Sets the panic callback function.
   //
-  // Using this function is optional, Cyth will use a default panic callback function.
+  // Using this function is optional, Cyth will use a default panic callback function that will
+  // print panics to the terminal.
   //
   // [panic_callback] will be called when a runtime error occurs.
   //
@@ -133,6 +135,26 @@ extern "C"
   void cyth_set_panic_callback(CyVM* vm,
                                void (*panic_callback)(const char* filename, const char* function,
                                                       int line, int column));
+
+  // Sets the import callback function.
+  //
+  // Using this function is optional, Cyth will use a default import callback function that will
+  // read files from the filesystem.
+  //
+  // You can disable the ability to import files, by calling "cyth_set_import_callback" with a
+  // NULL argument.
+  //
+  // [import_callback] will be called when importing a file.
+  //
+  // Inside the callback, you must call either "cyth_load_string" or "cyth_load_file". The callback
+  // must return 1, if the import operation was successful, otherwise return 0 (this will also
+  // trigger a call to the error callback).
+  //
+  // The filename passed to "cyth_load_string" or "cyth_load_file" is important. Cyth ignores
+  // repeated imports with the same filename. Make sure import paths that refer to the same file are
+  // resolved to the same filename.
+  void cyth_set_import_callback(CyVM* vm, int (*import_callback)(CyVM* vm, const char* filename,
+                                                                 const char* importer_filename));
 
   // Enable/disable logging.
   //
@@ -202,14 +224,6 @@ extern "C"
   // This function should always be called after calling a Cyth function. This includes functions
   // obtained from "cyth_get_function" and function pointers.
   int cyth_error(CyVM* vm);
-
-  // Declares a static Cyth string variable with the [name] and [value].
-#define cyth_static_string(name, value)                                                            \
-  static struct                                                                                    \
-  {                                                                                                \
-    int size;                                                                                      \
-    char data[sizeof(value)];                                                                      \
-  } name = { .size = sizeof(value) - 1, .data = value }
 
 #ifdef WASM
   // Initializes WASM compilation.
@@ -285,6 +299,25 @@ extern "C"
   void cyth_wasm_set_link_callback(void (*link_callback)(const char* ref_filename, int ref_line,
                                                          int ref_column, const char* def_filename,
                                                          int def_line, int def_column, int length));
+
+  // Sets the import callback function.
+  //
+  // Using this function is optional, by default import functionality is disabled.
+  //
+  // You can disable the ability to import files, by calling "cyth_wasm_set_import_callback" with a
+  // NULL argument.
+  //
+  // [import_callback] will be called when importing a file.
+  //
+  // Inside the callback, you must call either "cyth_load_string" or "cyth_load_file". The callback
+  // must return 1, if the import operation was successful, otherwise return 0 (this will also
+  // trigger a call to the error callback).
+  //
+  // The filename passed to "cyth_load_string" or "cyth_load_file" is important. Cyth ignores
+  // repeated imports with the same filename. Make sure import paths that refer to the same file are
+  // resolved to the same filename.
+  void cyth_wasm_set_import_callback(int (*import_callback)(const char* filename,
+                                                            const char* importer_filename));
 #endif
 #ifdef __cplusplus
 }

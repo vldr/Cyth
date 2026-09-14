@@ -72,7 +72,7 @@ static void finalize_type_builder(ArrayTypeBuilderSubtype* subtypes,
 
 static struct
 {
-  ArrayStmt statements;
+  ArrayArrayStmt statements_list;
 
   BinaryenModuleRef module;
   BinaryenType class;
@@ -83,6 +83,7 @@ static struct
   BinaryenType string_type;
   MapStrbufInt string_constants;
   ArrayDebugInfo debug_info;
+  MapSInt filenames;
   const char* function;
   int strings;
   int loop;
@@ -92,7 +93,15 @@ static struct
   void (*result_callback)(size_t size, void* data, size_t source_map_size, void* source_map);
   void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,
                         const char* def_filename, int def_line, int def_column, int length);
+  int (*import_callback)(const char* filename, const char* importer_filename);
 } codegen;
+
+static void error(Token token, const char* message)
+{
+  if (codegen.error_callback)
+    codegen.error_callback(token.filename ? token.filename : "", token.start_line,
+                           token.start_column, token.end_line, token.end_column, message);
+}
 
 static const char* get_function_member(DataType data_type, const char* name)
 {
@@ -5127,6 +5136,7 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
     return generate_function_template_declaration(&statement->func_template);
   case STMT_CLASS_TEMPLATE_DECL:
   case STMT_CLASS_DECL:
+  case STMT_IMPORT:
     return NULL;
   }
 
@@ -5144,6 +5154,29 @@ static BinaryenExpressionRef generate_statements(ArrayStmt* statements)
     BinaryenExpressionRef ref = generate_statement(statement);
     if (ref)
       array_add(&list, ref);
+  }
+
+  BinaryenExpressionRef block =
+    BinaryenBlock(codegen.module, NULL, list.elems, list.size, BinaryenTypeAuto());
+
+  return block;
+}
+
+static BinaryenExpressionRef generate_statements_list(void)
+{
+  ArrayBinaryenExpressionRef list;
+  array_init(&list);
+
+  ArrayStmt statements;
+  array_foreach(&codegen.statements_list, statements)
+  {
+    Stmt* statement;
+    array_foreach(&statements, statement)
+    {
+      BinaryenExpressionRef ref = generate_statement(statement);
+      if (ref)
+        array_add(&list, ref);
+    }
   }
 
   BinaryenExpressionRef block =
@@ -5181,34 +5214,59 @@ static void generate_class_statements(ArrayStmt* statements)
 
 void cyth_wasm_init(void)
 {
-  array_init(&codegen.statements);
+  array_init(&codegen.statements_list);
+  map_init_sint(&codegen.filenames, 0, 0);
 }
 
 int cyth_wasm_load_string(const char* filename, const char* string)
 {
+  if (filename)
+    filename = memory_strdup(filename);
+
+  if (map_get_sint(&codegen.filenames, filename))
+    return true;
+
+  map_put_sint(&codegen.filenames, filename, true);
+
   lexer_init(filename, string, codegen.error_callback);
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
-  {
-    memory_reset();
     return false;
-  }
 
   parser_init(tokens, codegen.error_callback);
   ArrayStmt statements = parser_parse();
 
   if (parser_errors())
-  {
-    memory_reset();
     return false;
-  }
 
   Stmt* statement;
   array_foreach(&statements, statement)
   {
-    array_add(&codegen.statements, statement);
+    switch (statement->type)
+    {
+    case STMT_IMPORT:
+      if (!codegen.import_callback)
+      {
+        error(statement->import.keyword, "Import functionality is not enabled.");
+        return false;
+      }
+
+      if (!codegen.import_callback(statement->import.filename.lexeme,
+                                   statement->import.filename.filename))
+      {
+        error(statement->import.keyword,
+              memory_sprintf("Failed to import '%s'.", statement->import.filename.lexeme));
+        return false;
+      }
+
+      break;
+    default:
+      break;
+    }
   }
+
+  array_add(&codegen.statements_list, statements);
 
   return true;
 }
@@ -5219,27 +5277,25 @@ int cyth_wasm_load_function(const char* signature, const char* module)
   ArrayToken tokens = lexer_scan();
 
   if (lexer_errors())
-  {
-    memory_reset();
     return false;
-  }
 
   parser_init(tokens, codegen.error_callback);
   Stmt* statement = parser_parse_import_function_declaration_statement(module);
 
   if (parser_errors() || statement == NULL)
-  {
-    memory_reset();
     return false;
-  }
 
-  array_add(&codegen.statements, statement);
+  ArrayStmt statements;
+  array_init(&statements);
+  array_add(&statements, statement);
+  array_add(&codegen.statements_list, statements);
+
   return true;
 }
 
 int cyth_wasm_compile(int compile, int logging)
 {
-  checker_init(codegen.statements, codegen.error_callback, codegen.link_callback);
+  checker_init(codegen.statements_list, codegen.error_callback, codegen.link_callback);
   checker_validate();
 
   bool result = !checker_errors();
@@ -5275,7 +5331,13 @@ int cyth_wasm_compile(int compile, int logging)
     map_put_string_binaryen_heap_type(&codegen.heap_types, "char[]", codegen.char_array_heap_type);
   }
 
-  generate_class_statements(&codegen.statements);
+  {
+    ArrayStmt statements;
+    array_foreach(&codegen.statements_list, statements)
+    {
+      generate_class_statements(&statements);
+    }
+  }
 
   VarStmt* statement;
   ArrayVarStmt statements = checker_global_locals();
@@ -5289,7 +5351,7 @@ int cyth_wasm_compile(int compile, int logging)
     BinaryenAddFunction(codegen.module, codegen.function, BinaryenTypeNone(), BinaryenTypeNone(),
                         codegen.global_local_types.elems, codegen.global_local_types.size, NULL);
 
-  BinaryenExpressionRef body = generate_statements(&codegen.statements);
+  BinaryenExpressionRef body = generate_statements_list();
   BinaryenFunctionSetBody(start_function, body);
 
   BinaryenAddFunctionExport(codegen.module, codegen.function, codegen.function);
@@ -5349,4 +5411,10 @@ void cyth_wasm_set_link_callback(void (*link_callback)(const char* ref_filename,
                                                        int def_line, int def_column, int length))
 {
   codegen.link_callback = link_callback;
+}
+
+void cyth_wasm_set_import_callback(int (*import_callback)(const char* filename,
+                                                          const char* importer_filename))
+{
+  codegen.import_callback = import_callback;
 }

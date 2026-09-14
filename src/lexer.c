@@ -482,6 +482,9 @@ static void literal(void)
       KEYWORD_GROUP('f')
       KEYWORD("if", TOKEN_IF)
 
+      KEYWORD_GROUP('m')
+      KEYWORD("import", TOKEN_IMPORT)
+
       KEYWORD_GROUP('n')
       switch (lexer.start[2])
       {
@@ -827,7 +830,7 @@ void lexer_init(const char* filename, const char* source,
                 void (*error_callback)(const char* filename, int start_line, int start_column,
                                        int end_line, int end_column, const char* message))
 {
-  lexer.filename = filename;
+  lexer.filename = filename ? memory_strdup(filename) : NULL;
   lexer.start = source;
   lexer.current = source;
   lexer.start_line = 1;
@@ -974,6 +977,7 @@ void lexer_print(void)
       "TOKEN_MATCH",
       "TOKEN_CASE",
       "TOKEN_DEFAULT",
+      "TOKEN_IMPORT",
 
       "TOKEN_EOF",
     };

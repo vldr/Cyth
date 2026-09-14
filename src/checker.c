@@ -17,7 +17,7 @@ typedef struct _TOKEN_LINK
 
 static struct
 {
-  ArrayStmt statements;
+  ArrayArrayStmt statements_list;
   ArrayLiteralArrayExpr literal_arrays;
 
   Environment* environment;
@@ -360,6 +360,11 @@ static void error_only_any_and_template_type(Token token, DataType data_type)
 static void error_name_cannot_appear_after_type_when_template_type(Token token)
 {
   error(token, memory_sprintf("A name cannot be appear here when matching on a template type."));
+}
+
+static void error_unexpected_import(Token token)
+{
+  error(token, "An import statement can only appear inside top-level scope.");
 }
 
 static inline int align(int value, int alignment)
@@ -3945,6 +3950,14 @@ static void check_break_statement(BreakStmt* statement)
   }
 }
 
+static void check_import_statement(ImportStmt* statement)
+{
+  if (checker.environment != checker.global_environment)
+  {
+    error_unexpected_import(statement->keyword);
+  }
+}
+
 static void check_if_statement(IfStmt* statement)
 {
   DataType data_type = check_expression(statement->condition);
@@ -4381,6 +4394,9 @@ static void check_statement(Stmt* statement, bool synchronize)
   case STMT_BREAK:
     check_break_statement(&statement->brk);
     return;
+  case STMT_IMPORT:
+    check_import_statement(&statement->import);
+    return;
   case STMT_FUNCTION_DECL:
     check_function_declaration(&statement->func);
     return;
@@ -4432,6 +4448,7 @@ static bool analyze_statement(Stmt* statement)
   case STMT_EXPR:
   case STMT_CONTINUE:
   case STMT_BREAK:
+  case STMT_IMPORT:
   case STMT_FUNCTION_DECL:
   case STMT_VARIABLE_DECL:
   case STMT_CLASS_DECL:
@@ -4477,13 +4494,16 @@ static void init_globals(void)
                            variable);
 }
 
-void checker_init(ArrayStmt statements,
+void checker_init(ArrayArrayStmt statements_list,
                   void (*error_callback)(const char* filename, int start_line, int start_column,
                                          int end_line, int end_column, const char* message),
                   void (*link_callback)(const char* ref_filename, int ref_line, int ref_column,
                                         const char* def_filename, int def_line, int def_column,
                                         int length))
 {
+  checker.statements_list = statements_list;
+  checker.error_callback = error_callback;
+  checker.link_callback = link_callback;
   checker.function = NULL;
   checker.template = NULL;
   checker.class = NULL;
@@ -4493,12 +4513,8 @@ void checker_init(ArrayStmt statements,
   checker.cond = NULL;
   checker.assignment = NULL;
   checker.call = NULL;
-  checker.statements = statements;
-
   checker.errors = 0;
   checker.error = false;
-  checker.error_callback = error_callback;
-  checker.link_callback = link_callback;
 
   checker.environment = environment_init(NULL);
   checker.global_environment = checker.environment;
@@ -4516,67 +4532,82 @@ int checker_errors(void)
 
 void checker_validate(void)
 {
-  Stmt* statement;
-
-  array_foreach(&checker.statements, statement)
+  ArrayStmt statements;
+  array_foreach(&checker.statements_list, statements)
   {
-    checker.error = false;
-
-    switch (statement->type)
+    Stmt* statement;
+    array_foreach(&statements, statement)
     {
-    case STMT_CLASS_DECL:
-      init_class_declaration(&statement->class);
-      break;
-    case STMT_CLASS_TEMPLATE_DECL:
-      init_class_template_declaration(&statement->class_template);
-      break;
-    case STMT_FUNCTION_TEMPLATE_DECL:
-      init_function_template_declaration(&statement->func_template);
-      break;
+      checker.error = false;
 
-    default:
-      break;
+      switch (statement->type)
+      {
+      case STMT_CLASS_DECL:
+        init_class_declaration(&statement->class);
+        break;
+      case STMT_CLASS_TEMPLATE_DECL:
+        init_class_template_declaration(&statement->class_template);
+        break;
+      case STMT_FUNCTION_TEMPLATE_DECL:
+        init_function_template_declaration(&statement->func_template);
+        break;
+
+      default:
+        break;
+      }
     }
   }
 
-  array_foreach(&checker.statements, statement)
+  array_foreach(&checker.statements_list, statements)
   {
-    checker.error = false;
-
-    switch (statement->type)
+    Stmt* statement;
+    array_foreach(&statements, statement)
     {
-    case STMT_FUNCTION_DECL:
-      init_function_declaration(&statement->func);
-      break;
-    case STMT_CLASS_DECL:
-      init_class_declaration_body(&statement->class);
-      break;
-    case STMT_VARIABLE_DECL:
-      init_variable_declaration(&statement->var);
-      break;
+      checker.error = false;
 
-    default:
-      break;
+      switch (statement->type)
+      {
+      case STMT_FUNCTION_DECL:
+        init_function_declaration(&statement->func);
+        break;
+      case STMT_CLASS_DECL:
+        init_class_declaration_body(&statement->class);
+        break;
+      case STMT_VARIABLE_DECL:
+        init_variable_declaration(&statement->var);
+        break;
+
+      default:
+        break;
+      }
     }
   }
 
-  array_foreach(&checker.statements, statement)
+  array_foreach(&checker.statements_list, statements)
   {
-    check_statement(statement, true);
+    Stmt* statement;
+    array_foreach(&statements, statement)
+    {
+      check_statement(statement, true);
+    }
   }
 
-  array_foreach(&checker.statements, statement)
+  array_foreach(&checker.statements_list, statements)
   {
-    checker.error = false;
-
-    switch (statement->type)
+    Stmt* statement;
+    array_foreach(&statements, statement)
     {
-    case STMT_CLASS_TEMPLATE_DECL:
-      check_class_template_declaration(&statement->class_template);
-      break;
+      checker.error = false;
 
-    default:
-      break;
+      switch (statement->type)
+      {
+      case STMT_CLASS_TEMPLATE_DECL:
+        check_class_template_declaration(&statement->class_template);
+        break;
+
+      default:
+        break;
+      }
     }
   }
 

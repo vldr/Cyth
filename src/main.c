@@ -91,6 +91,45 @@ static void error_callback(const char* filename, int start_line, int start_colum
 }
 
 #ifdef WASM
+static int import_callback(const char* filename, const char* importer_filename)
+{
+  if (!importer_filename)
+    importer_filename = "";
+
+  int last_index = 0;
+  int index = 0;
+  while (importer_filename[index] != '\0')
+  {
+    if (importer_filename[index] == '/' || importer_filename[index] == '\\')
+      last_index = index + 1;
+
+    index++;
+  }
+
+  bool absolute = false;
+
+#ifdef _WIN32
+  if (isalpha(filename[0]) && filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\'))
+    absolute = true;
+  else if ((filename[0] == '/' || filename[0] == '\\') &&
+           (filename[1] == '/' || filename[1] == '\\'))
+    absolute = true;
+#else
+  absolute = filename[0] == '/';
+#endif
+
+  const char* path =
+    absolute ? filename : memory_sprintf("%.*s%s", last_index, importer_filename, filename);
+
+  char* source = memory_read_file(path);
+  if (!source)
+  {
+    return false;
+  }
+
+  return cyth_wasm_load_string(path, source);
+}
+
 static void result_callback(size_t size, void* data, size_t source_map_size, void* source_map)
 {
   (void)source_map_size;
@@ -139,14 +178,14 @@ void run(char* source)
     cyth_wasm_init();
     cyth_wasm_set_error_callback(error_callback);
     cyth_wasm_set_result_callback(result_callback);
+    cyth_wasm_set_import_callback(import_callback);
     cyth_wasm_load_function("void log(int n)", "env");
     cyth_wasm_load_function("void log(bool n)", "env");
     cyth_wasm_load_function("void log(float n)", "env");
     cyth_wasm_load_function("void log(char n)", "env");
     cyth_wasm_load_function("void log(string n)", "env");
-
-    if (cyth_wasm_load_string(cyth.input_path, source))
-      cyth_wasm_compile(true, cyth.logging);
+    cyth_wasm_load_string(cyth.input_path, source);
+    cyth_wasm_compile(true, cyth.logging);
   }
   else
 #endif
@@ -214,8 +253,8 @@ static void run_file(void)
       return;
     }
 
-    FILE* file = fopen(cyth.input_path, "rb");
-    if (!file)
+    char* source = memory_read_file(cyth.input_path);
+    if (!source)
     {
       fprintf(stderr, "error: could not open file: %s\n", cyth.input_path);
 
@@ -223,23 +262,6 @@ static void run_file(void)
       return;
     }
 
-    fseek(file, 0L, SEEK_END);
-    size_t file_size = ftell(file);
-    rewind(file);
-
-    char* source = memory_alloc(file_size + 1);
-    source[file_size] = '\0';
-
-    size_t bytes_read = fread(source, sizeof(unsigned char), file_size, file);
-    if (file_size != bytes_read)
-    {
-      fprintf(stderr, "error: could not read file: %s\n", cyth.input_path);
-
-      cyth.error = true;
-      return;
-    }
-
-    fclose(file);
     run(source);
   }
 }

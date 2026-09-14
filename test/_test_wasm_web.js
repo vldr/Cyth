@@ -1,4 +1,5 @@
 import test from "node:test";
+import fss from "node:fs";
 import assert from "assert";
 import path from "path";
 import fs from "fs/promises";
@@ -35,6 +36,21 @@ cyth._cyth_wasm_set_error_callback(
   )
 );
 
+cyth._cyth_wasm_set_import_callback(
+  cyth.addFunction(
+    (filename, importerFilename) => {
+      filename = cyth.UTF8ToString(filename);
+
+      const filePath = path.join(import.meta.dirname, filename);
+      if (!fss.existsSync(filePath))
+        return false;
+
+      return cyth._cyth_wasm_load_string(encodeText(filename), encodeText(fss.readFileSync(filePath)))
+    },
+    "iii"
+  )
+);
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8");
 
@@ -62,7 +78,7 @@ const files = await fs.readdir(import.meta.dirname);
 const scripts = process.env.FILE ? process.env.FILE.split(",").filter(Boolean) : files.filter((f) => f.endsWith(".cy"));
 
 for (const filename of scripts) {
-  await test(filename + " (wasm)", async () => {
+  await test(filename + " (web)", async () => {
     checkPointer = true;
 
     const fullPath = path.join(import.meta.dirname, filename);
@@ -108,9 +124,8 @@ for (const filename of scripts) {
     cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
     cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
     cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
-
-    if (cyth._cyth_wasm_load_string(encodeText(filename), encodeText(text)))
-      cyth._cyth_wasm_compile(true, false);
+    cyth._cyth_wasm_load_string(encodeText(filename), encodeText(text));
+    cyth._cyth_wasm_compile(true, false);
 
     if (errors.length === 0) {
       function log(output) {

@@ -89,12 +89,12 @@ static void error(Token token, const char* message)
   checker.errors++;
 }
 
-static void link(Token reference, Token definition, int length)
+static void link(Token reference, Token definition, int reference_length)
 {
   if (checker.link_callback)
     checker.link_callback(reference.filename ? reference.filename : "", reference.start_line,
                           reference.start_column, definition.filename ? definition.filename : "",
-                          definition.start_line, definition.start_column, length);
+                          definition.start_line, definition.start_column, reference_length);
 }
 
 static void error_type_mismatch(Token token, DataType expected, DataType got)
@@ -3955,7 +3955,19 @@ static void check_import_statement(ImportStmt* statement)
   if (checker.environment != checker.global_environment)
   {
     error_unexpected_import(statement->keyword);
+    return;
   }
+
+  Token definition;
+  definition.type = TOKEN_NONE;
+  definition.start_line = 1;
+  definition.start_column = 1;
+  definition.end_line = 1;
+  definition.end_column = 1;
+  definition.filename = statement->filename.lexeme;
+  definition.length = statement->filename.length;
+
+  link(statement->filename, definition, statement->filename.length + 2);
 }
 
 static void check_if_statement(IfStmt* statement)

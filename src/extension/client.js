@@ -47,16 +47,26 @@ async function activate(context) {
   cyth._cyth_wasm_set_link_callback(
     cyth.addFunction(
       (refFilename, refLineNumber, refColumn, defFilename, defLineNumber, defColumn, length) => {
-        const document = documents.get(cyth.UTF8ToString(refFilename))
+        refFilename = cyth.UTF8ToString(refFilename);
+        defFilename = cyth.UTF8ToString(defFilename);
+
+        const document = documents.get(refFilename)
         if (!document)
           return;
 
+        try {
+          vscode.Uri.parse(defFilename, true);
+        } catch {
+          defFilename = path.win32.isAbsolute(defFilename) || path.posix.isAbsolute(defFilename) ?
+            vscode.Uri.file(defFilename) : vscode.Uri.joinPath(vscode.Uri.joinPath(vscode.Uri.parse(refFilename), ".."), defFilename);
+        }
+
         document.links.push({
-          refLineNumber: refLineNumber,
-          refColumn: refColumn,
-          defFilename: cyth.UTF8ToString(defFilename),
-          defLineNumber: defLineNumber,
-          defColumn: defColumn,
+          refLineNumber,
+          refColumn,
+          defFilename,
+          defLineNumber,
+          defColumn,
           length,
         });
       },
@@ -185,15 +195,24 @@ async function activate(context) {
 
     const link = findLink(documents.get(uri).links, position);
     if (link) {
-      return new vscode.Location(
-        vscode.Uri.parse(link.defFilename),
-        new vscode.Range(
-          link.defLineNumber - 1,
-          link.defColumn - 1,
-          link.defLineNumber - 1,
-          link.defColumn - 1
-        )
+      const target = new vscode.Range(
+        link.defLineNumber - 1,
+        link.defColumn - 1,
+        link.defLineNumber - 1,
+        link.defColumn - 1
       );
+
+      return [{
+        originSelectionRange: new vscode.Range(
+          link.refLineNumber - 1,
+          link.refColumn - 1,
+          link.refLineNumber - 1,
+          link.refColumn - 1 + link.length
+        ),
+        targetUri: vscode.Uri.parse(link.defFilename),
+        targetRange: target,
+        targetSelectionRange: target
+      }];
     }
   }
 

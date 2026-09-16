@@ -1,4 +1,6 @@
 const vscode = require("vscode");
+const path = require("path");
+const fs = require("fs");
 
 let cythReadyResolve;
 const cythReady = new Promise((resolve) => {
@@ -16,7 +18,10 @@ async function activate(context) {
   const documents = new Map();
   const encoder = new TextEncoder();
   const diagnostics = vscode.languages.createDiagnosticCollection("cyth");
+  const logger = vscode.window.createOutputChannel("Cyth");
+
   context.subscriptions.push(diagnostics);
+  context.subscriptions.push(logger);
 
   cyth._cyth_wasm_set_error_callback(
     cyth.addFunction(
@@ -59,6 +64,29 @@ async function activate(context) {
     )
   );
 
+  cyth._cyth_wasm_set_import_callback(
+    cyth.addFunction(
+      (filename, importerFilename) => {
+        filename = cyth.UTF8ToString(filename);
+        importerFilename = cyth.UTF8ToString(importerFilename);
+
+        const baseUri = vscode.Uri.parse(importerFilename);
+        const resolvedUri = path.win32.isAbsolute(filename) || path.posix.isAbsolute(filename) ?
+          vscode.Uri.file(filename) : vscode.Uri.joinPath(vscode.Uri.joinPath(baseUri, ".."), filename);
+
+        try {
+          const fileContent = fs.readFileSync(resolvedUri.fsPath, 'utf8');
+          const uri = resolvedUri.toString();
+
+          return cyth._cyth_wasm_load_string(encodeText(uri), encodeText(fileContent));
+        } catch {
+          return false;
+        }
+      },
+      "iii"
+    )
+  );
+
   function encodeText(text) {
     const data = encoder.encode(text);
     const offset = cyth._memory_alloc(data.byteLength + 1);
@@ -80,8 +108,7 @@ async function activate(context) {
         links: [],
         linkSorted: false,
       });
-    }
-    else {
+    } else {
       documents.get(uri).errors.length = 0;
       documents.get(uri).links.length = 0;
       documents.get(uri).linkSorted = false;
@@ -177,12 +204,20 @@ async function activate(context) {
     return files[file];
   }
 
+  function validateAll() {
+    for (const document of vscode.workspace.textDocuments) {
+      if (document.languageId === "cyth")
+        validate(document);
+    }
+  }
+
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(validate),
+    vscode.workspace.onDidSaveTextDocument(validateAll),
     vscode.workspace.onDidChangeTextDocument(e => validate(e.document)),
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('cyth'))
-        vscode.workspace.textDocuments.forEach(validate);
+        validateAll()
     }),
     vscode.workspace.onDidCloseTextDocument(doc => {
       documents.delete(doc.uri.toString());
@@ -190,9 +225,9 @@ async function activate(context) {
     }),
   );
 
-  vscode.workspace.textDocuments.forEach(validate);
-  vscode.workspace.registerTextDocumentContentProvider("cyth", { provideTextDocumentContent });
+  validateAll();
 
+  vscode.workspace.registerTextDocumentContentProvider("cyth", { provideTextDocumentContent });
   vscode.languages.registerDefinitionProvider("cyth", { provideDefinition });
   vscode.languages.setLanguageConfiguration("cyth", {
     comments: { lineComment: "#" },

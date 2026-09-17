@@ -54,11 +54,17 @@ async function activate(context) {
         if (!document)
           return;
 
-        try {
-          vscode.Uri.parse(defFilename, true);
-        } catch {
-          defFilename = path.win32.isAbsolute(defFilename) || path.posix.isAbsolute(defFilename) ?
-            vscode.Uri.file(defFilename) : vscode.Uri.joinPath(vscode.Uri.joinPath(vscode.Uri.parse(refFilename), ".."), defFilename);
+        if (path.win32.isAbsolute(defFilename) || path.posix.isAbsolute(defFilename)) {
+          defFilename = vscode.Uri.file(defFilename).toString();
+        } else {
+          try {
+            vscode.Uri.parse(defFilename, true);
+          } catch {
+            defFilename = vscode.Uri.joinPath(
+              vscode.Uri.joinPath(vscode.Uri.parse(refFilename), ".."),
+              defFilename
+            ).toString();
+          }
         }
 
         document.links.push({

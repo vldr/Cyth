@@ -3967,7 +3967,8 @@ static void check_import_statement(ImportStmt* statement)
   definition.filename = statement->filename.lexeme;
   definition.length = statement->filename.length;
 
-  link(statement->filename, definition, statement->filename.length + 2);
+  link(statement->filename, definition,
+       statement->filename.end_column - statement->filename.start_column);
 }
 
 static void check_if_statement(IfStmt* statement)

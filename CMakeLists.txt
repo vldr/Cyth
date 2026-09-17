@@ -38,7 +38,7 @@ if (EMSCRIPTEN)
     )
 
     add_custom_target(package
-        COMMAND npx @vscode/vsce package --allow-missing-repository
+        COMMAND npx @vscode/vsce@3.9.2 package --allow-missing-repository 
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/extension
         DEPENDS cyth
     )

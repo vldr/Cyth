@@ -287,29 +287,59 @@ jobs:
         run: |
           rm -rf build
 
-      - name: Build (MIR)
+      - name: Build (MIR) (ARM64)
         run: |
-          cmake -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
+          cmake -DCMAKE_OSX_ARCHITECTURES="arm64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
           cd build
           make -j3
 
-      - name: Test (MIR)
+      - name: Test (MIR) (ARM64)
         run: |
           cd build
           make test
 
-      - name: Bundle
+      - name: Bundle (ARM64)
+        run: |
+          cp src/include/cyth.h build/
+          cd build
+          zip cyth.zip cyth cyth.h libcyth.a
+
+      - name: Publish (ARM64)
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/cyth.zip
+          asset_name: cyth-macos-arm64.zip
+          tag: build-${{ github.sha }}
+          overwrite: true
+    
+      - name: Clean up
+        run: |
+          rm -rf build
+        
+      - name: Build (MIR) (x64)
+        run: |
+          cmake -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -S . -B build
+          cd build
+          make -j3
+
+      - name: Test (MIR) (x64)
+        run: |
+          cd build
+          make test
+
+      - name: Bundle (x64)
         run: |
           cp src/include/cyth.h build/
           cd build
           zip cyth.zip cyth cyth.h libcyth.a  
 
-      - name: Publish
+      - name: Publish (x64)
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/cyth.zip
-          asset_name: cyth-macos-universal.zip
+          asset_name: cyth-macos-x86_64.zip
           tag: build-${{ github.sha }}
           overwrite: true
 

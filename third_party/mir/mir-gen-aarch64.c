@@ -265,6 +265,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     call_insn->ops[1] = temp_op;
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
+
   for (size_t i = start; i < nops; i++) { /* calculate offset for blk params */
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
@@ -290,11 +291,20 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (int_arg_num + qwords > 8) blk_offset += qwords * 8;
       int_arg_num += qwords;
     } else if (get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code) == MIR_NON_VAR) {
+#if defined(__APPLE__)
+      const MIR_type_t mem_type = MIR_all_blk_type_p(type) ? MIR_T_I64 : type;
+      const size_t alignment = _MIR_type_size(ctx, mem_type);
+
+      blk_offset = (blk_offset + alignment - 1) / alignment * alignment;
+      blk_offset += _MIR_type_size(ctx, mem_type);
+#else
       if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 && blk_offset % 16 != 0)
         blk_offset = (blk_offset + 15) / 16 * 16;
       blk_offset += type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8;
+#endif
     }
   }
+
   blk_offset = (blk_offset + 15) / 16 * 16;
   int_arg_num = fp_arg_num = 0;
   for (size_t i = start; i < nops; i++) {
@@ -373,6 +383,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       curr_prev_call_insn = DLIST_NEXT (MIR_insn_t, new_insn);
       blk_offset += qwords * 8;
     }
+
     if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code)) != MIR_NON_VAR) {
       /* put arguments to argument hard regs */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
@@ -391,9 +402,18 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
+
+#if defined(__APPLE__)
+      mem_type = MIR_all_blk_type_p(type) ? MIR_T_I64 : type;
+
+      const size_t alignment = _MIR_type_size(ctx, mem_type);
+      mem_size = (mem_size + alignment - 1) / alignment * alignment;
+#else
       if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 && mem_size % 16 != 0)
         mem_size = (mem_size + 15) / 16 * 16;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
+#endif
+
       new_insn_code = (type == MIR_T_F    ? MIR_FMOV
                        : type == MIR_T_D  ? MIR_DMOV
                        : type == MIR_T_LD ? MIR_LDMOV
@@ -415,7 +435,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
       create_new_bb_insns (gen_ctx, prev_insn, next_insn, call_insn);
       call_insn->ops[i] = mem_op;
+
+#if defined(__APPLE__)
+      assert(__SIZEOF_LONG_DOUBLE__ == 8);
+      mem_size += _MIR_type_size(ctx, mem_type);
+#else
       mem_size += type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8;
+#endif
+
       if (ext_insn != NULL) gen_add_insn_after (gen_ctx, curr_prev_call_insn, ext_insn);
       curr_prev_call_insn = new_insn;
     }
@@ -820,15 +847,31 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, R8_HARD_REG),
                  _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_VAR, 1));
       }
+
+#if defined(__APPLE__)
+      mem_type = MIR_all_blk_type_p(type) ? MIR_T_I64 : type;
+
+      const size_t alignment = _MIR_type_size(ctx, mem_type);
+      mem_size = (mem_size + alignment - 1) / alignment * alignment;
+#else
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      if (type == MIR_T_LD) mem_size = (mem_size + 15) / 16 * 16;
+      if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 && mem_size % 16 != 0)
+        mem_size = (mem_size + 15) / 16 * 16;
+#endif
+
       new_insn_code = (type == MIR_T_F    ? MIR_FMOV
                        : type == MIR_T_D  ? MIR_DMOV
                        : type == MIR_T_LD ? MIR_LDMOV
                                           : MIR_MOV);
       mem_op = new_hard_reg_mem_op (gen_ctx, anchor, mem_type, mem_size, R8_HARD_REG);
       gen_mov (gen_ctx, anchor, new_insn_code, _MIR_new_var_op (ctx, i + MAX_HARD_REG + 1), mem_op);
-      mem_size += type == MIR_T_LD ? 16 : 8;
+
+#if defined(__APPLE__)
+      assert(__SIZEOF_LONG_DOUBLE__ == 8);
+      mem_size += _MIR_type_size(ctx, mem_type);
+#else
+      mem_size += type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8;
+#endif
     }
   }
   alloca_p = TRUE;

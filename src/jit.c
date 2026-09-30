@@ -556,15 +556,15 @@ static MIR_item_t data_type_to_proto(CyVM* vm, DataType data_type)
     {
       MIR_var_t var;
       var.name = memory_sprintf("%d", _i);
-      var.type = data_type_to_mir_type(parameter_type);
+      var.type = data_type_to_sized_mir_type(parameter_type);
 
       array_add(&vars, var);
     }
 
     item = MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", data_type_to_string(data_type)),
                              return_data_type.type != TYPE_VOID,
-                             (MIR_type_t[]){ data_type_to_mir_type(return_data_type) }, vars.size,
-                             vars.elems);
+                             (MIR_type_t[]){ data_type_to_sized_mir_type(return_data_type) },
+                             vars.size, vars.elems);
 
     map_put_mir_item(&vm->items, name, item);
   }
@@ -724,10 +724,10 @@ static Function* generate_array_push_function(CyVM* vm, DataType data_type,
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
-      { .name = "value", .size = 0, .type = data_type_to_mir_type(element_data_type) }
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "value", .size = 0, .type = data_type_to_sized_mir_type(element_data_type) }
     };
 
     MIR_item_t previous_function = vm->function;
@@ -926,10 +926,12 @@ static Function* generate_array_push_string_function(CyVM* vm, DataType data_typ
   {
     DataType element_data_type = DATA_TYPE(TYPE_CHAR);
 
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
-      { .name = "string_ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) }
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "string_ptr",
+        .size = 0,
+        .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) }
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1037,8 +1039,10 @@ static Function* generate_array_pop_function(CyVM* vm, DataType data_type)
   {
     DataType element_data_type = array_data_type_element(data_type);
 
-    MIR_type_t return_type = data_type_to_mir_type(element_data_type);
-    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
+    MIR_type_t return_type = data_type_to_sized_mir_type(element_data_type);
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) }
+    };
 
     MIR_item_t previous_function = vm->function;
     MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
@@ -1114,8 +1118,10 @@ static Function* generate_array_to_string_function(CyVM* vm, DataType data_type)
   {
     DataType return_data_type = DATA_TYPE(TYPE_STRING);
 
-    MIR_type_t return_type = data_type_to_mir_type(return_data_type);
-    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
+    MIR_type_t return_type = data_type_to_sized_mir_type(return_data_type);
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) }
+    };
 
     MIR_item_t previous_function = vm->function;
     MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
@@ -1189,8 +1195,10 @@ static Function* generate_array_clear_function(CyVM* vm, DataType data_type)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
-    MIR_var_t params[] = { { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) } };
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) }
+    };
 
     MIR_item_t previous_function = vm->function;
     MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
@@ -1232,10 +1240,10 @@ static Function* generate_array_remove_function(CyVM* vm, DataType data_type)
   {
     DataType element_data_type = array_data_type_element(data_type);
 
-    MIR_type_t return_type = data_type_to_mir_type(element_data_type);
+    MIR_type_t return_type = data_type_to_sized_mir_type(element_data_type);
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
-      { .name = "index", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "index", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1344,16 +1352,17 @@ static Function* generate_array_reserve_function(CyVM* vm, DataType data_type)
   {
     DataType element_data_type = array_data_type_element(data_type);
 
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
     ArrayMIR_var_t params;
     array_init(&params);
 
-    MIR_var_t this = { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) };
+    MIR_var_t this = { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) };
     array_add(&params, this);
 
     for (int i = 0; i < *data_type.array.count; i++)
     {
-      MIR_var_t n = { .name = memory_sprintf("n.%d", i), .type = data_type_to_mir_type(data_type) };
+      MIR_var_t n = { .name = memory_sprintf("n.%d", i),
+                      .type = data_type_to_sized_mir_type(data_type) };
       array_add(&params, n);
     }
 
@@ -1495,9 +1504,9 @@ static Function* generate_begin_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_ARRAY)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1546,10 +1555,10 @@ static Function* generate_next_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1599,10 +1608,10 @@ static Function* generate_array_has_next_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1653,10 +1662,10 @@ static Function* generate_string_has_next_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1699,9 +1708,9 @@ static Function* generate_int_hash_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1748,9 +1757,9 @@ static Function* generate_float_hash_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_FLOAT)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1800,9 +1809,9 @@ static Function* generate_float_sqrt_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_FLOAT));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_FLOAT)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_FLOAT)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1863,7 +1872,7 @@ static Function* generate_panic_function(CyVM* vm)
   {
     MIR_type_t return_type = MIR_T_UNDEF;
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -1915,9 +1924,9 @@ static Function* generate_string_hash_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "n", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "n", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -1965,10 +1974,12 @@ static Function* generate_string_index_of_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "haystack", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "haystack",
+        .size = 0,
+        .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2021,10 +2032,12 @@ static Function* generate_string_count_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
     MIR_var_t params[] = {
-      { .name = "haystack", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "haystack",
+        .size = 0,
+        .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "needle", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2115,11 +2128,11 @@ static Function* generate_string_replace_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "old", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "new", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "old", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "new", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2168,9 +2181,9 @@ static Function* generate_string_trim_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2210,10 +2223,10 @@ static Function* generate_string_starts_with_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2253,10 +2266,10 @@ static Function* generate_string_ends_with_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2284,10 +2297,10 @@ static Function* generate_string_contains_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_BOOL));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2396,10 +2409,10 @@ static Function* generate_string_split_function(CyVM* vm, DataType return_data_t
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(return_data_type);
+    MIR_type_t return_type = data_type_to_sized_mir_type(return_data_type);
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "delim", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "delim", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2461,10 +2474,10 @@ static Function* generate_string_join_function(CyVM* vm, DataType array_data_typ
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(array_data_type) },
-      { .name = "delim", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(array_data_type) },
+      { .name = "delim", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2499,9 +2512,9 @@ static Function* generate_string_to_array_function(CyVM* vm, DataType return_dat
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(return_data_type);
+    MIR_type_t return_type = data_type_to_sized_mir_type(return_data_type);
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
     };
 
     function = ALLOC(Function);
@@ -2541,10 +2554,10 @@ static Function* generate_string_pad_function(CyVM* vm)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "pad", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "pad", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
     };
 
     function = ALLOC(Function);
@@ -2569,7 +2582,7 @@ static Function* generate_string_concat_function(CyVM* vm, int count)
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
 
     ArrayMIR_var_t params;
     array_init(&params);
@@ -2578,7 +2591,7 @@ static Function* generate_string_concat_function(CyVM* vm, int count)
     {
       MIR_var_t param;
       param.name = memory_sprintf("n.%d", i);
-      param.type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+      param.type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
 
       array_add(&params, param);
     }
@@ -3451,12 +3464,12 @@ static Function* generate_string_array_cast_function(CyVM* vm, Token token, Data
     DataType element_data_type = array_data_type_element(data_type);
     bool multiline = element_data_type.type == TYPE_ARRAY || element_data_type.type == TYPE_OBJECT;
 
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
-      { .name = "dest", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "depth", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-      { .name = "list", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "dest", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "depth", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "list", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_ARRAY)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -3661,12 +3674,12 @@ static Function* generate_string_object_cast_function(CyVM* vm, Token token, Dat
     list_data_type.array.count = &list_count;
     list_data_type.array.data_type = &list_element_data_type;
 
-    MIR_type_t return_type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING));
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
     MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_mir_type(data_type) },
-      { .name = "dest", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "depth", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_INTEGER)) },
-      { .name = "list", .size = 0, .type = data_type_to_mir_type(DATA_TYPE(TYPE_ARRAY)) },
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "dest", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
+      { .name = "depth", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER)) },
+      { .name = "list", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_ARRAY)) },
     };
 
     MIR_item_t previous_function = vm->function;
@@ -5540,14 +5553,12 @@ static void init_function_declaration(CyVM* vm, FuncStmt* statement)
   {
     MIR_var_t var;
     var.name = memory_sprintf("%s.%d", parameter->name.lexeme, parameter->index);
-    var.type = statement->import ? data_type_to_sized_mir_type(parameter->data_type)
-                                 : data_type_to_mir_type(parameter->data_type);
+    var.type = data_type_to_sized_mir_type(parameter->data_type);
 
     array_add(&vars, var);
   }
 
-  MIR_type_t res_types[] = { statement->import ? data_type_to_sized_mir_type(statement->data_type)
-                                               : data_type_to_mir_type(statement->data_type) };
+  MIR_type_t res_types[] = { data_type_to_sized_mir_type(statement->data_type) };
 
   statement->proto =
     MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", statement->name.lexeme),
@@ -5637,19 +5648,19 @@ static void init_class_declaration(CyVM* vm, ClassStmt* statement)
 
         MIR_var_t var;
         var.name = memory_sprintf("%s.%d", parameter->name.lexeme, parameter->index);
-        var.type = data_type_to_mir_type(parameter->data_type);
+        var.type = data_type_to_sized_mir_type(parameter->data_type);
 
         array_add(&vars, var);
       }
     }
 
     MIR_item_t item = MIR_new_func_arr(
-      vm->ctx, initalizer_name, 1, (MIR_type_t[]){ data_type_to_mir_type(DATA_TYPE(TYPE_OBJECT)) },
-      vars.size, vars.elems);
+      vm->ctx, initalizer_name, 1,
+      (MIR_type_t[]){ data_type_to_sized_mir_type(DATA_TYPE(TYPE_OBJECT)) }, vars.size, vars.elems);
 
     MIR_item_t proto = MIR_new_proto_arr(
       vm->ctx, memory_sprintf("%s.proto", initalizer_name), 1,
-      (MIR_type_t[]){ data_type_to_mir_type(DATA_TYPE(TYPE_OBJECT)) }, vars.size, vars.elems);
+      (MIR_type_t[]){ data_type_to_sized_mir_type(DATA_TYPE(TYPE_OBJECT)) }, vars.size, vars.elems);
 
     if (initializer_function)
     {

@@ -48,6 +48,29 @@ static void log_string(CyString* n)
   putchar('\n');
 }
 
+static void log_test(int a, int b, int c, int d, int e, int f, int g, int h, void* i, char j,
+                     char k, int l)
+{
+  log_int(a);
+  log_int(b);
+  log_int(c);
+  log_int(d);
+  log_int(e);
+  log_int(f);
+  log_int(g);
+  log_int(h);
+  log_int(i == NULL);
+  log_char(j);
+  log_char(k);
+  log_int(l);
+}
+
+static void log_test_callback(void (*callback)(int a, int b, int c, int d, int e, int f, int g,
+                                               int h, void* i, char j, char k, int l))
+{
+  callback(1, 2, 3, 4, 5, 6, 7, 8, NULL, 'A', 'B', 12345678);
+}
+
 static void panic_callback(const char* filename, const char* function, int line, int column)
 {
   if (line && column)
@@ -184,6 +207,11 @@ void run(char* source)
     cyth_wasm_load_function("void log(float n)", "env");
     cyth_wasm_load_function("void log(char n)", "env");
     cyth_wasm_load_function("void log(string n)", "env");
+    cyth_wasm_load_function("void log(int a, int b, int c, int d, int e, int f, int g, int h, any "
+                            "i, char j, char k, int l)",
+                            "env");
+    cyth_wasm_load_function(
+      "void log(void(int, int, int, int, int, int, int, int, any, char, char, int) func)", "env");
     cyth_wasm_load_string(cyth.input_path, source);
     cyth_wasm_compile(true, cyth.logging);
   }
@@ -199,6 +227,13 @@ void run(char* source)
     cyth_load_function(vm, "void log(float n)", (uintptr_t)log_float);
     cyth_load_function(vm, "void log(char n)", (uintptr_t)log_char);
     cyth_load_function(vm, "void log(string n)", (uintptr_t)log_string);
+    cyth_load_function(vm,
+                       "void log(int a, int b, int c, int d, int e, int f, int g, int h, any i, "
+                       "char j, char k, int l)",
+                       (uintptr_t)log_test);
+    cyth_load_function(
+      vm, "void log(void(int, int, int, int, int, int, int, int, any, char, char, int) func)",
+      (uintptr_t)log_test_callback);
     cyth_load_string(vm, cyth.input_path, source);
     cyth_compile(vm);
     cyth_run(vm);

@@ -124,6 +124,8 @@ for (const filename of scripts) {
     cyth._cyth_wasm_load_function(encodeText("void log(float n)"), encodeText("env"));
     cyth._cyth_wasm_load_function(encodeText("void log(char n)"), encodeText("env"));
     cyth._cyth_wasm_load_function(encodeText("void log(string n)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(int a, int b, int c, int d, int e, int f, int g, int h, any i, char j, char k, int l)"), encodeText("env"));
+    cyth._cyth_wasm_load_function(encodeText("void log(void(int, int, int, int, int, int, int, int, any, char, char, int) func)"), encodeText("env"));
     cyth._cyth_wasm_load_string(encodeText(filename), encodeText(text));
     cyth._cyth_wasm_compile(true, false);
 
@@ -146,6 +148,25 @@ for (const filename of scripts) {
         }
       }
 
+      function logTest(a, b, c, d, e, f, g, h, i, j, k, l) {
+        log(a);
+        log(b);
+        log(c);
+        log(d);
+        log(e);
+        log(f);
+        log(g);
+        log(h);
+        log(+(i == null));
+        log(String.fromCharCode(j));
+        log(String.fromCharCode(k));
+        log(l);
+      }
+
+      function logTestCallback(callback) {
+        callback(1, 2, 3, 4, 5, 6, 7, 8, null, 'A'.charCodeAt(0), 'B'.charCodeAt(0), 12345678);
+      }
+
       const result = await WebAssembly.instantiate(bytecode, {
         env: {
           "log.void()": log,
@@ -154,6 +175,8 @@ for (const filename of scripts) {
           "log.void(string)": log,
           "log.void(char)": log,
           "log.void(bool)": log,
+          "log.void(int, int, int, int, int, int, int, int, any, char, char, int)": logTest,
+          "log.void(void(int, int, int, int, int, int, int, int, any, char, char, int))": logTestCallback,
         },
       });
 

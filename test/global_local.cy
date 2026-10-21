@@ -1,7 +1,7 @@
 int i = 10
 log(i)
 
-for int i = 0; i < 3; i += 1
+for int i = 0; i < 3; i++
     for int j = 0; j < 3; j = j + 1
         float k = 10.0
         log(i)

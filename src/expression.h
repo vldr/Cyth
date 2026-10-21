@@ -5,14 +5,14 @@
 #include "map.h"
 
 #define EXPR() (ALLOC(Expr))
-#define BINARY_EXPR(destination, op, l, r)                                                         \
+#define BINARY_EXPR(destination, o, l, r)                                                          \
   do                                                                                               \
   {                                                                                                \
     Expr* _ = EXPR();                                                                              \
     _->type = EXPR_BINARY;                                                                         \
-    _->binary.op = op;                                                                             \
-    _->binary.left = l;                                                                            \
-    _->binary.right = r;                                                                           \
+    _->binary.op = (o);                                                                            \
+    _->binary.left = (l);                                                                          \
+    _->binary.right = (r);                                                                         \
     destination = _;                                                                               \
   } while (0)
 
@@ -21,8 +21,20 @@
   {                                                                                                \
     Expr* _ = EXPR();                                                                              \
     _->type = EXPR_UNARY;                                                                          \
-    _->unary.op = op;                                                                              \
-    _->unary.expr = e;                                                                             \
+    _->unary.op = (op);                                                                            \
+    _->unary.expr = (e);                                                                           \
+    _->unary.postfix_expr = NULL;                                                                  \
+    destination = _;                                                                               \
+  } while (0)
+
+#define UNARY_POSTFIX_EXPR(destination, pp, e, e2)                                                 \
+  do                                                                                               \
+  {                                                                                                \
+    Expr* _ = EXPR();                                                                              \
+    _->type = EXPR_UNARY;                                                                          \
+    _->unary.op = (pp);                                                                            \
+    _->unary.expr = (e);                                                                           \
+    _->unary.postfix_expr = (e2);                                                                  \
     destination = _;                                                                               \
   } while (0)
 
@@ -160,6 +172,7 @@ typedef struct _UNARY_EXPR
 
   Token op;
   Expr* expr;
+  Expr* postfix_expr;
 } UnaryExpr;
 
 typedef struct _GROUP_EXPR

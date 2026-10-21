@@ -4,12 +4,12 @@ float[] b = [3.0, 5.0, 8.0, 1.0, 20.0, 1.0]
 quickSort<int>(a)
 quickSort<float>(b)
 
-for int i = 0; i < a.length; i += 1
+for int i = 0; i < a.length; i++
     log((string)a[i])
 
 log("-------------------------")
 
-for int i = 0; i < b.length; i += 1
+for int i = 0; i < b.length; i++
     log((string)b[i])
 
 # 1

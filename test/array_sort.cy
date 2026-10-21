@@ -52,7 +52,7 @@ void qsort(int l, int h)
 
 qsort(0, array.length - 1)
 
-for int i = 0; i < array.length; i += 1
+for int i = 0; i < array.length; i++
     log(array[i])
 
 # 1

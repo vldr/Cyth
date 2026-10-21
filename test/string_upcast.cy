@@ -14,7 +14,7 @@ log("" + false)
 log("" + 2147483647)
 log("" + -2147483648)
 
-for int i = -10; i <= 10; i += 1
+for int i = -10; i <= 10; i++
     log("" + i)
 
 # 123.625
@@ -63,7 +63,7 @@ log((string)false)
 log((string)2147483647)
 log((string)-2147483648)
 
-for int i = -10; i <= 10; i += 1
+for int i = -10; i <= 10; i++
     log((string)i)
 
 # 123.625

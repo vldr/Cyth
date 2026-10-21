@@ -17,7 +17,7 @@ class Map<K, V>
     bucketCount = 16
     size = 0
 
-    for int i = 0; i < bucketCount; i += 1
+    for int i = 0; i < bucketCount; i++
       buckets.push(null)
 
   void __set__(K key, V value)
@@ -90,10 +90,10 @@ class Map<K, V>
     bucketCount = bucketCount * 2
     size = 0
 
-    for int i = 0; i < bucketCount; i += 1
+    for int i = 0; i < bucketCount; i++
       buckets.push(null)
 
-    for int i = 0; i < oldBuckets.length; i += 1
+    for int i = 0; i < oldBuckets.length; i++
       Entry<K, V> current = oldBuckets[i]
       while current != null
         Entry<K, V> nextEntry = current.next

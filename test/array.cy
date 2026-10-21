@@ -4,12 +4,12 @@ array.push(test)
 
 string[] stack = array[0]
 
-for int i = 0; i < 100; i += 1
+for int i = 0; i < 100; i++
     stack.push((string)i)
     log("Length: " + stack.length)
     log("Capacity: true")
 
-for int i = 0; i < 100; i += 1
+for int i = 0; i < 100; i++
     log(stack[i])
     
     

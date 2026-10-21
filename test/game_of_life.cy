@@ -64,7 +64,7 @@ game.addCell(5, 4)
 game.addCell(4, 4)
 game.addCell(4, 5)
 
-for int i = 0; i < 3; i += 1
+for int i = 0; i < 3; i++
     game.printBoard()
     game.nextGeneration()
 

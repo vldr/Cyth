@@ -1,13 +1,13 @@
 bool generateDiff(int[] nums, int[][] queries, int k)
     int[] diff
 
-    for int i = 0; i < nums.length; i += 1
+    for int i = 0; i < nums.length; i++
         if i == 0
             diff.push(nums[i])
         else
             diff.push(nums[i] - nums[i - 1])
 
-    for int i = 0; i < k; i += 1
+    for int i = 0; i < k; i++
         int l = queries[i][0]
         int r = queries[i][1]
         int val = queries[i][2]
@@ -17,7 +17,7 @@ bool generateDiff(int[] nums, int[][] queries, int k)
         if r + 1 < diff.length
             diff[r + 1] = diff[r + 1] + val
     
-    for int i = 0; i < diff.length; i += 1
+    for int i = 0; i < diff.length; i++
         if i != 0
             diff[i] = diff[i - 1] + diff[i]
 

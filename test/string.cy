@@ -2,7 +2,7 @@ int stringIndexOf(string s, string target)
     if target.length == 0
         return 0
 
-    for int i = 0; i <= s.length - target.length; i += 1
+    for int i = 0; i <= s.length - target.length; i++
         bool mismatch = true
 
         for char c in target
@@ -32,7 +32,7 @@ string stringTrim(string s)
         end -= 1
 
     char[] result
-    for int i = start; i <= end; i += 1
+    for int i = start; i <= end; i++
         result.push(s[i])
 
     return result.toString()

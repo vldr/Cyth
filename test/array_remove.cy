@@ -1,7 +1,7 @@
 int[] a
 
 a = [1,2,3]
-for int i = 0; i < a.length; i += 1
+for int i = 0; i < a.length; i++
     log((string)a)
     log(a.remove(i))
     i -= 1
@@ -22,7 +22,7 @@ log((string)a)
 float[] b
 
 b = [1,2,3]
-for int i = 0; i < b.length; i += 1
+for int i = 0; i < b.length; i++
     log((string)b)
     log(b.remove(i))
     i -= 1

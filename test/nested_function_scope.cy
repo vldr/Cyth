@@ -24,7 +24,7 @@ void hello(int n)
     void test()
         log(n)
 
-for int i = 0; i < 2; i += 1
+for int i = 0; i < 2; i++
     void test()
         log(outer)
         log(i)

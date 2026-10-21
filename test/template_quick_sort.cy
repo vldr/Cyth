@@ -53,12 +53,12 @@ bool comparator(int a, int b)
 QuickSort<int>().sort(a, comparator)
 QuickSort<float>().sort(b, null)
 
-for int i = 0; i < a.length; i += 1
+for int i = 0; i < a.length; i++
     log((string)a[i])
 
 log("-------------------------")
 
-for int i = 0; i < b.length; i += 1
+for int i = 0; i < b.length; i++
     log((string)b[i])
 
 # 1

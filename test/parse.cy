@@ -12,7 +12,7 @@ string stringTrim(string s)
         end -= 1
 
     char[] result
-    for int i = start; i <= end; i += 1
+    for int i = start; i <= end; i++
         result.push(s[i])
 
     return result.toString()

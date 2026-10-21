@@ -3382,6 +3382,9 @@ static void generate_binary_expression(CyVM* vm, MIR_reg_t dest, BinaryExpr* exp
 
 static void generate_unary_expression(CyVM* vm, MIR_reg_t dest, UnaryExpr* expression)
 {
+  if (expression->postfix_expr)
+    generate_expression(vm, dest, expression->postfix_expr);
+
   MIR_reg_t expr =
     _MIR_new_temp_reg(vm->ctx, data_type_to_mir_type(expression->data_type), vm->function->u.func);
   generate_expression(vm, expr, expression->expr);
@@ -3448,6 +3451,10 @@ static void generate_unary_expression(CyVM* vm, MIR_reg_t dest, UnaryExpr* expre
     }
     else
       UNREACHABLE("Unsupported unary type for !");
+
+  case TOKEN_PLUS_PLUS:
+  case TOKEN_MINUS_MINUS:
+    break;
 
   default:
     UNREACHABLE("Unhandled unary expression");
@@ -4117,6 +4124,15 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
   if (expression->to_data_type.type == TYPE_FLOAT &&
       expression->from_data_type.type == TYPE_INTEGER)
   {
+    if (expression->expr->type == EXPR_LITERAL)
+    {
+      MIR_append_insn(
+        vm->ctx, vm->function,
+        MIR_new_insn(vm->ctx, MIR_FMOV, MIR_new_reg_op(vm->ctx, dest),
+                     MIR_new_float_op(vm->ctx, (float)expression->expr->literal.integer)));
+      return;
+    }
+
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_insn(vm->ctx, MIR_I2FS, MIR_new_reg_op(vm->ctx, dest),
                                  MIR_new_reg_op(vm->ctx, expr)));
@@ -5887,6 +5903,9 @@ CyVM* cyth_init(void)
 
 int cyth_compile(CyVM* vm)
 {
+  if (vm->start)
+    return false;
+
   checker_init(vm->statements_list, vm->error_callback, NULL);
   checker_validate();
 

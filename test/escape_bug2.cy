@@ -1,4 +1,4 @@
 
 string a
-for int i = 0; i < 28; i += 1
+for int i = 0; i < 28; i++
     a += "a"

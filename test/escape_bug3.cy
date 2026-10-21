@@ -2,7 +2,7 @@ class Obj
     int x
 
 Obj p = Obj()
-for int i = 1; i <= 10; i += 1
+for int i = 1; i <= 10; i++
     Obj temp = Obj()
     log(p.x)
 

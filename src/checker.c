@@ -2304,7 +2304,8 @@ static DataType check_group_expression(GroupExpr* expression)
 
 static DataType check_unary_expression(UnaryExpr* expression)
 {
-  DataType data_type = check_expression(expression->expr);
+  DataType data_type =
+    check_expression(expression->postfix_expr ? expression->postfix_expr : expression->expr);
   Token op = expression->op;
 
   switch (op.type)
@@ -2335,6 +2336,14 @@ static DataType check_unary_expression(UnaryExpr* expression)
     }
 
     expression->data_type = DATA_TYPE(TYPE_BOOL);
+    break;
+
+  case TOKEN_PLUS_PLUS:
+  case TOKEN_MINUS_MINUS:
+    if (data_type.type != TYPE_INTEGER && data_type.type != TYPE_FLOAT)
+      error_operation_not_defined(op, data_type);
+
+    expression->data_type = check_expression(expression->expr);
     break;
 
   default:

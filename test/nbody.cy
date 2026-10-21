@@ -8,7 +8,7 @@ NBodySystem bodies = NBodySystem()
 log((int)(bodies.energy() * 1000000))
 # -169075
 
-for int i=0; i < N; i += 1
+for int i=0; i < N; i++
     bodies.advance(0.01)
 
 log((int)(bodies.energy() * 1000000))
@@ -31,7 +31,7 @@ class NBodySystem
     float px = 0.0
     float py = 0.0
     float pz = 0.0
-    for int i=0; i < LENGTH; i += 1
+    for int i=0; i < LENGTH; i++
         px += bodies[i].vx * bodies[i].mass
         py += bodies[i].vy * bodies[i].mass
         pz += bodies[i].vz * bodies[i].mass
@@ -41,7 +41,7 @@ class NBodySystem
 
   void advance(float dt) 
     Body[] b = bodies
-    for int i=0; i < LENGTH-1; i += 1
+    for int i=0; i < LENGTH-1; i++
         Body iBody = b[i]
         float iMass = iBody.mass
         float ix = iBody.x
@@ -68,7 +68,7 @@ class NBodySystem
           jBody.vy += dy * iMass * mag
           jBody.vz += dz * iMass * mag
 
-    for int i=0; i < LENGTH; i += 1
+    for int i=0; i < LENGTH; i++
         Body body = b[i]
         body.x += dt * body.vx
         body.y += dt * body.vy
@@ -81,7 +81,7 @@ class NBodySystem
     float distance
     float e = 0.0
 
-    for int i=0; i < bodies.length; i += 1
+    for int i=0; i < bodies.length; i++
         Body iBody = bodies[i]
         e += 0.5 * iBody.mass * (iBody.vx * iBody.vx
                                 + iBody.vy * iBody.vy

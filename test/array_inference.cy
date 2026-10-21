@@ -1,6 +1,6 @@
 class Printer<T>
     void print(T a)
-        for int i = 0; i < a.length; i += 1
+        for int i = 0; i < a.length; i++
             log((string)a[i])
 
 

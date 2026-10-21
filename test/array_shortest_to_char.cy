@@ -2,7 +2,7 @@ int[] shortestToChar(string s, char c)
     int[] list
 
     int ch = -1
-    for int i = 0; i < s.length; i += 1
+    for int i = 0; i < s.length; i++
         if s[i] == c
             ch = i
 
@@ -28,7 +28,7 @@ int[] shortestToChar(string s, char c)
 int[] result = shortestToChar("aaaaaaaaaaaab", 'b')
 
 string buffer
-for int i = 0; i < result.length; i += 1
+for int i = 0; i < result.length; i++
     buffer = buffer + result[i] + " "
 
 log(buffer)

@@ -6,7 +6,7 @@ int maxSquare(int[][] data)
 
   int max
 
-  for int i = 0; i < m; i += 1
+  for int i = 0; i < m; i++
     for int j = 0; j < n; j += 1
       if not data[i][j]
         continue

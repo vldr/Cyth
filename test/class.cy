@@ -76,10 +76,10 @@ int items = 100
 Node node = Node()
 LinkedList list = LinkedList(0, null)
 
-for int i = 0; i < items; i += 1
+for int i = 0; i < items; i++
     list.append(i)
 
-for int i = 0; i < items / 2; i += 1
+for int i = 0; i < items / 2; i++
     list.pop()
     
 list.print()

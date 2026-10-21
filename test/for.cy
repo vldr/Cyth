@@ -36,7 +36,7 @@ for ; i != 3;
 
 i = 0
 
-for ;; i += 1
+for ;; i++
     if i == 3
         break
     
@@ -46,14 +46,14 @@ for ;; i += 1
 # 1
 # 2
 
-for int i = 0; i < 3; i += 1
+for int i = 0; i < 3; i++
     log(i)
 
 # 0
 # 1
 # 2
 
-for int i = 0, string a; i < 3; i += 1
+for int i = 0, string a; i < 3; i++
     a += i
 
     log(a)
@@ -62,14 +62,14 @@ for int i = 0, string a; i < 3; i += 1
 # 01
 # 012
 
-for int i = 0, string a, a += i; a.length <= 3; i += 1, a += i
+for int i = 0, string a, a += i; a.length <= 3; i++, a += i
     log(a)
 
 # 0
 # 01
 # 012
 
-for int i = 0, string a = (string)i; a.length <= 3; i += 1, a += i
+for int i = 0, string a = (string)i; a.length <= 3; i++, a += i
     log(a)
 
 # 0

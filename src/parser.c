@@ -21,7 +21,7 @@ static struct
 
 static void statements(ArrayStmt* stmts);
 static void statement(ArrayStmt* stmts);
-static Expr* prefix_unary(void);
+static Expr* unary(void);
 static Expr* expression(void);
 static DataTypeToken data_type_array_function(bool* skip_greater_greater);
 
@@ -490,7 +490,7 @@ static Expr* primary(void)
       consume(TOKEN_RIGHT_PAREN, "Expected a ')' after type.");
 
       expr->type = EXPR_CAST;
-      expr->cast.expr = prefix_unary();
+      expr->cast.expr = unary();
       expr->cast.type = type;
       expr->cast.to_data_type = DATA_TYPE(TYPE_VOID);
       expr->cast.from_data_type = DATA_TYPE(TYPE_VOID);
@@ -665,30 +665,96 @@ static Expr* call(void)
   return expr;
 }
 
-static Expr* prefix_unary(void)
+static Expr* unary(void)
 {
+  int current = parser.current;
+
   if (match(TOKEN_BANG) || match(TOKEN_NOT) || match(TOKEN_TILDE) || match(TOKEN_MINUS))
   {
     Token op = previous();
-    Expr* expr = prefix_unary();
+    Expr* expr = unary();
 
     Expr* unary;
     UNARY_EXPR(unary, op, expr);
 
     return unary;
   }
+  else if (match(TOKEN_PLUS_PLUS) || match(TOKEN_MINUS_MINUS))
+  {
+    Token op = previous();
+    op.type = op.type == TOKEN_PLUS_PLUS ? TOKEN_PLUS : TOKEN_MINUS;
 
-  return call();
+    Expr* left = unary();
+    Expr* right = EXPR();
+    right->type = EXPR_LITERAL;
+    right->literal.data_type = DATA_TYPE(TYPE_INTEGER);
+    right->literal.integer = 1;
+
+    Expr* binary;
+    BINARY_EXPR(binary, op, left, right);
+
+    seek(current);
+    advance();
+
+    Expr* target = unary();
+    Expr* expr = EXPR();
+    expr->type = EXPR_ASSIGN;
+    expr->assign.op = op;
+    expr->assign.target = target;
+    expr->assign.value = binary;
+    expr->assign.variable = NULL;
+
+    return expr;
+  }
+
+  Expr* expr = call();
+
+  if (match(TOKEN_PLUS_PLUS) || match(TOKEN_MINUS_MINUS))
+  {
+    Token binary_op = previous();
+    binary_op.type = binary_op.type == TOKEN_PLUS_PLUS ? TOKEN_PLUS : TOKEN_MINUS;
+
+    Expr* right = EXPR();
+    right->type = EXPR_LITERAL;
+    right->literal.data_type = DATA_TYPE(TYPE_INTEGER);
+    right->literal.integer = 1;
+
+    Expr* value;
+    BINARY_EXPR(value, binary_op, expr, right);
+
+    seek(current);
+    Expr* target = call();
+    advance();
+
+    Expr* prefix_expr = EXPR();
+    prefix_expr->type = EXPR_ASSIGN;
+    prefix_expr->assign.op = binary_op;
+    prefix_expr->assign.target = target;
+    prefix_expr->assign.value = value;
+    prefix_expr->assign.variable = NULL;
+
+    seek(current);
+    Expr* postfix_expr = call();
+    advance();
+
+    Token unary_op = previous();
+    Expr* unary;
+    UNARY_POSTFIX_EXPR(unary, unary_op, prefix_expr, postfix_expr);
+
+    return unary;
+  }
+
+  return expr;
 }
 
 static Expr* factor(void)
 {
-  Expr* expr = prefix_unary();
+  Expr* expr = unary();
 
   while (match(TOKEN_SLASH) || match(TOKEN_STAR) || match(TOKEN_PERCENT))
   {
     Token op = previous();
-    Expr* right = prefix_unary();
+    Expr* right = unary();
 
     BINARY_EXPR(expr, op, expr, right);
   }

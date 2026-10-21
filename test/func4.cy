@@ -10,7 +10,7 @@ a.push(hello)
 a.push(world)
 a.push((void(string))log)
 
-for int i = 0; i < a.length; i += 1
+for int i = 0; i < a.length; i++
   a[i]("hi")
 
 # hello hi

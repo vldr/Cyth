@@ -22,7 +22,7 @@ class A
 
         hi(10)
 
-        for int i = 0; i < 2; i += 1
+        for int i = 0; i < 2; i++
             int hi(int n)
                 log("2 hi")
 
@@ -30,7 +30,7 @@ class A
 
             hi(10)
 
-            for int i = 0; i < 2; i += 1
+            for int i = 0; i < 2; i++
                 int hi(int n)
                     log("3 hi")
 
@@ -46,7 +46,7 @@ void hello(int n)
 
     hi(10)
 
-    for int i = 0; i < 2; i += 1
+    for int i = 0; i < 2; i++
         int hi(int n)
             log("2 hi")
 
@@ -54,7 +54,7 @@ void hello(int n)
 
         hi(10)
 
-        for int i = 0; i < 2; i += 1
+        for int i = 0; i < 2; i++
             int hi(int n)
                 log("3 hi")
 
@@ -69,7 +69,7 @@ int hi(int n)
 A().hello(10)
 hello(10)
 
-for int i = 0; i < 2; i += 1
+for int i = 0; i < 2; i++
     hi(12)
 
     int hi(int n)

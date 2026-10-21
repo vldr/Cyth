@@ -23,7 +23,7 @@ void merge(int[] nums1, int m, int[] nums2, int n)
 
     index += 1
 
-  for int i = 0; i < nums1.length; i += 1
+  for int i = 0; i < nums1.length; i++
     nums1[i] = numstemp[i]
 
 int[] input = [1,2,3,0,0,0]

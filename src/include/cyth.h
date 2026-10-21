@@ -34,7 +34,7 @@ extern "C"
   //
   // [source] is the source code to be compiled.
   //
-  // This function will return 1 if the string was successfully loaded, or return 0, if an
+  // This function will return 1 if the string was successfully loaded, otherwise return 0, if an
   // error has occurred (which will also call the error callback).
   int cyth_load_string(CyVM* vm, const char* filename, const char* source);
 
@@ -44,8 +44,8 @@ extern "C"
   //
   // [filename] is the path to a file that contains source code to be compiled.
   //
-  // This function will return 1 if the file was successfully loaded, or return 0, if an error has
-  // occurred (which will also call the error callback).
+  // This function will return 1 if the file was successfully loaded, otherwise return 0, if an
+  // error has occurred (which will also call the error callback).
   int cyth_load_file(CyVM* vm, const char* filename);
 
   // Loads an external C function to compile.
@@ -76,35 +76,32 @@ extern "C"
   //
   // After calling this function, you can safely run the generated code.
   //
-  // This function will return 1 if the program was successfully compiled, or return 0, if an error
-  // has occurred (which will also call the error callback).
+  // This function will return 1 if the program was successfully compiled, otherwise return 0, if an
+  // error has occurred (which will also call the error callback).
   int cyth_compile(CyVM* vm);
 
   // Runs the top-level scope of the program (which is called the <start> function).
-  //
-  // Note: calling Cyth code is not thread safe.
   void cyth_run(CyVM* vm);
 
   // Destroys a VM instance.
   //
-  // This MUST be called after calling "cyth_init" and "cyth_compile" respectively.
-  //
-  // After this function is called, it is UNSAFE to run generated code as it will be deleted.
+  // After this function is called, generated code is deleted making it UNSAFE to run.
   void cyth_destroy(CyVM* vm);
 
-  // Allocates a block of memory and returns a pointer to that memory.
+  // Allocates a block of memory and returns a pointer to it.
   //
   // This memory is managed by the garbage collector and will be automatically cleaned up.
   //
-  // Do not store the returned pointer outside the program as the garbage collector won't be able to
-  // find it and might prematurely deallocate it. Only store the returned pointer on the stack.
+  // Cyth uses Boehm GC under the hood; as long as the memory allocated by this function stays on
+  // the stack or in other memory regions allocated by this function, the garbage collector will be
+  // able to find it (it is able to do so because it scans the stack).
   //
   // [atomic] is 0, if the memory you're allocating contains pointers to heap allocated strings,
   // arrays and objects.
   //
   // It is 1, if the memory you're allocating does NOT contain any pointers.
   //
-  // If you're confused, just pass 0 always (though performance will suffer).
+  // If you're unsure, just pass 0 always (though performance will suffer).
   //
   // [size] is the size in bytes to allocate.
   void* cyth_alloc(int atomic, uintptr_t size);
@@ -138,19 +135,18 @@ extern "C"
 
   // Sets the import callback function.
   //
-  // Using this function is optional, Cyth will use a default import callback function that will
-  // read files from the filesystem.
+  // Using this function is optional, by default, Cyth will read files from the filesystem.
   //
-  // You can disable the ability to import files, by calling "cyth_set_import_callback" with a
-  // NULL argument.
+  // You can optionally disable the ability to import files, by calling "cyth_set_import_callback"
+  // with a NULL argument.
   //
   // [import_callback] will be called when importing a file.
   //
   // Inside the callback, you must call either "cyth_load_string" or "cyth_load_file". The callback
   // must return 1, if the import operation was successful, otherwise return 0 (this will also
-  // trigger a call to the error callback).
+  // generate a compile time error).
   //
-  // The filename passed to "cyth_load_string" or "cyth_load_file" is important. Cyth ignores
+  // The filename passed to "cyth_load_string" or "cyth_load_file" is very important. Cyth ignores
   // repeated imports with the same filename. Make sure import paths that refer to the same file are
   // resolved to the same filename.
   void cyth_set_import_callback(CyVM* vm, int (*import_callback)(CyVM* vm, const char* filename,
@@ -161,30 +157,30 @@ extern "C"
   // [logging] is 1, logging is enabled. When 0, logging is disabled.
   void cyth_set_logging(CyVM* vm, int logging);
 
-  // Returns the address to a Cyth function.
+  // Returns an address to a Cyth function.
   //
-  // You MUST call "cyth_run" before calling functions obtained from this function, otherwise global
-  // variables will be uninitialized.
+  // You MUST call "cyth_run" before calling any Cyth function, otherwise global variables
+  // (top-level scope) will be uninitialized.
   //
-  // You should call "cyth_error" after calling a Cyth function to check whether an runtime panic
-  // occurred (see below). If a runtime panic occurred, the return value of the Cyth function will
-  // always be zero or NULL if a pointer.
+  // You should call "cyth_error" after calling a Cyth function to check whether a runtime panic
+  // occurred (see example below). If a runtime panic occurred, the return value of a Cyth
+  // function will always be zero/NULL.
   //
   // [name] must be in the format: <function name>.<type name>
   //
-  // For example, if I have the following Cyth code:
+  // For example, if I have the following Cyth function:
   //
   //    int adder(int a, int b)
   //      return a + b
   //
-  // The corresponding C code would look like:
+  // The corresponding C code to access that function would look like:
   //
   //    typedef int (*Func)(int, int);
   //    Func adder = (Func) cyth_get_function(vm, "adder.int(int, int)");
   //
   //    int sum = adder(10, 10);
   //    if (cyth_error(vm))
-  //      print("Runtime panic!\n");
+  //      print("Runtime panic, don't trust the value in sum!\n");
   //
   uintptr_t cyth_get_function(CyVM* vm, const char* name);
 
@@ -192,24 +188,31 @@ extern "C"
   //
   // This function is similar to "cyth_get_function" except that the function pointer it returns
   // is an unsafe variant, meaning that if you call the Cyth function and a runtime panic occurs,
-  // then your C application will crash alongside the Cyth application.
+  // then your C application can crash alongside the Cyth application.
   //
   // This function is useful if you know that the function you are calling will not panic,
   // or if it does panic, you are already inside the Cyth VM, such as in a callback or "cyth_run".
   uintptr_t cyth_get_function_unsafe(CyVM* vm, const char* name);
+
+  // Returns 1 if a runtime panic has occurred, otherwise returns 0 if no runtime panic has
+  // occurred.
+  //
+  // This function should always be called after calling a Cyth function. This includes functions
+  // obtained from "cyth_get_function" and function pointers.
+  int cyth_error(CyVM* vm);
 
   // Returns the address to memory that contains a global variable (top-level scope).
   //
   // You MUST call "cyth_run" before accessing global variables, otherwise they will be
   // uninitialized.
   //
-  // Note that if a global variable is only read/written within the top-level scope of a program,
-  // and not within other functions, it will be demoted from a global to a local variable and will
-  // not be accessible by this function.
+  // Note that if a global variable is only read/written from within the top-level scope of a
+  // program, and not used in other functions, it will be demoted from a global to a local variable
+  // and you will not be able to access it through this function.
   //
   // [name] must be in the format: <variable name>.<type name>
   //
-  //  For example, if I have the following Cyth code:
+  //  For example, if I have the following Cyth code (assuming the global is used in a function):
   //
   //     int globalVariable = 10
   //
@@ -218,12 +221,6 @@ extern "C"
   //     int* myVariable = (int*) cyth_get_variable(vm, "globalVariable.int");
   //
   uintptr_t cyth_get_variable(CyVM* vm, const char* name);
-
-  // Returns 1 if a runtime panic has occurred, or 0 if no runtime panic has occurred.
-  //
-  // This function should always be called after calling a Cyth function. This includes functions
-  // obtained from "cyth_get_function" and function pointers.
-  int cyth_error(CyVM* vm);
 
 #ifdef WASM
   // Initializes WASM compilation.
@@ -304,18 +301,15 @@ extern "C"
   //
   // Using this function is optional, by default import functionality is disabled.
   //
-  // You can disable the ability to import files, by calling "cyth_wasm_set_import_callback" with a
-  // NULL argument.
-  //
   // [import_callback] will be called when importing a file.
   //
-  // Inside the callback, you must call either "cyth_load_string" or "cyth_load_file". The callback
-  // must return 1, if the import operation was successful, otherwise return 0 (this will also
-  // trigger a call to the error callback).
+  // Inside the callback, you must call "cyth_wasm_load_string". The callback must return 1, if the
+  // import operation was successful, otherwise return 0 (this will also trigger a call to the error
+  // callback).
   //
-  // The filename passed to "cyth_load_string" or "cyth_load_file" is important. Cyth ignores
-  // repeated imports with the same filename. Make sure import paths that refer to the same file are
-  // resolved to the same filename.
+  // The filename passed to "cyth_wasm_load_string" is very important. Cyth ignores repeated imports
+  // with the same filename. Make sure import paths that refer to the same file are resolved to the
+  // same filename.
   void cyth_wasm_set_import_callback(int (*import_callback)(const char* filename,
                                                             const char* importer_filename));
 #endif

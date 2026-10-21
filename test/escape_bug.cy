@@ -4,7 +4,7 @@ class Test
 void test(int n, int target)
   Test result
 
-  for int i = 0; i < n; i += 1
+  for int i = 0; i < n; i++
     Test p = Test()
     p.value = i * 10
 

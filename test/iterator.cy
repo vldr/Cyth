@@ -91,7 +91,7 @@ class Map<K, V>
         values.reserve(bucketCount)
         used.reserve(bucketCount)
 
-        for int i = 0; i < oldCount; i += 1
+        for int i = 0; i < oldCount; i++
             if oldUsed[i]
                 insert(oldKeys[i], oldValues[i])
 

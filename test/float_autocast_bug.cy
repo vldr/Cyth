@@ -3,7 +3,7 @@ raytracer.draw()
 
 float sqrt(float x)
     float z = 1 
-    for int i = 1; i <= 20; i += 1
+    for int i = 1; i <= 20; i++
         z -= (z*z - x) / (2*z)
     return z
     
@@ -39,13 +39,13 @@ float pow(float x, float exp)
   float exp_series(float y)
     float sum = 1
     float term = 1
-    for int i = 1; i <= 40; i += 1
+    for int i = 1; i <= 40; i++
       term = term * (y / (float)i)
       sum = sum + term
     return sum
 
   float ln_x = 0
-  for int i = 0; i < 60; i += 1
+  for int i = 0; i < 60; i++
     float ey = exp_series(ln_x)
     ln_x = ln_x - 1 + x / ey
 
@@ -103,7 +103,7 @@ class Raytracer
     HitRecord closestHit = HitRecord(-1, Vector(0, 0, 0), Vector(0, 0, 0), null)
     float closestSoFar = 10000.0 
 
-    for int i = 0; i < spheres.length; i += 1
+    for int i = 0; i < spheres.length; i++
       HitRecord rec = spheres[i].hit(ray, 0.001, closestSoFar)
       if rec.t > 0
         closestSoFar = rec.t
@@ -121,7 +121,7 @@ class Raytracer
     Vector finalColor = rec.material.color.scale(rec.material.ambient)  
     Vector viewDir = (ray.origin - rec.p).normalized()
 
-    for int i = 0; i < lights.length; i += 1
+    for int i = 0; i < lights.length; i++
       Vector lightDir = (lights[i].position - rec.p).normalized()
       
       Ray shadowRay = Ray(rec.p, lightDir)

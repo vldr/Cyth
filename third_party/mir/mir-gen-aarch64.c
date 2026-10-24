@@ -258,8 +258,8 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     nargs = VARR_LENGTH (MIR_var_t, proto->args);
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
-  if (call_insn->ops[1].mode != MIR_OP_VAR) {
-    // ??? to optimize (can be immediate operand for func call)
+
+  if (call_insn->ops[1].mode == MIR_OP_REF && call_insn->ops[1].u.ref->item_type == MIR_import_item) {
     temp_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
     new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op, call_insn->ops[1]);
     call_insn->ops[1] = temp_op;
@@ -724,6 +724,15 @@ struct label_ref {
 typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
 
+struct call_ref {
+  MIR_func_t source;
+  MIR_func_t target;
+  uint64_t source_offset;
+};
+
+typedef struct call_ref call_ref_t;
+DEF_VARR (call_ref_t);
+
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p, short_bb_branch_p;
   size_t small_aggregate_save_area;
@@ -733,6 +742,7 @@ struct target_ctx {
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
   VARR (label_ref_t) * label_refs;
+  VARR (call_ref_t) * call_refs;
   VARR (uint64_t) * abs_address_locs;
   VARR (MIR_code_reloc_t) * relocs;
 };
@@ -748,6 +758,7 @@ struct target_ctx {
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
 #define label_refs gen_ctx->target_ctx->label_refs
+#define call_refs gen_ctx->target_ctx->call_refs
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
 
@@ -1817,9 +1828,9 @@ static const struct pattern patterns[] = {
   // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
   {MIR_CALL, "X r $", "d63f0000:fffffc1f rn1"},   /* blr *Rn */
-  {MIR_CALL, "X L $", "94000000:fc000000 rn1"},   /* bl address */
+  {MIR_CALL, "X L $", "94000000:fc000000 L"},   /* bl address */
   {MIR_INLINE, "X r $", "d63f0000:fffffc1f rn1"}, /* blr *Rn */
-  {MIR_INLINE, "X L $", "94000000:fc000000 rn1"}, /* bl address */
+  {MIR_INLINE, "X L $", "94000000:fc000000 L"}, /* bl address */
   {MIR_RET, "$", "d65f0000:fffffc1f hn1e"},       /* ret R30  */
 
   {MIR_JCALL, "X r $", "d61f0000:fffffc00 rn1"}, /* br r1 */
@@ -2428,15 +2439,25 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (insn->code == MIR_LADDR || insn->code == MIR_CALL || insn->code == MIR_INLINE) nop = 1;
         op = insn->ops[nop];
         gen_assert (op.mode == MIR_OP_LABEL || (start_ch == 'L' && op.mode == MIR_OP_REF));
-        lr.abs_addr_p = FALSE;
-        lr.short_p = start_ch == 'l';
-        lr.label_val_disp = 0;
-        if (jump_addrs == NULL)
-          lr.u.label = op.u.label;
-        else
-          lr.u.jump_addr = jump_addrs[0];
-        label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
-        VARR_PUSH (label_ref_t, label_refs, lr);
+
+        if (start_ch == 'L' && (insn->code == MIR_CALL || insn->code == MIR_INLINE)) {
+          call_ref_t call_ref;
+          call_ref.target = op.u.ref->u.func;
+          call_ref.source = curr_func_item->u.func;
+          call_ref.source_offset = VARR_LENGTH (uint8_t, result_code);
+
+          VARR_PUSH (call_ref_t, call_refs, call_ref);
+        } else {
+          lr.abs_addr_p = FALSE;
+          lr.short_p = start_ch == 'l';
+          lr.label_val_disp = 0;
+          if (jump_addrs == NULL)
+            lr.u.label = op.u.label;
+          else
+            lr.u.jump_addr = jump_addrs[0];
+          label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
+          VARR_PUSH (label_ref_t, label_refs, lr);
+        }
         break;
       }
       default: gen_assert (FALSE);
@@ -2632,7 +2653,28 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   gen_setup_lrefs (gen_ctx, base);
 }
 
-static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {}
+static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {
+  gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
+
+  for (size_t i = 0; i < VARR_LENGTH (call_ref_t, call_refs); i++) {
+    call_ref_t call_ref = VARR_GET (call_ref_t, call_refs, i);
+    uint8_t* target_address = (uint8_t *)call_ref.target->machine_code;
+    uint8_t* source_address = (uint8_t *)call_ref.source->machine_code + call_ref.source_offset;
+    
+    const int64_t offset = (int64_t)target_address - (int64_t)source_address;
+    if ((offset & 0x3) != 0 || offset < -(1LL << 27) || offset > ((1LL << 27) - 4)) {
+      fprintf (stderr, "fatal failure in changing to direct call, target is out of range\n");
+      exit (1);
+    }
+
+    assert(*(uint32_t*)source_address == 0x94000000);
+
+    const uint32_t opcode = 0x94000000 | ((offset / 4) & 0x3ffffff);
+    _MIR_change_code(ctx, source_address, (uint8_t *) &opcode, sizeof(uint32_t));
+  }
+
+  VARR_TRUNC (call_ref_t, call_refs, 0);
+}
 
 struct target_bb_version {
   uint8_t *base;
@@ -2760,6 +2802,7 @@ static void target_init (gen_ctx_t gen_ctx) {
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, alloc, 0);
   VARR_CREATE (label_ref_t, label_refs, alloc, 0);
+  VARR_CREATE (call_ref_t, call_refs, alloc, 0);
   VARR_CREATE (uint64_t, abs_address_locs, alloc, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, alloc, 0);
   patterns_init (gen_ctx);
@@ -2773,6 +2816,7 @@ static void target_finish (gen_ctx_t gen_ctx) {
   _MIR_free_insn (gen_ctx->ctx, temp_jump);
   VARR_DESTROY (uint8_t, result_code);
   VARR_DESTROY (label_ref_t, label_refs);
+  VARR_DESTROY (call_ref_t, call_refs);
   VARR_DESTROY (uint64_t, abs_address_locs);
   VARR_DESTROY (MIR_code_reloc_t, relocs);
   MIR_free (alloc, gen_ctx->target_ctx);

@@ -29,7 +29,7 @@ class EditorConsole {
     this.consoleTopbar.style.visibility = "visible";
     this.consoleTopbar.style.opacity = "1";
 
-    this.consoleButton.onclick = () => this.onClick();
+    this.consoleButton.onclick = (event) => this.onClick(event);
     this.draggingDelta = 0;
 
     this.consoleDragger.addEventListener("pointerdown", (event) => {
@@ -236,7 +236,9 @@ class EditorConsole {
     }
   }
 
-  onClick() {
+  onClick(event) {
+    event.currentTarget.blur();
+
     if (!this.running) {
       this.start();
     } else {
@@ -568,6 +570,7 @@ class Editor {
     monaco.languages.setMonarchTokensProvider("cyth", {
       types: [
         "class",
+        "alias",
         "string",
         "int",
         "any",

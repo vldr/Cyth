@@ -16,4 +16,3 @@ string C
 #! 10:8-10:9 The name 'C' already exists.
 #! 3:3-3:4 Mismatched types, expected 'class A' but got 'int'.
 #! 7:3-7:4 Mismatched types, expected 'class B<T>' but got 'int'.
-#! 11:2-11:5 Invalid type conversion from 'int' to 'any'.

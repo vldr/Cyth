@@ -100,6 +100,7 @@ typedef enum
   TOKEN_CASE,
   TOKEN_DEFAULT,
   TOKEN_IMPORT,
+  TOKEN_ALIAS,
 
   TOKEN_EOF
 } TokenKind;

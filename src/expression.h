@@ -90,6 +90,7 @@ typedef struct _DATA_TYPE
     struct
     {
       DataTypeToken token;
+      Token name;
       struct _DATA_TYPE* data_type;
     } alias;
 
@@ -227,6 +228,7 @@ typedef struct _CAST_EXPR
   DataType to_data_type;
 
   Expr* expr;
+  bool implicit;
 } CastExpr;
 
 typedef struct _ACCESS_EXPR

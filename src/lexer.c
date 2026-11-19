@@ -415,6 +415,9 @@ static void literal(void)
     switch (lexer.start[1])
     {
     default:
+      KEYWORD_GROUP('l')
+      KEYWORD("alias", TOKEN_ALIAS)
+
       KEYWORD_GROUP('n')
       switch (lexer.start[2])
       {
@@ -978,6 +981,7 @@ void lexer_print(void)
       "TOKEN_CASE",
       "TOKEN_DEFAULT",
       "TOKEN_IMPORT",
+      "TOKEN_ALIAS",
 
       "TOKEN_EOF",
     };

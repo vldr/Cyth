@@ -89,7 +89,7 @@
       "patterns": [
         {
           "name": "storage.type.cyth",
-          "match": "\\b(class|string|int|any|float|bool|char|void|null|true|false|this|and|or|not|inf|nan)\\b"
+          "match": "\\b(alias|class|string|int|any|float|bool|char|void|null|true|false|this|and|or|not|inf|nan)\\b"
         }
       ]
     },

@@ -167,6 +167,15 @@ typedef struct _IMPORT_STMT
   Token filename;
 } ImportStmt;
 
+typedef struct _ALIAS_STMT
+{
+  Token keyword;
+  Token name;
+
+  DataTypeToken data_type_token;
+  DataType data_type;
+} AliasStmt;
+
 struct _STMT
 {
   enum
@@ -179,6 +188,7 @@ struct _STMT
     STMT_WHILE,
     STMT_MATCH,
     STMT_IMPORT,
+    STMT_ALIAS,
     STMT_FUNCTION_DECL,
     STMT_FUNCTION_TEMPLATE_DECL,
     STMT_VARIABLE_DECL,
@@ -199,6 +209,7 @@ struct _STMT
     ClassStmt class;
     MatchStmt match;
     ImportStmt import;
+    AliasStmt alias;
     ClassTemplateStmt class_template;
   };
 };

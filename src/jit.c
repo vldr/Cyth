@@ -4108,17 +4108,100 @@ static void generate_string_cast(CyVM* vm, Token token, MIR_reg_t dest, MIR_reg_
   }
 }
 
+static void generate_any_to_type_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
+                                      DataType to_data_type, Token to_token)
+{
+  MIR_label_t ok_label = MIR_new_label(vm->ctx);
+
+  MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+
+  MIR_append_insn(vm->ctx, vm->function,
+                  MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, id),
+                               MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 48)));
+
+  MIR_append_insn(vm->ctx, vm->function,
+                  MIR_new_insn(vm->ctx, MIR_BEQ, MIR_new_label_op(vm->ctx, ok_label),
+                               MIR_new_reg_op(vm->ctx, id),
+                               MIR_new_int_op(vm->ctx, data_type_to_typeid(vm, to_data_type))));
+
+  generate_panic(vm, "Invalid type cast.", to_token);
+
+  MIR_append_insn(vm->ctx, vm->function, ok_label);
+  MIR_append_insn(vm->ctx, vm->function,
+                  MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, expr),
+                               MIR_new_reg_op(vm->ctx, expr),
+                               MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
+
+  MIR_append_insn(vm->ctx, vm->function,
+                  MIR_new_insn(vm->ctx, to_data_type.type == TYPE_FLOAT ? MIR_U2F : MIR_MOV,
+                               MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
+}
+
+static void generate_type_to_any_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
+                                      DataType from_data_type)
+{
+  if (from_data_type.type == TYPE_FLOAT)
+  {
+    MIR_reg_t bits = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(
+      vm->ctx, vm->function,
+      MIR_new_insn(vm->ctx, MIR_F2U, MIR_new_reg_op(vm->ctx, bits), MIR_new_reg_op(vm->ctx, expr)));
+
+    expr = bits;
+  }
+
+  uint64_t id = data_type_to_typeid(vm, from_data_type) << 48;
+
+  MIR_append_insn(vm->ctx, vm->function,
+                  MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, expr),
+                               MIR_new_reg_op(vm->ctx, expr),
+                               MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
+
+  if (data_type_is_pointer(from_data_type))
+  {
+    MIR_append_insn(
+      vm->ctx, vm->function,
+      MIR_new_insn(vm->ctx, MIR_NEG, MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
+
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_RSH, MIR_new_reg_op(vm->ctx, dest),
+                                 MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, 63)));
+
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
+                                 MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, id)));
+
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_OR, MIR_new_reg_op(vm->ctx, dest),
+                                 MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
+  }
+  else
+  {
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_OR, MIR_new_reg_op(vm->ctx, dest),
+                                 MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, id)));
+  }
+}
+
 static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* expression)
 {
   MIR_type_t type = data_type_to_mir_type(expression->from_data_type);
   MIR_reg_t expr = 0;
 
-  if (type != MIR_T_UNDEF && expression->from_data_type.type != TYPE_FUNCTION &&
-      expression->from_data_type.type != TYPE_FUNCTION_MEMBER &&
-      expression->from_data_type.type != TYPE_FUNCTION_INTERNAL)
+  if (type != MIR_T_UNDEF)
   {
     expr = _MIR_new_temp_reg(vm->ctx, type, vm->function->u.func);
-    generate_expression(vm, expr, expression->expr);
+
+    if (expression->from_data_type.type == TYPE_FUNCTION ||
+        expression->from_data_type.type == TYPE_FUNCTION_MEMBER ||
+        expression->from_data_type.type == TYPE_FUNCTION_INTERNAL)
+    {
+      generate_function_pointer(vm, expr, expression->from_data_type);
+    }
+    else
+    {
+      generate_expression(vm, expr, expression->expr);
+    }
   }
 
   if (expression->to_data_type.type == TYPE_FLOAT &&
@@ -4181,36 +4264,11 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                            expression->from_data_type);
       return;
     }
-    case TYPE_ANY: {
-      MIR_label_t cont_label = MIR_new_label(vm->ctx);
-      MIR_label_t if_false_label = MIR_new_label(vm->ctx);
 
-      MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, id),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 48)));
-
-      MIR_append_insn(
-        vm->ctx, vm->function,
-        MIR_new_insn(vm->ctx, MIR_BNE, MIR_new_label_op(vm->ctx, if_false_label),
-                     MIR_new_reg_op(vm->ctx, id),
-                     MIR_new_int_op(vm->ctx, data_type_to_typeid(vm, expression->to_data_type))));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
-      MIR_append_insn(vm->ctx, vm->function, if_false_label);
-
-      generate_panic(vm, "Invalid type cast to string.", expression->type.token);
-
-      MIR_append_insn(vm->ctx, vm->function, cont_label);
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
       return;
-    }
+
     default:
       break;
     }
@@ -4225,6 +4283,10 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_I2FS, MIR_new_reg_op(vm->ctx, dest),
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      return;
+
     default:
       break;
     }
@@ -4238,6 +4300,10 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_ANDS, MIR_new_reg_op(vm->ctx, dest),
                                    MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0xFF)));
       return;
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      return;
+
     default:
       break;
     }
@@ -4257,6 +4323,10 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                       MIR_new_insn(vm->ctx, MIR_F2IS, MIR_new_reg_op(vm->ctx, dest),
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      return;
+
     default:
       break;
     }
@@ -4290,13 +4360,18 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     case TYPE_ANY:
     case TYPE_NULL:
     case TYPE_OBJECT:
-    case TYPE_FUNCTION_POINTER: {
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_NES, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0)));
+    case TYPE_FUNCTION_POINTER:
+      if (!expression->implicit && expression->from_data_type.type == TYPE_ANY)
+      {
+        generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+        return;
+      }
 
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_NE, MIR_new_reg_op(vm->ctx, dest),
+                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0)));
       return;
-    }
+
     default:
       break;
     }
@@ -4305,33 +4380,20 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_BOOL:
+    case TYPE_CHAR:
+    case TYPE_INTEGER:
+    case TYPE_FLOAT:
     case TYPE_STRING:
     case TYPE_ARRAY:
-    case TYPE_OBJECT: {
-      uint64_t id = data_type_to_typeid(vm, expression->from_data_type) << 48;
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_NE, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_NEG, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, dest)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_OR, MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, id)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_reg_op(vm->ctx, dest)));
+    case TYPE_OBJECT:
+    case TYPE_FUNCTION:
+    case TYPE_FUNCTION_MEMBER:
+    case TYPE_FUNCTION_INTERNAL:
+    case TYPE_FUNCTION_POINTER:
+      generate_type_to_any_cast(vm, dest, expr, expression->from_data_type);
       return;
-    }
+
     case TYPE_NULL:
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_insn(vm->ctx, data_type_to_mov_type(expression->to_data_type),
@@ -4346,36 +4408,10 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
   {
     switch (expression->from_data_type.type)
     {
-    case TYPE_ANY: {
-      MIR_label_t cont_label = MIR_new_label(vm->ctx);
-      MIR_label_t if_false_label = MIR_new_label(vm->ctx);
-
-      MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, id),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 48)));
-
-      MIR_append_insn(
-        vm->ctx, vm->function,
-        MIR_new_insn(vm->ctx, MIR_BNE, MIR_new_label_op(vm->ctx, if_false_label),
-                     MIR_new_reg_op(vm->ctx, id),
-                     MIR_new_int_op(vm->ctx, data_type_to_typeid(vm, expression->to_data_type))));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
-      MIR_append_insn(vm->ctx, vm->function, if_false_label);
-
-      generate_panic(vm, "Invalid type cast to array.", expression->type.token);
-
-      MIR_append_insn(vm->ctx, vm->function, cont_label);
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
       return;
-    }
+
     default:
       break;
     }
@@ -4384,39 +4420,13 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
   {
     switch (expression->from_data_type.type)
     {
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      return;
+
     case TYPE_NULL:
       generate_default_initialization(vm, dest, expression->to_data_type);
       return;
-    case TYPE_ANY: {
-      MIR_label_t cont_label = MIR_new_label(vm->ctx);
-      MIR_label_t if_false_label = MIR_new_label(vm->ctx);
-
-      MIR_reg_t id = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, id),
-                                   MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 48)));
-
-      MIR_append_insn(
-        vm->ctx, vm->function,
-        MIR_new_insn(vm->ctx, MIR_BNE, MIR_new_label_op(vm->ctx, if_false_label),
-                     MIR_new_reg_op(vm->ctx, id),
-                     MIR_new_int_op(vm->ctx, data_type_to_typeid(vm, expression->to_data_type))));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, dest),
-                                   MIR_new_reg_op(vm->ctx, expr),
-                                   MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, cont_label)));
-      MIR_append_insn(vm->ctx, vm->function, if_false_label);
-
-      generate_panic(vm, "Invalid type cast to object.", expression->type.token);
-
-      MIR_append_insn(vm->ctx, vm->function, cont_label);
-      return;
-    }
     default:
       break;
     }
@@ -4428,10 +4438,15 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     case TYPE_FUNCTION:
     case TYPE_FUNCTION_MEMBER:
     case TYPE_FUNCTION_INTERNAL:
-      generate_function_pointer(vm, dest, expression->from_data_type);
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, dest),
+                                   MIR_new_reg_op(vm->ctx, expr)));
       return;
     case TYPE_NULL:
       generate_default_initialization(vm, dest, expression->to_data_type);
+      return;
+    case TYPE_ANY:
+      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -5205,10 +5220,15 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
         uint64_t id = data_type_to_typeid(vm, data_type);
 
         MIR_append_insn(vm->ctx, vm->function, labels.elems[id - minimum_id]);
-        MIR_append_insn(
-          vm->ctx, vm->function,
-          MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, variable_statement->reg),
-                       MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, expr),
+                                     MIR_new_reg_op(vm->ctx, expr),
+                                     MIR_new_int_op(vm->ctx, 0xFFFFFFFFFFFFUL)));
+
+        MIR_append_insn(vm->ctx, vm->function,
+                        MIR_new_insn(vm->ctx, data_type.type == TYPE_FLOAT ? MIR_U2F : MIR_MOV,
+                                     MIR_new_reg_op(vm->ctx, variable_statement->reg),
+                                     MIR_new_reg_op(vm->ctx, expr)));
 
         generate_statements(vm, &body);
 
@@ -5541,6 +5561,7 @@ static void generate_statement(CyVM* vm, Stmt* statement)
     generate_function_template_declaration(vm, &statement->func_template);
     return;
   case STMT_IMPORT:
+  case STMT_ALIAS:
     return;
   }
 

@@ -183,6 +183,7 @@ static Expr* cast_to_array(DataTypeToken type, Expr* expr)
     cast->cast.to_data_type = DATA_TYPE(TYPE_VOID);
     cast->cast.from_data_type = DATA_TYPE(TYPE_VOID);
     cast->cast.type = type;
+    cast->cast.implicit = false;
 
     if (cast->cast.type.type != DATA_TYPE_TOKEN_ARRAY)
     {
@@ -494,6 +495,7 @@ static Expr* primary(void)
       expr->cast.type = type;
       expr->cast.to_data_type = DATA_TYPE(TYPE_VOID);
       expr->cast.from_data_type = DATA_TYPE(TYPE_VOID);
+      expr->cast.implicit = false;
     }
     else
     {
@@ -1798,6 +1800,22 @@ static Stmt* import_statement(void)
   return stmt;
 }
 
+static Stmt* alias_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_ALIAS;
+  stmt->alias.keyword = advance();
+  stmt->alias.name = consume(TOKEN_IDENTIFIER, "Expected name after 'alias' keyword.");
+
+  consume(TOKEN_EQUAL, "Expected a '=' after alias name.");
+
+  stmt->alias.data_type_token = consume_data_type("Expected type after alias name");
+
+  consume(TOKEN_NEWLINE, "Expected a newline after alias statement.");
+
+  return stmt;
+}
+
 static void statement(ArrayStmt* stmts)
 {
   if (is_data_type_and_identifier())
@@ -1848,6 +1866,9 @@ static void statement(ArrayStmt* stmts)
       break;
     case TOKEN_IMPORT:
       array_add(stmts, import_statement());
+      break;
+    case TOKEN_ALIAS:
+      array_add(stmts, alias_statement());
       break;
     case TOKEN_INDENT:
       statements(stmts);

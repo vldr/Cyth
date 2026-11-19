@@ -161,6 +161,7 @@ typedef enum {
                        otherwise, zero is moved into the 1st operand. Used to perform bounds checking. */
   INSN_EL (FSQRT),
   INSN_EL (F2U),
+  INSN_EL (U2F),
 
   /* Used only internally for ARM64 prologue and epilogue  */
   INSN_EL (STP),

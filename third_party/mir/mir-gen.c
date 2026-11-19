@@ -5323,6 +5323,7 @@ static void escape_analysis_finalization(gen_ctx_t gen_ctx, bitmap_t loop_map, b
       (use_insn->code >= MIR_EQ && use_insn->code <= MIR_UBNO) ||
       use_insn->code == MIR_FSQRT ||
       use_insn->code == MIR_F2U ||
+      use_insn->code == MIR_U2F ||
       use_insn->code == MIR_FMOV
     )
     {
@@ -5590,6 +5591,7 @@ static void escape_analysis(gen_ctx_t gen_ctx)
           (use_insn->code >= MIR_EQ && use_insn->code <= MIR_UBNO) ||
           use_insn->code == MIR_FSQRT ||
           use_insn->code == MIR_F2U ||
+          use_insn->code == MIR_U2F ||
           use_insn->code == MIR_FMOV
         )
         {

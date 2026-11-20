@@ -4670,7 +4670,11 @@ static void generate_call_expression(CyVM* vm, MIR_reg_t dest, CallExpr* express
 
   if (expression->callee_data_type.type == TYPE_ALIAS)
   {
-    generate_default_initialization(vm, dest, *expression->callee_data_type.alias.data_type);
+    if (expression->arguments.size)
+      generate_expression(vm, dest, array_at(&expression->arguments, 0));
+    else
+      generate_default_initialization(vm, dest, *expression->callee_data_type.alias.data_type);
+
     return;
   }
   else if (expression->callee_data_type.type == TYPE_FUNCTION_INTERNAL)

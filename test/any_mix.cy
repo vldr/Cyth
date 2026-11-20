@@ -44,4 +44,11 @@ log(((int(int))a)(10))
 
 # 10
 
+void test3()
+    log("test3")
 
+void() fnptr = test3
+a = fnptr
+((void())a)()
+
+# test3

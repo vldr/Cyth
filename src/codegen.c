@@ -4531,7 +4531,10 @@ static BinaryenExpressionRef generate_call_expression(CallExpr* expression)
 
   if (expression->callee_data_type.type == TYPE_ALIAS)
   {
-    return generate_default_initialization(*expression->callee_data_type.alias.data_type);
+    if (expression->arguments.size)
+      return generate_expression(array_at(&expression->arguments, 0));
+    else
+      return generate_default_initialization(*expression->callee_data_type.alias.data_type);
   }
   else if (expression->callee_data_type.type == TYPE_FUNCTION_POINTER)
   {

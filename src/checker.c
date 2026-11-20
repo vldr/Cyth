@@ -289,6 +289,11 @@ static void error_invalid_arity(Token token, int expected, int got)
                               expected == 1 ? "parameter" : "parameters", got));
 }
 
+static void error_invalid_one_or_more_arity(Token token, int got)
+{
+  error(token, memory_sprintf("Expected 0 or 1 parameter but got %d.", got));
+}
+
 static void error_invalid_type_conversion(Token token, DataType from, DataType to)
 {
   error(token, memory_sprintf("Invalid type conversion from '%s' to '%s'.",
@@ -1154,6 +1159,9 @@ static void data_type_token_unalias(ArrayDataTypeToken* types)
 
     if (variable && variable->data_type.type == TYPE_ALIAS)
     {
+      link(array_at(types, i).token, variable->data_type.alias.name,
+           variable->data_type.alias.name.length);
+
       array_at(types, i) = variable->data_type.alias.token;
     }
 
@@ -3078,15 +3086,29 @@ static DataType check_call_expression(CallExpr* expression)
   }
   else if (callee_data_type.type == TYPE_ALIAS)
   {
+    DataType data_type = *callee_data_type.alias.data_type;
+
     int number_of_arguments = array_size(&expression->arguments);
-    if (number_of_arguments > 0)
+    if (number_of_arguments == 1)
     {
-      error_invalid_arity(expression->callee_token, 0, number_of_arguments);
-      return DATA_TYPE(TYPE_VOID);
+      DataType argument_data_type = argument_data_types[0];
+
+      data_type_inference(&expression->arguments.elems[0], &argument_data_type, &data_type);
+
+      if (!equal_data_type(argument_data_type, data_type) &&
+          !assignable_data_type(false, data_type, argument_data_type))
+      {
+        error_type_mismatch(expression->argument_tokens.elems[0], data_type, argument_data_type);
+        checker.error = false;
+      }
+    }
+    else if (number_of_arguments != 0)
+    {
+      error_invalid_one_or_more_arity(expression->callee_token, number_of_arguments);
     }
 
     expression->callee_data_type = callee_data_type;
-    expression->return_data_type = *callee_data_type.alias.data_type;
+    expression->return_data_type = data_type;
 
     return expression->return_data_type;
   }

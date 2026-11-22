@@ -103,7 +103,9 @@ class Map<K, V>
   int getSize()
     return size
 
-Map<int, any> map = Map<int, any>()
+any Thing = Object | int[] | string
+
+Map<int, Thing> map = Map<int, Thing>()
 
 class Object
     int data
@@ -115,9 +117,9 @@ map.set(0, Object(12))
 map.set(1, (int[]) [22, 44, 66])
 map.set(2, "hello world")
 
-map[3] = (any) Object(12)
-map[4] = (any) (int[]) [22, 44, 66]
-map[5] = (any) "hello world"
+map[3] = (Thing) Object(12)
+map[4] = (Thing) (int[]) [22, 44, 66]
+map[5] = (Thing) "hello world"
 
 Object a = (Object) map[0]
 int[] b = (int[]) map[1]

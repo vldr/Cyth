@@ -1980,6 +1980,11 @@ static const char* generate_string_object_cast_function(DataType data_type, Data
       codegen.module, name, params, results, vars_list, sizeof(vars_list) / sizeof_ptr(vars_list),
       BinaryenBlock(codegen.module, NULL, NULL, 0, BinaryenTypeNone()));
 
+    DataType any_data_type = DATA_TYPE(TYPE_ANY);
+    any_data_type.any = ALLOC(AnyStmt);
+    any_data_type.any->name = TOKEN_EMPTY();
+    any_data_type.any->name.lexeme = "any";
+
     BinaryenExpressionRef loop_body_list[] = {
       BinaryenBreak(codegen.module, "string.object_cast.block",
                     BinaryenBinary(codegen.module, BinaryenGeUInt32(), COUNTER(), SIZE()), NULL),
@@ -2089,8 +2094,7 @@ static const char* generate_string_object_cast_function(DataType data_type, Data
 
       loop,
 
-      BinaryenCall(codegen.module,
-                   generate_array_push_function(list_data_type, DATA_TYPE(TYPE_ANY)),
+      BinaryenCall(codegen.module, generate_array_push_function(list_data_type, any_data_type),
                    (BinaryenExpressionRef[]){ LIST(), THIS() }, 2, BinaryenTypeNone()),
 
       BinaryenLocalSet(codegen.module, 3,
@@ -4195,10 +4199,15 @@ static BinaryenExpressionRef generate_cast_expression(CastExpr* expression)
       if (expression->from_data_type.type == TYPE_OBJECT ||
           expression->from_data_type.type == TYPE_ARRAY)
       {
+        DataType any_data_type = DATA_TYPE(TYPE_ANY);
+        any_data_type.any = ALLOC(AnyStmt);
+        any_data_type.any->name = TOKEN_EMPTY();
+        any_data_type.any->name.lexeme = "any";
+
         list_data_type.array.data_type = ALLOC(DataType);
         list_data_type.array.count = ALLOC(unsigned char);
         *list_data_type.array.count = 1;
-        *list_data_type.array.data_type = DATA_TYPE(TYPE_ANY);
+        *list_data_type.array.data_type = any_data_type;
 
         list = generate_default_initialization(list_data_type);
       }
@@ -5298,6 +5307,7 @@ static BinaryenExpressionRef generate_statement(Stmt* statement)
   case STMT_CLASS_DECL:
   case STMT_IMPORT:
   case STMT_ALIAS:
+  case STMT_ANY:
     return NULL;
   }
 

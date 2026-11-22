@@ -155,6 +155,7 @@ typedef struct _MATCH_STMT
   Token keyword;
   DataType data_type;
   Expr* expression;
+  bool default_case;
 
   ArrayArrayStmt match_bodies;
   ArrayVarStmt match_types;
@@ -176,6 +177,15 @@ typedef struct _ALIAS_STMT
   DataType data_type;
 } AliasStmt;
 
+typedef struct _ANY_STMT
+{
+  Token keyword;
+  Token name;
+
+  ArrayDataTypeToken data_type_tokens;
+  ArrayDataType data_types;
+} AnyStmt;
+
 struct _STMT
 {
   enum
@@ -189,6 +199,7 @@ struct _STMT
     STMT_MATCH,
     STMT_IMPORT,
     STMT_ALIAS,
+    STMT_ANY,
     STMT_FUNCTION_DECL,
     STMT_FUNCTION_TEMPLATE_DECL,
     STMT_VARIABLE_DECL,
@@ -210,6 +221,7 @@ struct _STMT
     MatchStmt match;
     ImportStmt import;
     AliasStmt alias;
+    AnyStmt any;
     ClassTemplateStmt class_template;
   };
 };

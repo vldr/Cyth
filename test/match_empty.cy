@@ -1,18 +1,22 @@
 class Value
 
-any produce()
+any Thing = Value
+
+Thing produce()
   log("produce")
   return null
 
 match produce()
+  default
 log("after static")
 
-any value = Value()
+Thing value = Value()
 match value
+  default
 log("after any")
 
 match produce()
-  case string value
+  case Value value
     log("wrong")
   default
     log("default")

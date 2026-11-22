@@ -2,6 +2,7 @@
 #include "array.h"
 #include "expression.h"
 #include "lexer.h"
+#include "memory.h"
 #include "statement.h"
 
 #include <math.h>
@@ -101,7 +102,6 @@ static DataTypeToken data_type_primary(void)
   {
   case TOKEN_IDENTIFIER:
   case TOKEN_IDENTIFIER_VOID:
-  case TOKEN_IDENTIFIER_ANY:
   case TOKEN_IDENTIFIER_CHAR:
   case TOKEN_IDENTIFIER_INT:
   case TOKEN_IDENTIFIER_FLOAT:
@@ -1669,6 +1669,7 @@ static Stmt* match_statement(void)
   stmt->type = STMT_MATCH;
   stmt->match.keyword = advance();
   stmt->match.expression = expression();
+  stmt->match.default_case = false;
 
   array_init(&stmt->match.match_bodies);
   array_init(&stmt->match.match_types);
@@ -1676,7 +1677,6 @@ static Stmt* match_statement(void)
 
   consume(TOKEN_NEWLINE, "Expected a newline after 'match' keyword.");
 
-  bool has_default_case = false;
   bool invalid = false;
   Token invalid_start_token;
 
@@ -1734,7 +1734,7 @@ static Stmt* match_statement(void)
           parser.error = false;
         }
 
-        if (has_default_case)
+        if (stmt->match.default_case)
         {
           error(previous(), "Cannot have multiple 'default' cases.");
           parser.error = false;
@@ -1745,7 +1745,7 @@ static Stmt* match_statement(void)
         if (check(TOKEN_INDENT))
           statements(&stmt->match.default_body);
 
-        has_default_case = true;
+        stmt->match.default_case = true;
       }
       else
       {
@@ -1809,9 +1809,33 @@ static Stmt* alias_statement(void)
 
   consume(TOKEN_EQUAL, "Expected a '=' after alias name.");
 
-  stmt->alias.data_type_token = consume_data_type("Expected type after alias name");
+  stmt->alias.data_type_token = consume_data_type("Expected type after alias name.");
 
   consume(TOKEN_NEWLINE, "Expected a newline after alias statement.");
+
+  return stmt;
+}
+
+static Stmt* any_statement(void)
+{
+  Stmt* stmt = STMT();
+  stmt->type = STMT_ANY;
+  stmt->any.keyword = advance();
+  stmt->any.name = consume(TOKEN_IDENTIFIER, "Expected name after 'any' keyword.");
+
+  array_init(&stmt->any.data_types);
+  array_init(&stmt->any.data_type_tokens);
+
+  if (match(TOKEN_EQUAL))
+  {
+    do
+    {
+      DataTypeToken data_type_token = consume_data_type("Expected type here.");
+      array_add(&stmt->any.data_type_tokens, data_type_token);
+    } while (match(TOKEN_PIPE));
+  }
+
+  consume(TOKEN_NEWLINE, "Expected a newline after any statement.");
 
   return stmt;
 }
@@ -1869,6 +1893,9 @@ static void statement(ArrayStmt* stmts)
       break;
     case TOKEN_ALIAS:
       array_add(stmts, alias_statement());
+      break;
+    case TOKEN_ANY:
+      array_add(stmts, any_statement());
       break;
     case TOKEN_INDENT:
       statements(stmts);

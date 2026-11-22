@@ -8,7 +8,7 @@ B + 2
 
 int C
 string C
-(any)C
+C
 
 
 #! 2:5-2:6 The name 'A' already exists.

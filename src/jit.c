@@ -572,18 +572,16 @@ static MIR_item_t data_type_to_proto(CyVM* vm, DataType data_type)
   return item;
 }
 
-static uint64_t data_type_to_typeid(CyVM* vm, DataType data_type)
+static uint64_t any_type_id(AnyStmt* any, DataType data_type)
 {
-  const char* name = data_type_to_string(data_type);
-  uint64_t id = map_get_s64(&vm->typeids, name);
-
-  if (!id)
+  DataType other_data_type;
+  array_foreach(&any->data_types, other_data_type)
   {
-    id = map_size_s64(&vm->typeids) + 1;
-    map_put_s64(&vm->typeids, name, id);
+    if (equal_data_type(data_type, other_data_type))
+      return _i + 1;
   }
 
-  return id;
+  UNREACHABLE("Type id was not found");
 }
 
 static FuncStmt* get_function_member(DataType data_type, const char* name)
@@ -3675,8 +3673,13 @@ static Function* generate_string_object_cast_function(CyVM* vm, Token token, Dat
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
+    DataType any_data_type = DATA_TYPE(TYPE_ANY);
+    any_data_type.any = ALLOC(AnyStmt);
+    any_data_type.any->name = TOKEN_EMPTY();
+    any_data_type.any->name.lexeme = "any";
+
     unsigned char list_count = 1;
-    DataType list_element_data_type = DATA_TYPE(TYPE_ANY);
+    DataType list_element_data_type = any_data_type;
     DataType list_data_type = DATA_TYPE(TYPE_ARRAY);
     list_data_type.array.count = &list_count;
     list_data_type.array.data_type = &list_element_data_type;
@@ -4108,7 +4111,7 @@ static void generate_string_cast(CyVM* vm, Token token, MIR_reg_t dest, MIR_reg_
   }
 }
 
-static void generate_any_to_type_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
+static void generate_any_to_type_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, AnyStmt* any,
                                       DataType to_data_type, Token to_token)
 {
   MIR_label_t ok_label = MIR_new_label(vm->ctx);
@@ -4122,7 +4125,7 @@ static void generate_any_to_type_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
   MIR_append_insn(vm->ctx, vm->function,
                   MIR_new_insn(vm->ctx, MIR_BEQ, MIR_new_label_op(vm->ctx, ok_label),
                                MIR_new_reg_op(vm->ctx, id),
-                               MIR_new_int_op(vm->ctx, data_type_to_typeid(vm, to_data_type))));
+                               MIR_new_int_op(vm->ctx, any_type_id(any, to_data_type))));
 
   generate_panic(vm, "Invalid type cast.", to_token);
 
@@ -4137,7 +4140,7 @@ static void generate_any_to_type_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
                                MIR_new_reg_op(vm->ctx, dest), MIR_new_reg_op(vm->ctx, expr)));
 }
 
-static void generate_type_to_any_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
+static void generate_type_to_any_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr, AnyStmt* any,
                                       DataType from_data_type)
 {
   if (from_data_type.type == TYPE_FLOAT)
@@ -4150,7 +4153,7 @@ static void generate_type_to_any_cast(CyVM* vm, MIR_reg_t dest, MIR_reg_t expr,
     expr = bits;
   }
 
-  uint64_t id = data_type_to_typeid(vm, from_data_type) << 48;
+  uint64_t id = any_type_id(any, from_data_type) << 48;
 
   MIR_append_insn(vm->ctx, vm->function,
                   MIR_new_insn(vm->ctx, MIR_AND, MIR_new_reg_op(vm->ctx, expr),
@@ -4266,7 +4269,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     }
 
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4284,7 +4288,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4301,7 +4306,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                                    MIR_new_reg_op(vm->ctx, expr), MIR_new_int_op(vm->ctx, 0xFF)));
       return;
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4324,7 +4330,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
                                    MIR_new_reg_op(vm->ctx, expr)));
       return;
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4363,7 +4370,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     case TYPE_FUNCTION_POINTER:
       if (!expression->implicit && expression->from_data_type.type == TYPE_ANY)
       {
-        generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+        generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                  expression->to_data_type, expression->type.token);
         return;
       }
 
@@ -4391,7 +4399,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     case TYPE_FUNCTION_MEMBER:
     case TYPE_FUNCTION_INTERNAL:
     case TYPE_FUNCTION_POINTER:
-      generate_type_to_any_cast(vm, dest, expr, expression->from_data_type);
+      generate_type_to_any_cast(vm, dest, expr, expression->to_data_type.any,
+                                expression->from_data_type);
       return;
 
     case TYPE_NULL:
@@ -4409,7 +4418,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     switch (expression->from_data_type.type)
     {
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4421,7 +4431,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
     switch (expression->from_data_type.type)
     {
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     case TYPE_NULL:
@@ -4446,7 +4457,8 @@ static void generate_cast_expression(CyVM* vm, MIR_reg_t dest, CastExpr* express
       generate_default_initialization(vm, dest, expression->to_data_type);
       return;
     case TYPE_ANY:
-      generate_any_to_type_cast(vm, dest, expr, expression->to_data_type, expression->type.token);
+      generate_any_to_type_cast(vm, dest, expr, expression->from_data_type.any,
+                                expression->to_data_type, expression->type.token);
       return;
 
     default:
@@ -4974,23 +4986,23 @@ static void generate_array_expression(CyVM* vm, MIR_reg_t dest, LiteralArrayExpr
 
 static void generate_is_expression(CyVM* vm, MIR_reg_t dest, IsExpr* expression)
 {
+  assert(expression->expr_data_type.type == TYPE_ANY);
+
+  generate_expression(vm, dest, expression->expr);
+
   if (expression->is_data_type.type == TYPE_ANY)
   {
-    generate_expression(vm, dest, expression->expr);
-
     MIR_append_insn(vm->ctx, vm->function,
                     MIR_new_insn(vm->ctx, MIR_NE, MIR_new_reg_op(vm->ctx, dest),
                                  MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, 0)));
     return;
   }
 
-  generate_expression(vm, dest, expression->expr);
-
   MIR_append_insn(vm->ctx, vm->function,
                   MIR_new_insn(vm->ctx, MIR_URSH, MIR_new_reg_op(vm->ctx, dest),
                                MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, 48)));
 
-  uint64_t id = data_type_to_typeid(vm, expression->is_data_type);
+  uint64_t id = any_type_id(expression->expr_data_type.any, expression->is_data_type);
   MIR_append_insn(vm->ctx, vm->function,
                   MIR_new_insn(vm->ctx, MIR_EQ, MIR_new_reg_op(vm->ctx, dest),
                                MIR_new_reg_op(vm->ctx, dest), MIR_new_int_op(vm->ctx, id)));
@@ -5158,7 +5170,7 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
       array_foreach(&statement->match_bodies, body)
       {
         DataType data_type = statement->match_types.elems[_i]->data_type;
-        uint64_t id = data_type_to_typeid(vm, data_type);
+        uint64_t id = any_type_id(statement->data_type.any, data_type);
 
         if (id < minimum_id)
           minimum_id = id;
@@ -5178,7 +5190,7 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
       array_foreach(&statement->match_bodies, body)
       {
         DataType data_type = statement->match_types.elems[_i]->data_type;
-        uint64_t id = data_type_to_typeid(vm, data_type);
+        uint64_t id = any_type_id(statement->data_type.any, data_type);
 
         labels.elems[id - minimum_id] = MIR_new_label(vm->ctx);
       }
@@ -5221,7 +5233,7 @@ static void generate_match_statement(CyVM* vm, MatchStmt* statement)
       {
         VarStmt* variable_statement = statement->match_types.elems[_i];
         DataType data_type = variable_statement->data_type;
-        uint64_t id = data_type_to_typeid(vm, data_type);
+        uint64_t id = any_type_id(statement->data_type.any, data_type);
 
         MIR_append_insn(vm->ctx, vm->function, labels.elems[id - minimum_id]);
         MIR_append_insn(vm->ctx, vm->function,
@@ -5566,6 +5578,7 @@ static void generate_statement(CyVM* vm, Stmt* statement)
     return;
   case STMT_IMPORT:
   case STMT_ALIAS:
+  case STMT_ANY:
     return;
   }
 

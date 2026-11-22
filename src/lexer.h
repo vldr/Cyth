@@ -3,7 +3,6 @@
 
 #include "array.h"
 #include "main.h"
-#include "memory.h"
 
 #define TOKEN_EMPTY() ((Token){ 0 })
 #define DATA_TYPE_TOKEN_EMPTY() ((DataTypeToken){ 0 })
@@ -66,7 +65,6 @@ typedef enum
 
   TOKEN_IDENTIFIER,
   TOKEN_IDENTIFIER_VOID,
-  TOKEN_IDENTIFIER_ANY,
   TOKEN_IDENTIFIER_INT,
   TOKEN_IDENTIFIER_FLOAT,
   TOKEN_IDENTIFIER_BOOL,
@@ -101,6 +99,7 @@ typedef enum
   TOKEN_DEFAULT,
   TOKEN_IMPORT,
   TOKEN_ALIAS,
+  TOKEN_ANY,
 
   TOKEN_EOF
 } TokenKind;

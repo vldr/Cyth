@@ -1,6 +1,7 @@
 #ifndef main_h
 #define main_h
 
+#include <assert.h>
 #include <stdio.h>
 
 #ifdef _WIN32
@@ -8,28 +9,28 @@
 #endif
 
 #if defined(_MSC_VER)
-#define trap() __debugbreak()
+#define TRAP() __debugbreak()
 #elif defined(__clang__)
-#define trap() __builtin_debugtrap()
+#define TRAP() __builtin_debugtrap()
 #elif defined(__GNUC__)
-#define trap() __builtin_trap()
+#define TRAP() __builtin_trap()
 #else
-#define trap() ((void)0)
+#define TRAP() ((void)0)
 #endif
 
 #if defined(_MSC_VER)
-#define unreach() __assume(0)
+#define UNREACH() __assume(0)
 #else
-#define unreach() __builtin_unreachable()
+#define UNREACH() __builtin_unreachable()
 #endif
 
-#define assert(expr)                                                                               \
+#define EXPECT(expr)                                                                               \
   do                                                                                               \
   {                                                                                                \
     if (!(expr))                                                                                   \
     {                                                                                              \
       fprintf(stderr, "Assertion failed: %s %s:%d\n", #expr, __FILE__, __LINE__);                  \
-      trap();                                                                                      \
+      TRAP();                                                                                      \
       abort();                                                                                     \
     }                                                                                              \
   } while (0)
@@ -37,8 +38,8 @@
 #define UNREACHABLE(message)                                                                       \
   do                                                                                               \
   {                                                                                                \
-    assert(!message);                                                                              \
-    unreach();                                                                                     \
+    EXPECT(!message);                                                                              \
+    UNREACH();                                                                                     \
   } while (0)
 
 #endif

@@ -149,12 +149,17 @@ static void error_missing_template_types(Token token)
 
 static void error_type_cannot_be_void(Token token)
 {
-  error(token, "The type cannot be void here.");
+  error(token, "The type cannot be 'void' here.");
 }
 
 static void error_cannot_find_name(Token token, const char* name)
 {
   error(token, memory_sprintf("Undeclared identifier '%s'.", name));
+}
+
+static void error_name_inaccessible(Token token, const char* name)
+{
+  error(token, memory_sprintf("Cannot access '%s' because it is inaccessible.", name));
 }
 
 static void error_cannot_access_name_outside_function(Token token, const char* name)
@@ -346,11 +351,6 @@ static void error_ambiguous_call(Token token, const char* name)
                               name));
 }
 
-static void error_cannot_cast_to_any(Token token, DataType data_type)
-{
-  error(token, memory_sprintf("Cannot cast 'any' to '%s'.", data_type_to_string(data_type)));
-}
-
 static void error_case_already_exists(Token token, DataType data_type)
 {
   error(token, memory_sprintf("A case for '%s' already exists.", data_type_to_string(data_type)));
@@ -369,7 +369,45 @@ static void error_name_cannot_appear_after_type_when_template_type(Token token)
 
 static void error_unexpected_import(Token token)
 {
-  error(token, "An import statement can only appear inside top-level scope.");
+  error(token, "An 'import' statement can only appear inside the top-level scope.");
+}
+
+static void error_unexpected_alias(Token token)
+{
+  error(token, "An 'alias' statement can only appear inside the top-level scope.");
+}
+
+static void error_unexpected_any(Token token)
+{
+  error(token, "An 'any' statement can only appear inside the top-level scope.");
+}
+
+static void error_is_only_works_on_any(Token token)
+{
+  error(token, "The 'is' statement cannot be used on this type.");
+}
+
+static void error_duplicate_any_type(Token token, const char* data_type_string)
+{
+  error(token, memory_sprintf("The type '%s' already exists.", data_type_string));
+}
+
+static void error_not_compatible_with_any(Token token, const char* data_type_string)
+{
+  error(token, memory_sprintf("The type '%s' cannot be used.", data_type_string));
+}
+
+static void error_match_not_exhaustive(Token token, ArrayStr missing_cases)
+{
+  const char* message = "Not all cases covered, add a 'default' case or these:";
+
+  const char* missing_case;
+  array_foreach(&missing_cases, missing_case)
+  {
+    message = memory_sprintf("%s%s'%s'", message, _i == 0 ? " " : ", ", missing_case);
+  }
+
+  error(token, message);
 }
 
 static inline int align(int value, int alignment)
@@ -438,8 +476,6 @@ const char* data_type_to_string(DataType data_type)
     return "void";
   case TYPE_NULL:
     return "null";
-  case TYPE_ANY:
-    return "any";
   case TYPE_BOOL:
     return "bool";
   case TYPE_CHAR:
@@ -454,6 +490,8 @@ const char* data_type_to_string(DataType data_type)
     return data_type_to_string(*data_type.alias.data_type);
   case TYPE_OBJECT:
     return data_type.class->name.lexeme;
+  case TYPE_ANY:
+    return data_type.any->name.lexeme;
   case TYPE_PROTOTYPE:
     return memory_sprintf("class %s", data_type.class->name.lexeme);
   case TYPE_FUNCTION_TEMPLATE:
@@ -637,6 +675,9 @@ bool equal_data_type(DataType left, DataType right)
   if (left.type == TYPE_OBJECT && right.type == TYPE_OBJECT)
     return left.class == right.class;
 
+  if (left.type == TYPE_ANY && right.type == TYPE_ANY)
+    return left.any == right.any;
+
   if (left.type == TYPE_ARRAY && right.type == TYPE_ARRAY)
     return *left.array.count == *right.array.count &&
            equal_data_type(*left.array.data_type, *right.array.data_type);
@@ -683,14 +724,33 @@ bool boolable_data_type(DataType data_type)
          data_type.type == TYPE_BOOL;
 }
 
+bool assignable_to_any(DataType destination, DataType source)
+{
+  assert(destination.type == TYPE_ANY);
+
+  if (destination.type == TYPE_ANY)
+  {
+    if (source.type == TYPE_NULL)
+      return true;
+
+    if (equal_data_type(destination, source))
+      return true;
+
+    DataType data_type;
+    array_foreach(&destination.any->data_types, data_type)
+    {
+      if (equal_data_type(data_type, source))
+        return true;
+    }
+  }
+
+  return false;
+}
+
 bool assignable_data_type(bool permissive, DataType destination, DataType source)
 {
   if (destination.type == TYPE_ANY && permissive)
-    return source.type == TYPE_OBJECT || source.type == TYPE_STRING || source.type == TYPE_ARRAY ||
-           source.type == TYPE_NULL || source.type == TYPE_INTEGER || source.type == TYPE_FLOAT ||
-           source.type == TYPE_BOOL || source.type == TYPE_CHAR || source.type == TYPE_FUNCTION ||
-           source.type == TYPE_FUNCTION_MEMBER || source.type == TYPE_FUNCTION_INTERNAL ||
-           source.type == TYPE_FUNCTION_POINTER || source.type == TYPE_ANY;
+    return assignable_to_any(destination, source);
 
   if (destination.type == TYPE_FLOAT && permissive)
     return source.type == TYPE_INTEGER;
@@ -784,18 +844,12 @@ static void data_type_inference(Expr** source_expression, DataType* source, Data
       }
     }
   }
-  else if (source->type == TYPE_NULL && target->type == TYPE_FUNCTION_POINTER)
+  else if (source->type == TYPE_NULL && source->null_function &&
+           target->type == TYPE_FUNCTION_POINTER)
   {
     *source->null_function = true;
   }
-  else if (target->type == TYPE_ANY &&
-           (source->type == TYPE_OBJECT || source->type == TYPE_STRING ||
-            source->type == TYPE_ARRAY || source->type == TYPE_NULL ||
-            source->type == TYPE_INTEGER || source->type == TYPE_FLOAT ||
-            source->type == TYPE_BOOL || source->type == TYPE_CHAR ||
-            source->type == TYPE_FUNCTION || source->type == TYPE_FUNCTION_MEMBER ||
-            source->type == TYPE_FUNCTION_INTERNAL || source->type == TYPE_FUNCTION_POINTER ||
-            source->type == TYPE_ANY))
+  else if (target->type == TYPE_ANY && assignable_to_any(*target, *source))
   {
     autocast(source_expression, source, target);
   }
@@ -817,8 +871,6 @@ static DataType token_to_data_type(Token token)
     return DATA_TYPE(TYPE_BOOL);
   case TOKEN_IDENTIFIER_VOID:
     return DATA_TYPE(TYPE_VOID);
-  case TOKEN_IDENTIFIER_ANY:
-    return DATA_TYPE(TYPE_ANY);
   case TOKEN_IDENTIFIER_INT:
     return DATA_TYPE(TYPE_INTEGER);
   case TOKEN_IDENTIFIER_FLOAT:
@@ -827,6 +879,7 @@ static DataType token_to_data_type(Token token)
     return DATA_TYPE(TYPE_CHAR);
   case TOKEN_IDENTIFIER_STRING:
     return DATA_TYPE(TYPE_STRING);
+
   case TOKEN_IDENTIFIER: {
     VarStmt* variable = environment_get_variable(checker.environment, token.lexeme);
     if (!variable)
@@ -847,6 +900,11 @@ static DataType token_to_data_type(Token token)
     {
       link(token, variable->data_type.alias.name, variable->data_type.alias.name.length);
       return *variable->data_type.alias.data_type;
+    }
+    else if (variable->data_type.type == TYPE_ANY)
+    {
+      link(token, variable->data_type.any->name, variable->data_type.any->name.length);
+      return variable->data_type;
     }
     else
     {
@@ -2027,6 +2085,13 @@ static void init_alias_statement(AliasStmt* statement)
 {
   const char* name = statement->name.lexeme;
 
+  DataType data_type = data_type_token_to_data_type(statement->data_type_token);
+  if (data_type.type == TYPE_VOID)
+  {
+    error_type_cannot_be_void(statement->data_type_token.token);
+    checker.error = false;
+  }
+
   VarStmt* variable = ALLOC(VarStmt);
   variable->name = statement->name;
   variable->type = statement->data_type_token;
@@ -2038,12 +2103,77 @@ static void init_alias_statement(AliasStmt* statement)
   variable->data_type.alias.name = statement->name;
   variable->data_type.alias.token = statement->data_type_token;
   variable->data_type.alias.data_type = ALLOC(DataType);
-  *variable->data_type.alias.data_type = data_type_token_to_data_type(statement->data_type_token);
+  *variable->data_type.alias.data_type = data_type;
 
   if (environment_check_variable(checker.environment, name))
     error_name_already_exists(statement->name, name);
   else
     environment_set_variable(checker.environment, name, variable);
+}
+
+static void init_any_statement(AnyStmt* statement)
+{
+  const char* name = statement->name.lexeme;
+
+  VarStmt* variable = ALLOC(VarStmt);
+  variable->name = statement->name;
+  variable->type = (DataTypeToken){
+    .type = DATA_TYPE_TOKEN_PRIMITIVE,
+    .token = statement->name,
+  };
+  variable->initializer = NULL;
+  variable->function = NULL;
+  variable->scope = SCOPE_NONE;
+  variable->index = -1;
+  variable->data_type.type = TYPE_ANY;
+  variable->data_type.any = statement;
+
+  if (environment_check_variable(checker.environment, name))
+    error_name_already_exists(statement->name, name);
+  else
+    environment_set_variable(checker.environment, name, variable);
+}
+
+static void init_any_statement_body(AnyStmt* statement)
+{
+  MapSInt type_set;
+  map_init_sint(&type_set, 0, 0);
+
+  DataTypeToken data_type_token;
+  array_foreach(&statement->data_type_tokens, data_type_token)
+  {
+    DataType data_type = data_type_token_to_data_type(data_type_token);
+    array_add(&statement->data_types, data_type);
+
+    const char* data_type_string = data_type_to_string(data_type);
+    if (map_get_sint(&type_set, data_type_string))
+    {
+      error_duplicate_any_type(data_type_token.token, data_type_string);
+      checker.error = false;
+    }
+    else
+    {
+      map_put_sint(&type_set, data_type_string, true);
+    }
+
+    switch (data_type.type)
+    {
+    case TYPE_BOOL:
+    case TYPE_CHAR:
+    case TYPE_INTEGER:
+    case TYPE_FLOAT:
+    case TYPE_STRING:
+    case TYPE_ARRAY:
+    case TYPE_OBJECT:
+    case TYPE_FUNCTION_POINTER:
+      break;
+
+    default:
+      error_not_compatible_with_any(data_type_token.token, data_type_string);
+      checker.error = false;
+      break;
+    }
+  }
 }
 
 static void init_class_declaration_body(ClassStmt* statement)
@@ -2111,8 +2241,11 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_CHAR:
       case TYPE_INTEGER:
       case TYPE_STRING:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2128,8 +2261,11 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_FLOAT:
       case TYPE_STRING:
       case TYPE_CHAR:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2144,8 +2280,11 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_BOOL:
       case TYPE_INTEGER:
       case TYPE_STRING:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2160,8 +2299,11 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_FLOAT:
       case TYPE_INTEGER:
       case TYPE_STRING:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2174,8 +2316,11 @@ static DataType check_cast_expression(CastExpr* expression)
       {
       case TYPE_STRING:
       case TYPE_BOOL:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2186,11 +2331,15 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_ARRAY:
       switch (expression->to_data_type.type)
       {
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
+        break;
+
       case TYPE_ARRAY:
         valid = equal_data_type(expression->from_data_type, expression->to_data_type);
         break;
+
       case TYPE_STRING:
-      case TYPE_ANY:
         valid = true;
         break;
 
@@ -2202,11 +2351,15 @@ static DataType check_cast_expression(CastExpr* expression)
     case TYPE_OBJECT:
       switch (expression->to_data_type.type)
       {
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
+        break;
+
       case TYPE_OBJECT:
         valid = equal_data_type(expression->from_data_type, expression->to_data_type);
         break;
+
       case TYPE_STRING:
-      case TYPE_ANY:
         valid = true;
         break;
 
@@ -2215,32 +2368,17 @@ static DataType check_cast_expression(CastExpr* expression)
       }
 
       break;
+
     case TYPE_ANY:
-      switch (expression->to_data_type.type)
-      {
-      case TYPE_ANY:
-      case TYPE_BOOL:
-      case TYPE_CHAR:
-      case TYPE_INTEGER:
-      case TYPE_FLOAT:
-      case TYPE_STRING:
-      case TYPE_ARRAY:
-      case TYPE_OBJECT:
-      case TYPE_FUNCTION_POINTER:
-        valid = true;
-        break;
-
-      default:
-        break;
-      }
-
+      valid = assignable_to_any(expression->from_data_type, expression->to_data_type);
       break;
+
     case TYPE_NULL:
       switch (expression->to_data_type.type)
       {
-      case TYPE_ANY:
       case TYPE_OBJECT:
       case TYPE_FUNCTION_POINTER:
+      case TYPE_ANY:
         valid = true;
         break;
 
@@ -2255,8 +2393,11 @@ static DataType check_cast_expression(CastExpr* expression)
       case TYPE_NULL:
       case TYPE_STRING:
       case TYPE_BOOL:
-      case TYPE_ANY:
         valid = true;
+        break;
+
+      case TYPE_ANY:
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       default:
@@ -2319,12 +2460,15 @@ static DataType check_cast_expression(CastExpr* expression)
       switch (expression->to_data_type.type)
       {
       case TYPE_ANY:
-      case TYPE_STRING:
-        valid = true;
+        valid = assignable_to_any(expression->to_data_type, expression->from_data_type);
         break;
 
       case TYPE_FUNCTION_POINTER:
         valid = equal_data_type(expression->from_data_type, expression->to_data_type);
+        break;
+
+      case TYPE_STRING:
+        valid = true;
         break;
 
       default:
@@ -2690,6 +2834,12 @@ static DataType check_variable_expression(VarExpr* expression)
     return DATA_TYPE(TYPE_VOID);
   }
 
+  if (variable->scope == SCOPE_NONE)
+  {
+    error_name_inaccessible(expression->name, name);
+    return DATA_TYPE(TYPE_VOID);
+  }
+
   if (variable->scope != SCOPE_GLOBAL && variable->scope != SCOPE_CLASS &&
       variable->function != checker.function)
   {
@@ -2810,10 +2960,13 @@ static DataType check_call_expression(CallExpr* expression)
 
   checker.call = previous_call;
 
+  bool alias = false;
   if (callee_data_type.type == TYPE_ALIAS && callee_data_type.alias.data_type->type == TYPE_OBJECT)
   {
     callee_data_type = *callee_data_type.alias.data_type;
     callee_data_type.type = TYPE_PROTOTYPE;
+
+    alias = true;
   }
 
   DataType* argument_data_types = alloca(expression->arguments.size * sizeof(DataType));
@@ -3077,7 +3230,9 @@ static DataType check_call_expression(CallExpr* expression)
       expression->function = class->default_constructor;
     }
 
-    link(expression->callee_token, expression->function->name, class->name_raw.length);
+    link(expression->callee_token, expression->function->name,
+         alias ? expression->callee_token.end_column - expression->callee_token.start_column
+               : class->name_raw.length);
 
     expression->callee_data_type = callee_data_type;
     expression->return_data_type = token_to_data_type(class->name);
@@ -3901,8 +4056,9 @@ static DataType check_is_expression(IsExpr* expression)
     }
 
     break;
+
   default:
-    error_type_mismatch(expression->expr_token, DATA_TYPE(TYPE_ANY), expression->expr_data_type);
+    error_is_only_works_on_any(expression->expr_token);
     return DATA_TYPE(TYPE_VOID);
   }
 
@@ -4051,11 +4207,20 @@ static void check_import_statement(ImportStmt* statement)
        statement->filename.end_column - statement->filename.start_column);
 }
 
-static void check_alias_statement(ImportStmt* statement)
+static void check_alias_statement(AliasStmt* statement)
 {
   if (checker.environment != checker.global_environment)
   {
-    error_unexpected_import(statement->keyword);
+    error_unexpected_alias(statement->keyword);
+    return;
+  }
+}
+
+static void check_any_statement(AnyStmt* statement)
+{
+  if (checker.environment != checker.global_environment)
+  {
+    error_unexpected_any(statement->keyword);
     return;
   }
 }
@@ -4221,9 +4386,16 @@ static void check_match_statement(MatchStmt* statement)
     }
     else
     {
-      if (!assignable_data_type(true, DATA_TYPE(TYPE_ANY), variable_statement->data_type))
+      if (variable_statement->data_type.type == TYPE_ANY)
       {
-        error_cannot_cast_to_any(variable_statement->type.token, variable_statement->data_type);
+        error_not_compatible_with_any(variable_statement->type.token, variable_data_type_string);
+        checker.error = false;
+      }
+
+      if (!assignable_data_type(true, data_type, variable_statement->data_type))
+      {
+        error_type_is_not_assignable(variable_statement->type.token, variable_statement->data_type,
+                                     data_type);
         checker.error = false;
       }
     }
@@ -4237,6 +4409,28 @@ static void check_match_statement(MatchStmt* statement)
     if (data_type.type == TYPE_ANY)
     {
       checker.environment = checker.environment->parent;
+    }
+  }
+
+  if (data_type.type == TYPE_ANY && !statement->default_case)
+  {
+    ArrayStr missing_cases;
+    array_init(&missing_cases);
+
+    DataType case_data_type;
+    array_foreach(&data_type.any->data_types, case_data_type)
+    {
+      const char* data_type_string = data_type_to_string(case_data_type);
+
+      if (!map_get_sint(&type_set, data_type_string))
+      {
+        array_add(&missing_cases, data_type_string);
+      }
+    }
+
+    if (missing_cases.size)
+    {
+      error_match_not_exhaustive(statement->keyword, missing_cases);
     }
   }
 
@@ -4498,7 +4692,10 @@ static void check_statement(Stmt* statement, bool synchronize)
     check_import_statement(&statement->import);
     return;
   case STMT_ALIAS:
-    check_alias_statement(&statement->import);
+    check_alias_statement(&statement->alias);
+    return;
+  case STMT_ANY:
+    check_any_statement(&statement->any);
     return;
   case STMT_FUNCTION_DECL:
     check_function_declaration(&statement->func);
@@ -4553,6 +4750,7 @@ static bool analyze_statement(Stmt* statement)
   case STMT_BREAK:
   case STMT_IMPORT:
   case STMT_ALIAS:
+  case STMT_ANY:
   case STMT_FUNCTION_DECL:
   case STMT_VARIABLE_DECL:
   case STMT_CLASS_DECL:
@@ -4655,6 +4853,9 @@ void checker_validate(void)
       case STMT_FUNCTION_TEMPLATE_DECL:
         init_function_template_declaration(&statement->func_template);
         break;
+      case STMT_ANY:
+        init_any_statement(&statement->any);
+        break;
 
       default:
         break;
@@ -4695,6 +4896,9 @@ void checker_validate(void)
         break;
       case STMT_CLASS_DECL:
         init_class_declaration_body(&statement->class);
+        break;
+      case STMT_ANY:
+        init_any_statement_body(&statement->any);
         break;
       case STMT_VARIABLE_DECL:
         init_variable_declaration(&statement->var);

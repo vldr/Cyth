@@ -1,7 +1,5 @@
 void not_overload()
 
-any a = (any)null
-
 string test<T>()
     return (string)T + " " + T
 
@@ -50,7 +48,7 @@ log((string)"".toArray)
 log(test<string>())
 log((string)not_overload)
 
-# void(int), void(bool), void(float), void(char), void(string), void(int, int, int, int, int, int, int, int, any, char, char, int), void(void(int, int, int, int, int, int, int, int, any, char, char, int))
+# void(int), void(bool), void(float), void(char), void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)
@@ -63,7 +61,7 @@ log("" + test)
 log("" + "".toArray)
 log("" + not_overload)
 
-# void(int), void(bool), void(float), void(char), void(string), void(int, int, int, int, int, int, int, int, any, char, char, int), void(void(int, int, int, int, int, int, int, int, any, char, char, int))
+# void(int), void(bool), void(float), void(char), void(string)
 # void(Object, int)
 # string<T>()
 # char[](string)

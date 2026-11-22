@@ -1,23 +1,26 @@
 class Result
 class Other
 
-int complete(any value)
+any Thing = Result | Other
+
+int complete(Thing value)
   match value
     case Result result
       return 1
     default
       return 2
 
-int returnsAfterMatch(any value)
+int returnsAfterMatch(Thing value)
   match value
     case Result result
       return 3
+    default
 
   return 4
 
 
-any result = Result()
-any other = Other()
+Thing result = Result()
+Thing other = Other()
 
 log(complete(result))
 log(complete(other))

@@ -4,7 +4,9 @@ class Apple
 class Apple2
     int field = 33
 
-any[] test = ["hello", Apple(), (int[])[1, 2, 3]]
+any Thing = string | Apple | Apple2 | int[]
+
+Thing[] test = ["hello", Apple(), (int[])[1, 2, 3]]
 
 string a = (string)test[0]
 Apple b = (Apple)test[1]

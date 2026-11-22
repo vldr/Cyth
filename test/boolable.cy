@@ -1,8 +1,10 @@
 class Object
 
+any Thing = Object
+
 int a = -1
 string b = "hello"
-any c = Object()
+Thing c = Object()
 Object d = Object()
 void(string) e = (void(string))log
 int[] f = [1,2,3]

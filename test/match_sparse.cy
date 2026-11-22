@@ -5,14 +5,16 @@ class Type4
 class Type5
 class Type6
 
-any type1 = Type1()
-any type2 = Type2()
-any type3 = Type3()
-any type4 = Type4()
-any type5 = Type5()
-any type6 = Type6()
+any Thing = Type1 | Type2 | Type3 | Type4 | Type5 | Type6
 
-int full(any value)
+Thing type1 = Type1()
+Thing type2 = Type2()
+Thing type3 = Type3()
+Thing type4 = Type4()
+Thing type5 = Type5()
+Thing type6 = Type6()
+
+int full(Thing value)
   match value
     case Type1
       return 1
@@ -43,7 +45,7 @@ log(full(type6))
 # 5
 # 6
 
-int middle(any value)
+int middle(Thing value)
   match value
     case Type3
       return 3
@@ -68,7 +70,7 @@ log(middle(type6))
 # 5
 # -1
 
-int sparse(any value)
+int sparse(Thing value)
   match value
     case Type1
       return 1
@@ -93,7 +95,7 @@ log(sparse(type6))
 # -1
 # 6
 
-int edges(any value)
+int edges(Thing value)
   match value
     case Type1
       return 1
@@ -116,7 +118,7 @@ log(edges(type6))
 # -1
 # 6
 
-int offset(any value)
+int offset(Thing value)
   match value
     case Type2
       return 2

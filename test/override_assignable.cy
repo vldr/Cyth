@@ -4,11 +4,13 @@ class A
     void __init__(int a)
         this.a = a
 
-    bool __eq__(any test)
+    bool __eq__(Thing test)
         if (A)test
             return ((A)test).a == a
             
         return not test
+
+any Thing = A
 
 log(A(10) == A(12))
 log(A(10) == A(10))

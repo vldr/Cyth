@@ -24,20 +24,20 @@ c(a, 0, 0, 0)
 a = Vector("string")
 # string
 
-a = Vector((any)"string")
-# any
+a = Vector((Thing)"string")
+# Thing
 
 a = Vector((int[]) [1,2,3])
 # int[]
 
-a = Vector((any) (int[]) [1,2,3])
-# any
+a = Vector((Thing) (int[]) [1,2,3])
+# Thing
 
 a = Vector(a)
 # Vector
 
-a = Vector((any)a)
-# any
+a = Vector((Thing)a)
+# Thing
 
 class Vector
   void __init__(float x, float y, float z)
@@ -55,5 +55,7 @@ class Vector
   void __init__(Vector x)
     log("Vector")
 
-  void __init__(any x)
-    log("any")
+  void __init__(Thing x)
+    log("Thing")
+
+any Thing = Vector | string | int[]

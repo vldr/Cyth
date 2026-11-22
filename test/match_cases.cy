@@ -7,19 +7,23 @@ class Second
 class Other
   float value = 1.625
 
-any first = First()
+any Thing = First | Second | Other
+
+Thing first = First()
 match first
   case First
     log(first.value)
   case Second
     log(first.value)
+  default
 
-any other = Other()
+Thing other = Other()
 match other
   case First
     log(other.value)
   case Second
     log(other.value)
+  default
 
 log("continued")
 

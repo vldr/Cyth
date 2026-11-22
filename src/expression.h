@@ -82,6 +82,7 @@ typedef struct _DATA_TYPE
   } type;
 
   union {
+    struct _ANY_STMT* any;
     struct _CLASS_STMT* class;
     struct _CLASS_TEMPLATE_STMT* class_template;
     struct _FUNC_STMT* function;

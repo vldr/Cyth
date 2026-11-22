@@ -1,16 +1,19 @@
 class Result
+any Thing = Result
 
-int noDefault(any value)
+Thing a
+
+int noDefault(Thing value)
   match value
     case Result result
       return 1
 
-int incompleteDefault(any value)
+int incompleteDefault(Thing value)
   match value
     case Result result
       return 2
     default
       log("missing return")
 
-#! 3:5-3:14 Non-void function must return a value.
-#! 8:5-8:22 Non-void function must return a value.
+#! 6:5-6:14 Non-void function must return a value.
+#! 11:5-11:22 Non-void function must return a value.

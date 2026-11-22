@@ -1,12 +1,14 @@
 class Test
-    void __get__(any a)
+    void __get__(Thing a)
         log((string)(Test)a)
 
-    void __set__(int p, any a)
+    void __set__(int p, Thing a)
         log((string)(Test)a)
 
     void __set__(int p, float a)
         log("" + a)
+
+any Thing = Test
 
 Test()[Test()]
 Test()[0] = Test()

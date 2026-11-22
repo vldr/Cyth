@@ -1,11 +1,13 @@
 class Object
     int field
 
-any myType = "hello world"
+any Thing = Object | string
+
+Thing myType = "hello world"
 
 log(((Object)myType).field)
 
 #> Invalid type cast.
-#>   at <start>:6:7
+#>   at <start>:8:7
 
 #< RuntimeError: illegal cast

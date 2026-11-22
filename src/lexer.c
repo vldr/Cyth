@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "array.h"
+#include "memory.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -426,7 +427,7 @@ static void literal(void)
         KEYWORD("and", TOKEN_AND)
 
         KEYWORD_GROUP('y')
-        KEYWORD("any", TOKEN_IDENTIFIER_ANY)
+        KEYWORD("any", TOKEN_ANY)
       }
     }
 
@@ -947,7 +948,6 @@ void lexer_print(void)
 
       "TOKEN_IDENTIFIER",
       "TOKEN_IDENTIFIER_VOID",
-      "TOKEN_IDENTIFIER_ANY",
       "TOKEN_IDENTIFIER_INT",
       "TOKEN_IDENTIFIER_FLOAT",
       "TOKEN_IDENTIFIER_BOOL",
@@ -982,6 +982,7 @@ void lexer_print(void)
       "TOKEN_DEFAULT",
       "TOKEN_IMPORT",
       "TOKEN_ALIAS",
+      "TOKEN_ANY",
 
       "TOKEN_EOF",
     };

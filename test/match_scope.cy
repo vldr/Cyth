@@ -1,3 +1,5 @@
+any Thing = Apple
+
 class Apple
   string name
 
@@ -5,14 +7,14 @@ class Apple
     this.name = name
 
 class Runner
-  void __init__(any value)
+  void __init__(Thing value)
     match value
       case Apple apple
         log("initializer " + apple.name)
       default
         log("initializer default")
 
-  void run(any value)
+  void run(Thing value)
     match value
       case Apple apple
         log("method " + apple.name)
@@ -20,22 +22,22 @@ class Runner
         log("method default")
 
 class GenericRunner<T>
-  void run(any value)
+  void run(Thing value)
     match value
       case Apple apple
         log("class template " + apple.name)
       default
         log("class template default")
 
-void inOrdinaryFunction(any value)
+void inOrdinaryFunction(Thing value)
   match value
     case Apple apple
       log("function " + apple.name)
     default
       log("function default")
 
-void inNestedFunction(any value)
-  void nested(any inner)
+void inNestedFunction(Thing value)
+  void nested(Thing inner)
     match inner
       case Apple apple
         log("nested function " + apple.name)
@@ -44,14 +46,14 @@ void inNestedFunction(any value)
 
   nested(value)
 
-void inFunctionTemplate<T>(any value)
+void inFunctionTemplate<T>(Thing value)
   match value
     case Apple apple
       log("function template " + apple.name)
     default
       log("function template default")
 
-void inControlFlow(any value)
+void inControlFlow(Thing value)
   if true
     match value
       case Apple apple
@@ -69,10 +71,10 @@ void inControlFlow(any value)
 
     i += 1
 
-void inNestedMatch(any value)
+void inNestedMatch(Thing value)
   match value
     case Apple apple
-      any inner = apple
+      Thing inner = apple
 
       match inner
         case Apple innerApple
@@ -82,10 +84,10 @@ void inNestedMatch(any value)
     default
       log("outer match default")
 
-void functionDeclaredInMatch(any value)
+void functionDeclaredInMatch(Thing value)
   match value
     case Apple apple
-      void nestedCase(any inner)
+      void nestedCase(Thing inner)
         match inner
           case Apple innerApple
             log("match function " + innerApple.name)
@@ -96,14 +98,14 @@ void functionDeclaredInMatch(any value)
     default
       log("match declaration default")
 
-any topLevel = Apple("top level")
+Thing topLevel = Apple("top level")
 match topLevel
   case Apple apple
     log(apple.name)
   default
     log("top level default")
 
-any defaultOnly = Apple("unused")
+Thing defaultOnly = Apple("unused")
 match defaultOnly
   default
     log("default only")

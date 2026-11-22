@@ -1,13 +1,15 @@
 log("A: " + (int[]) [1,2,3])
 log((string) (int[]) [1,2,3])
 
+any Thing = string
+
 class Object
     int a = 12
     float b = 62.25
     bool c = true
     char d = 'a'
     string e = "hello world"
-    any f
+    Thing f
     void(string) g
 
 Object object
@@ -32,5 +34,5 @@ log((string) object)
 # null
 # C: Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = null,\n g = null\n)
 # Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = null,\n g = null\n)
-# D: Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = any,\n g = void(string)\n)
-# Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = any,\n g = void(string)\n)
+# D: Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = Thing,\n g = void(string)\n)
+# Object(\n a = 12,\n b = 62.25,\n c = true,\n d = a,\n e = hello world,\n f = Thing,\n g = void(string)\n)

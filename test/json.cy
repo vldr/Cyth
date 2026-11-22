@@ -1,4 +1,5 @@
-alias JsonValue = any
+any JsonValue = JsonBool | JsonNumber | JsonInteger | JsonString | JsonArray | JsonObject
+
 alias JsonBool = bool
 alias JsonNumber = float
 alias JsonInteger = int
@@ -32,6 +33,9 @@ string jsonEncode(JsonValue value)
     buffer.push('"') 
 
   void jsonEncode(char[] buffer, JsonValue value)
+    if not value
+      buffer.pushString("null")
+
     match value
       case JsonBool
         buffer.pushString(value ? "true" : "false")
@@ -71,9 +75,6 @@ string jsonEncode(JsonValue value)
           first = false
 
         buffer.push('}')
-      
-      default
-        buffer.pushString("null")
 
   char[] buffer
   jsonEncode(buffer, value)
@@ -81,7 +82,7 @@ string jsonEncode(JsonValue value)
   return buffer.toString()
 
 JsonArray array = JsonArray()
-array.push('a')
+array.push(null)
 array.push(10)
 array.push(12.5)
 array.push("hello world")
@@ -109,7 +110,7 @@ class Map<K, V>
         keys.reserve(bucketCount)
         values.reserve(bucketCount)
         used.reserve(bucketCount)
-    
+
     void __set__(K key, V value)
         insertAndResize(key, value)
 

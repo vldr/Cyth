@@ -1,4 +1,6 @@
-any apple
+any Bool = bool
+
+Bool apple
 
 if apple
 else

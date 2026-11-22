@@ -1,6 +1,7 @@
-class Value
+class Value 
 
-any nullValue
+any Thing = Value
+Thing nullValue
 
 match nullValue
   case Value value

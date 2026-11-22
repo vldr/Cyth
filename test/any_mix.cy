@@ -1,4 +1,6 @@
-any a = 10
+any Thing = int | float | char | bool | void() | int(int) | void(Object)
+
+Thing a = 10
 log((int)a)
 
 # 10

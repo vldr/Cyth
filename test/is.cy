@@ -7,12 +7,13 @@ class B
 class C
     int field
 
-any a = null
+any Thing = A | B | C | string | int[]
+Thing a = null
 
 log(a is A)
 log(a is B)
 log(a is C)
-log(a is any)
+log(a is Thing)
 log(a is string)
 log(a is int[])
 
@@ -27,7 +28,7 @@ a = A()
 
 log(a is A)
 log(a is B)
-log(a is any)
+log(a is Thing)
 log(a is string)
 log(a is int[])
 
@@ -42,7 +43,7 @@ a = "hello"
 log(a is A)
 log(a is B)
 log(a is C)
-log(a is any)
+log(a is Thing)
 log(a is string)
 log(a is int[])
 
@@ -58,7 +59,7 @@ a = (int[]) [1, 2, 3]
 log(a is A)
 log(a is B)
 log(a is C)
-log(a is any)
+log(a is Thing)
 log(a is string)
 log(a is int[])
 

@@ -714,108 +714,6 @@ static void generate_default_array_initialization(CyVM* vm, MIR_reg_t dest)
     MIR_new_insn(vm->ctx, MIR_MOV, generate_array_data_op(vm, dest), MIR_new_int_op(vm->ctx, 0)));
 }
 
-static Function* generate_array_push_function(CyVM* vm, DataType data_type,
-                                              DataType element_data_type)
-{
-  const char* name = memory_sprintf("array.push.%s", data_type_to_string(data_type));
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
-    MIR_var_t params[] = {
-      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
-      { .name = "value", .size = 0, .type = data_type_to_sized_mir_type(element_data_type) }
-    };
-
-    MIR_item_t previous_function = vm->function;
-    MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
-    MIR_set_curr_func(vm->ctx, NULL);
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_func_arr(vm->ctx, name, return_type != MIR_T_UNDEF, &return_type,
-                                      sizeof(params) / sizeof_ptr(params), params);
-
-    vm->function = function->func;
-
-    MIR_reg_t ptr = MIR_reg(vm->ctx, "ptr", vm->function->u.func);
-    MIR_reg_t value = MIR_reg(vm->ctx, "value", vm->function->u.func);
-
-    {
-      MIR_label_t push_label = MIR_new_label(vm->ctx);
-      MIR_label_t resize_label = MIR_new_label(vm->ctx);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_BEQS, MIR_new_label_op(vm->ctx, resize_label),
-                                   generate_array_length_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr)));
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, push_label)));
-
-      MIR_append_insn(vm->ctx, vm->function, resize_label);
-
-      MIR_reg_t new_size = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_UMULOS, generate_array_capacity_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr),
-                                   MIR_new_int_op(vm->ctx, 2)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_capacity_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr),
-                                   MIR_new_int_op(vm->ctx, 1)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_UMULOS, MIR_new_reg_op(vm->ctx, new_size),
-                                   generate_array_capacity_op(vm, ptr),
-                                   MIR_new_int_op(vm->ctx, size_data_type(element_data_type))));
-
-      generate_realloc_expression(vm, generate_array_data_op(vm, ptr),
-                                  generate_array_data_op(vm, ptr),
-                                  MIR_new_reg_op(vm->ctx, new_size));
-
-      MIR_append_insn(vm->ctx, vm->function, push_label);
-    }
-
-    {
-      MIR_reg_t array_ptr = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
-                                   generate_array_data_op(vm, ptr)));
-
-      MIR_reg_t index = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, index),
-                                   generate_array_length_op(vm, ptr)));
-
-      MIR_append_insn(
-        vm->ctx, vm->function,
-        MIR_new_insn(vm->ctx, data_type_to_mov_type(element_data_type),
-                     MIR_new_mem_op(vm->ctx, data_type_to_sized_mir_type(element_data_type), 0,
-                                    array_ptr, index, size_data_type(element_data_type)),
-                     MIR_new_reg_op(vm->ctx, value)));
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_length_op(vm, ptr),
-                                   generate_array_length_op(vm, ptr), MIR_new_int_op(vm->ctx, 1)));
-    }
-
-    map_put_function(&vm->functions, name, function);
-
-    MIR_finish_func(vm->ctx);
-    MIR_set_curr_func(vm->ctx, previous_func);
-    vm->function = previous_function;
-  }
-
-  return function;
-}
-
 static Function generate_function_wrapper(CyVM* vm, MIR_func_t func, bool use_pointer)
 {
   char name[512];
@@ -913,6 +811,109 @@ static Function generate_function_wrapper(CyVM* vm, MIR_func_t func, bool use_po
   vm->function = previous_function;
 
   return (Function){ .func = function, .proto = proto };
+}
+
+static Function* generate_array_push_function(CyVM* vm, DataType data_type,
+                                              DataType element_data_type)
+{
+  const char* name = memory_sprintf(
+    "array.push.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
+
+  Function* function = map_get_function(&vm->functions, name);
+  if (!function)
+  {
+    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_VOID));
+    MIR_var_t params[] = {
+      { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
+      { .name = "value", .size = 0, .type = data_type_to_sized_mir_type(element_data_type) }
+    };
+
+    MIR_item_t previous_function = vm->function;
+    MIR_func_t previous_func = MIR_get_curr_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, NULL);
+
+    function = ALLOC(Function);
+    function->proto =
+      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                        &return_type, sizeof(params) / sizeof_ptr(params), params);
+    function->func = MIR_new_func_arr(vm->ctx, name, return_type != MIR_T_UNDEF, &return_type,
+                                      sizeof(params) / sizeof_ptr(params), params);
+
+    vm->function = function->func;
+
+    MIR_reg_t ptr = MIR_reg(vm->ctx, "ptr", vm->function->u.func);
+    MIR_reg_t value = MIR_reg(vm->ctx, "value", vm->function->u.func);
+
+    {
+      MIR_label_t push_label = MIR_new_label(vm->ctx);
+      MIR_label_t resize_label = MIR_new_label(vm->ctx);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_BEQS, MIR_new_label_op(vm->ctx, resize_label),
+                                   generate_array_length_op(vm, ptr),
+                                   generate_array_capacity_op(vm, ptr)));
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, push_label)));
+
+      MIR_append_insn(vm->ctx, vm->function, resize_label);
+
+      MIR_reg_t new_size = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_UMULOS, generate_array_capacity_op(vm, ptr),
+                                   generate_array_capacity_op(vm, ptr),
+                                   MIR_new_int_op(vm->ctx, 2)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_capacity_op(vm, ptr),
+                                   generate_array_capacity_op(vm, ptr),
+                                   MIR_new_int_op(vm->ctx, 1)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_UMULOS, MIR_new_reg_op(vm->ctx, new_size),
+                                   generate_array_capacity_op(vm, ptr),
+                                   MIR_new_int_op(vm->ctx, size_data_type(element_data_type))));
+
+      generate_realloc_expression(vm, generate_array_data_op(vm, ptr),
+                                  generate_array_data_op(vm, ptr),
+                                  MIR_new_reg_op(vm->ctx, new_size));
+
+      MIR_append_insn(vm->ctx, vm->function, push_label);
+    }
+
+    {
+      MIR_reg_t array_ptr = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
+                                   generate_array_data_op(vm, ptr)));
+
+      MIR_reg_t index = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, index),
+                                   generate_array_length_op(vm, ptr)));
+
+      MIR_append_insn(
+        vm->ctx, vm->function,
+        MIR_new_insn(vm->ctx, data_type_to_mov_type(element_data_type),
+                     MIR_new_mem_op(vm->ctx, data_type_to_sized_mir_type(element_data_type), 0,
+                                    array_ptr, index, size_data_type(element_data_type)),
+                     MIR_new_reg_op(vm->ctx, value)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_length_op(vm, ptr),
+                                   generate_array_length_op(vm, ptr), MIR_new_int_op(vm->ctx, 1)));
+    }
+
+    map_put_function(&vm->functions, name, function);
+
+    MIR_finish_func(vm->ctx);
+    MIR_set_curr_func(vm->ctx, previous_func);
+    vm->function = previous_function;
+  }
+
+  return function;
 }
 
 static Function* generate_array_push_string_function(CyVM* vm, DataType data_type)
@@ -1030,13 +1031,13 @@ static Function* generate_array_push_string_function(CyVM* vm, DataType data_typ
 
 static Function* generate_array_pop_function(CyVM* vm, DataType data_type)
 {
-  const char* name = memory_sprintf("array.pop.%s", data_type_to_string(data_type));
+  DataType element_data_type = array_data_type_element(data_type);
+  const char* name = memory_sprintf(
+    "array.pop.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
 
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    DataType element_data_type = array_data_type_element(data_type);
-
     MIR_type_t return_type = data_type_to_sized_mir_type(element_data_type);
     MIR_var_t params[] = {
       { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) }
@@ -1231,13 +1232,13 @@ static Function* generate_array_clear_function(CyVM* vm, DataType data_type)
 
 static Function* generate_array_remove_function(CyVM* vm, DataType data_type)
 {
-  const char* name = memory_sprintf("array.remove.%s", data_type_to_string(data_type));
+  DataType element_data_type = array_data_type_element(data_type);
+  const char* name = memory_sprintf(
+    "array.remove.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
 
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
   {
-    DataType element_data_type = array_data_type_element(data_type);
-
     MIR_type_t return_type = data_type_to_sized_mir_type(element_data_type);
     MIR_var_t params[] = {
       { .name = "ptr", .size = 0, .type = data_type_to_sized_mir_type(data_type) },
@@ -1915,31 +1916,6 @@ static int string_hash(CyString* n)
   return hash;
 }
 
-static Function* generate_string_hash_function(CyVM* vm)
-{
-  const char* name = "string.hash";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
-    MIR_var_t params[] = {
-      { .name = "n", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_hash);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static int string_index_of(CyString* haystack, CyString* needle)
 {
   if (needle->size == 0)
@@ -1963,34 +1939,6 @@ static int string_index_of(CyString* haystack, CyString* needle)
   }
 
   return -1;
-}
-
-static Function* generate_string_index_of_function(CyVM* vm)
-{
-  const char* name = "string.index_of";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
-    MIR_var_t params[] = {
-      { .name = "haystack",
-        .size = 0,
-        .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_index_of);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
 }
 
 static int string_count(CyString* haystack, CyString* needle)
@@ -2021,34 +1969,6 @@ static int string_count(CyString* haystack, CyString* needle)
   }
 
   return count;
-}
-
-static Function* generate_string_count_function(CyVM* vm)
-{
-  const char* name = "string.count";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_INTEGER));
-    MIR_var_t params[] = {
-      { .name = "haystack",
-        .size = 0,
-        .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "needle", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_count);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
 }
 
 static CyString* string_replace(CyString* input, CyString* old, CyString* new)
@@ -2119,33 +2039,6 @@ static CyString* string_replace(CyString* input, CyString* old, CyString* new)
   return result;
 }
 
-static Function* generate_string_replace_function(CyVM* vm)
-{
-  const char* name = "string.replace";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "old", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "new", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_replace);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static CyString* string_trim(CyString* input)
 {
   if (!input->size)
@@ -2172,31 +2065,6 @@ static CyString* string_trim(CyString* input)
   return result;
 }
 
-static Function* generate_string_trim_function(CyVM* vm)
-{
-  const char* name = "string.trim";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_trim);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static int string_starts_with(CyString* input, CyString* target)
 {
   if (target->size == 0)
@@ -2212,32 +2080,6 @@ static int string_starts_with(CyString* input, CyString* target)
   }
 
   return true;
-}
-
-static Function* generate_string_starts_with_function(CyVM* vm)
-{
-  const char* name = "string.starts_with";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_starts_with);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
 }
 
 static int string_ends_with(CyString* input, CyString* target)
@@ -2257,61 +2099,9 @@ static int string_ends_with(CyString* input, CyString* target)
   return true;
 }
 
-static Function* generate_string_ends_with_function(CyVM* vm)
-{
-  const char* name = "string.ends_with";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_ends_with);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static int string_contains(CyString* input, CyString* target)
 {
   return string_index_of(input, target) != -1;
-}
-
-static Function* generate_string_contains_function(CyVM* vm)
-{
-  const char* name = "string.contains";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_BOOL));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "target", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_contains);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
 }
 
 static CyArray* string_split(CyString* input, CyString* delim)
@@ -2400,32 +2190,6 @@ static CyArray* string_split(CyString* input, CyString* delim)
   }
 }
 
-static Function* generate_string_split_function(CyVM* vm, DataType return_data_type)
-{
-  const char* name = "string.split";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(return_data_type);
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-      { .name = "delim", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_split);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static CyString* string_join(CyArray* input, CyString* delim)
 {
   if (input->size == 0)
@@ -2465,32 +2229,6 @@ static CyString* string_join(CyArray* input, CyString* delim)
   return result;
 }
 
-static Function* generate_string_join_function(CyVM* vm, DataType array_data_type)
-{
-  const char* name = "string.join";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING));
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(array_data_type) },
-      { .name = "delim", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_join);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
-}
-
 static CyArray* string_to_array(CyString* input)
 {
   CyArray* result = GC_malloc(sizeof(CyArray));
@@ -2501,31 +2239,6 @@ static CyArray* string_to_array(CyString* input)
   memcpy(result->data, input->data, input->size);
 
   return result;
-}
-
-static Function* generate_string_to_array_function(CyVM* vm, DataType return_data_type)
-{
-  const char* name = "string.to_array";
-
-  Function* function = map_get_function(&vm->functions, name);
-  if (!function)
-  {
-    MIR_type_t return_type = data_type_to_sized_mir_type(return_data_type);
-    MIR_var_t params[] = {
-      { .name = "input", .size = 0, .type = data_type_to_sized_mir_type(DATA_TYPE(TYPE_STRING)) },
-    };
-
-    function = ALLOC(Function);
-    function->proto =
-      MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
-                        &return_type, sizeof(params) / sizeof_ptr(params), params);
-    function->func = MIR_new_import(vm->ctx, name);
-
-    MIR_load_external(vm->ctx, name, (uintptr_t)string_to_array);
-    map_put_function(&vm->functions, name, function);
-  }
-
-  return function;
 }
 
 static CyString* string_pad(CyString* input, int pad)
@@ -2796,6 +2509,48 @@ static bool generate_function_internal_intrinsic(CyVM* vm, MIR_reg_t dest, CallE
   return false;
 }
 
+static Function* generate_imported_function_internal(CyVM* vm, DataType data_type, uintptr_t addr)
+{
+  if (data_type.type == TYPE_FUNCTION_INTERNAL)
+  {
+    const char* name = data_type.function_internal.name;
+    Function* function = map_get_function(&vm->functions, name);
+
+    if (!function)
+    {
+      MIR_type_t return_type =
+        data_type_to_sized_mir_type(*data_type.function_internal.return_type);
+
+      ArrayMIR_var_t params;
+      array_init(&params);
+
+      DataType parameter_data_type;
+      array_foreach(&data_type.function_internal.parameter_types, parameter_data_type)
+      {
+        MIR_var_t param;
+        param.name = memory_sprintf("n%d", _i);
+        param.size = 0;
+        param.type = data_type_to_sized_mir_type(parameter_data_type);
+
+        array_add(&params, param);
+      }
+
+      function = ALLOC(Function);
+      function->proto =
+        MIR_new_proto_arr(vm->ctx, memory_sprintf("%s.proto", name), return_type != MIR_T_UNDEF,
+                          &return_type, params.size, params.elems);
+      function->func = MIR_new_import(vm->ctx, name);
+
+      MIR_load_external(vm->ctx, name, addr);
+      map_put_function(&vm->functions, name, function);
+    }
+
+    return function;
+  }
+
+  UNREACHABLE("Unexpected data type for generate function internal");
+}
+
 static Function* generate_function_internal(CyVM* vm, DataType data_type)
 {
   assert(data_type.type == TYPE_FUNCTION_INTERNAL);
@@ -2813,6 +2568,7 @@ static Function* generate_function_internal(CyVM* vm, DataType data_type)
 
   else if (strcmp(name, "panic") == 0)
     return generate_panic_function(vm);
+
   else if (strcmp(name, "array.push") == 0)
     return generate_array_push_function(vm,
                                         array_at(&data_type.function_internal.parameter_types, 0),
@@ -2835,35 +2591,36 @@ static Function* generate_function_internal(CyVM* vm, DataType data_type)
   else if (strcmp(name, "array.reserve") == 0)
     return generate_array_reserve_function(
       vm, array_at(&data_type.function_internal.parameter_types, 0));
+
   else if (strcmp(name, "int.hash") == 0)
     return generate_int_hash_function(vm);
   else if (strcmp(name, "float.hash") == 0)
     return generate_float_hash_function(vm);
   else if (strcmp(name, "float.sqrt") == 0)
     return generate_float_sqrt_function(vm);
+
   else if (strcmp(name, "string.hash") == 0)
-    return generate_string_hash_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_hash);
   else if (strcmp(name, "string.index_of") == 0)
-    return generate_string_index_of_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_index_of);
   else if (strcmp(name, "string.count") == 0)
-    return generate_string_count_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_count);
   else if (strcmp(name, "string.replace") == 0)
-    return generate_string_replace_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_replace);
   else if (strcmp(name, "string.trim") == 0)
-    return generate_string_trim_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_trim);
   else if (strcmp(name, "string.starts_with") == 0)
-    return generate_string_starts_with_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_starts_with);
   else if (strcmp(name, "string.ends_with") == 0)
-    return generate_string_ends_with_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_ends_with);
   else if (strcmp(name, "string.contains") == 0)
-    return generate_string_contains_function(vm);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_contains);
   else if (strcmp(name, "string.split") == 0)
-    return generate_string_split_function(vm, *data_type.function_internal.return_type);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_split);
   else if (strcmp(name, "string.join") == 0)
-    return generate_string_join_function(vm,
-                                         array_at(&data_type.function_internal.parameter_types, 0));
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_join);
   else if (strcmp(name, "string.to_array") == 0)
-    return generate_string_to_array_function(vm, *data_type.function_internal.return_type);
+    return generate_imported_function_internal(vm, data_type, (uintptr_t)string_to_array);
   else
     UNREACHABLE("Unexpected internal function");
 }

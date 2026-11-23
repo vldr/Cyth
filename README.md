@@ -184,7 +184,7 @@ If you would like to contribute to the project or simply provide feedback and as
   - [`char`](#char)
   - [`int`](#int)
   - [`float`](#float)
-- [Types](#types)
+- [Pointer Types](#pointer-types)
   - [`string`](#string)
   - [`any`](#any)
   - [Array](#array)
@@ -203,7 +203,7 @@ If you would like to contribute to the project or simply provide feedback and as
 - [`continue` statement](#continue-statement)
 
 ### Primitive Types
-#### `bool`
+### `bool`
 Possible values: `false` or `true`  
 Default value: `false`  
 
@@ -212,7 +212,7 @@ _Example:_
 bool myBool = true
 ```
 
-#### `char`
+### `char`
 Possible values: `0` to `255`  
 Default value: `'\0'`  
 
@@ -221,7 +221,7 @@ _Example:_
 char myChar = 'a'
 ```
 
-#### `int`
+### `int`
 Possible values: `-2147483648` to `2147483647`  
 Default value: `0`  
 
@@ -230,7 +230,7 @@ _Example:_
 int myInt = 10
 ```
 
-#### `float`
+### `float`
 Possible values: `± 1.5 x 10−45` to `± 3.4 x 1038`  
 Default value: `0.0`  
 
@@ -239,36 +239,36 @@ _Example:_
 float myFloat = 12.25
 ```
 
-### Types
+### Pointer Types
 
-#### `string`
+### `string`
 Possible values: UTF-8 text  
 Default value: `""` (empty string)  
-
-- All types can be cast to a `string`, which will convert to the type's string representation; casting `any` to a string will attempt to convert the `any` to the underlying string type rather than its string representation.
 
 _Example:_
 ```jai
 string myString = "hello world"
 ```
 
+- All types can be cast to a `string`, which will convert to the type's string representation except `any` types.
+
 ### `any`
-Possible values: `null`, `string`, [Array](#array) or [Object](#object)   
+Possible values: `null` or any type part of its set.  
 Default value: `null` 
-- Casting `any` to the incorrect underlying type will trigger a panic. 
 
 _Example:_
 ```jai
-any myAny = "hello world"
-string myString = (string)myAny
+any StringOrInt = string | int
+
+StringOrInt value = "hello world"
+string text = (string)value
 ```
 
-#### Array
+- Casting `any` to the incorrect underlying type will trigger a panic. 
+
+### Array
 Possible values: `[]` (empty list) or a list with one or more elements.  
 Default value: `[]` (empty list)   
-
-- Arrays can be multi-dimensional.
-- All arrays are dynamic, meaning they can be resized.
 
 _Example:_
 
@@ -281,8 +281,12 @@ myArray.push(3)
 string[][] myArray2D = [["I'm", "multidimensional"]]
 ```
 
-#### Object
-Possible values: `null` or a valid pointer (reference).  
+- Arrays can be multi-dimensional.
+- All arrays are dynamic, meaning they can be resized.
+
+
+### Object
+Possible values: `null` or a valid pointer to an object.  
 Default value: `null`  
 
 _Example:_
@@ -301,92 +305,13 @@ class Vector
 Vector myVector = Vector(10, 20, 30)
 ```
 
-Although the keyword `class` is used, there is no support for inheritance or other common object-oriented concepts in Cyth.
+There is no support for **inheritance** in Cyth.
 
-Objects in Cyth closely resemble structs rather than traditional classes. The key difference is that they can have **method functions**, which are functions that include an implicit `this` parameter.
+Objects in Cyth are C structs rather than traditional classes. But, they can have **method functions**, which are functions that include an implicit `this` parameter.
 
-_Example:_
-
-```cpp
-class Vector
-  float x
-  float y
-  float z
-
-  float length()
-    return (x*x  + y*y + z*z).sqrt()
-```
-
-> Cyth objects are compatible with C structs. In C, the Vector object would look like:
-> ```c
-> struct Vector {
->   float x;
->   float y;
->   float z;
-> };
-> ```
-> 
-> Calling the `length` method function from C would look like:
-> ```c
-> typedef float (*LengthFunc)(Vector*);
->
-> LengthFunc length = (LengthFunc) cyth_get_function(vm, "Vector.length.float()");
-> 
-> Vector* vector = (Vector*) cyth_alloc(true, sizeof(Vector));
-> vector->x = 1;
-> vector->y = 2;
-> vector->z = 3;
->
-> float len = length(vector);
-> if (cyth_error(vm))
->   len = 0.0f;
-> ```
->
-
-Objects have special method functions:
-
-*Constructors*
-```cpp
-void __init__()
-```
-
-*Index overload*
-```cpp
-V __get__(T index)
-```
-
-*Index and assign overload*
-```cpp
-V __set__(T index, U value)
-```
-
-*Operator overloads*
-```python
-V __add__(T other)
-V __sub__(T other)
-V __div__(T other)
-V __mul__(T other)
-V __mod__(T other)
-V __and__(T other)
-V __or__(T other)
-V __xor__(T other)
-V __lshift__(T other)
-V __rshift__(T other)
-V __lt__(T other)
-V __le__(T other)
-V __gt__(T other)
-V __ge__(T other)
-V __eq__(T other)
-V __ne__(T other)
-V __str__(T other)
-```
-
-#### Function Pointers
-Possible values: `null` or a valid pointer (reference).  
+### Function Pointers
+Possible values: `null` or a valid pointer to a function.   
 Default value: `null`  
-
-- Function pointers cannot be placed into `any` (limitation added due to WASM not supporting them).
-- Function pointers in Cyth are compatible with C function pointers.
 
 _Example:_
 
@@ -398,7 +323,7 @@ int(int, int) myFunctionPointer = adder
 myFunctionPointer(10, 20)
 ```
 
-_Example (Function Member):_
+_Example (Method Function):_
 
 ```cpp
 class Vector
@@ -427,20 +352,6 @@ float mySecondVariable
 If you do not initialize a variable, a default value is assigned automatically. For example, `mySecondVariable` will be set to `0.0`.
 
 You can declare variables in the top-level scope of your program which will make them a global variable. 
-
-> You can access global variables from C using `cyth_get_variable`.
->
-> For example, to get `myVariable` from C, you would write:
-> ```c
-> int* myVariable = (int*) cyth_get_variable(vm, "myVariable.int");
-> ```
-> The address returned from `cyth_get_variable` will be `NULL` if it was not found, or the signature is incorrect.
->
-> Make sure to only call `cyth_get_variable` after calling `cyth_run`, otherwise global variables will be 
-> uninitialized which can lead to issues if you're using types that have special default initializations (like arrays and strings).
->
->  Note that if a global variable is only read/written within the top-level scope of a program, and not within other functions, it will be demoted from a global to a local variable and will not be accessible by this function.
->
 
 ## Functions
 
@@ -489,23 +400,6 @@ class MyClass
 ```
 
 Nested functions inside method functions are themselves method functions with an implicit `this` parameter. Meaning these nested method functions can access object fields inside them.
-
-> You can access global functions from C using `cyth_get_function`.
->
-> For example, to get `myFunction` from C, you would write:
-> ```c
-> typedef int (*Func)(int, int);
-> Func my_function = (Func) cyth_get_function(vm, "myFunction.int(int, int)");
->
-> int sum = my_function(10, 20);
-> if (cyth_error(vm))
->   sum = 0;
-> ```
-> The address returned from `cyth_get_function` will be `NULL` if it was not found, or the signature is incorrect.
-> 
-> - Make sure to call `cyth_error` after calling a Cyth function to check whether the function ran successfully or not (see `cyth.h` for details).
-> - Make sure you call `cyth_run` before calling functions obtained from `cyth_get_function`, otherwise global variables will be uninitialized.
->
 
 ## Generics
 You can declare generic [functions](#functions-1) and [objects](#objects-1). Generics use duck typing and work similarly to [templates](https://en.wikipedia.org/wiki/Template_(C%2B%2B)), where a generic function or object is only created when it is first used, not when it is declared.
@@ -596,7 +490,7 @@ while condition
 You can declare a C-style `for` loop, like this:
 
 ```python
-for int i = 0; i < 10; i += 1
+for int i; i < 10; i++
   # for loops
 ```
 
@@ -614,7 +508,7 @@ The index of the element is stored into an implicit `it` variable.
 You can use `break` to immediately exit a loop:
 
 ```python
-for int i = 0; i < 10; i += 1
+for int i; i < 10; i++
   # Exit when i == 5
   if i == 5
     break
@@ -625,7 +519,7 @@ for int i = 0; i < 10; i += 1
 You can use `continue` to immediately start the next iteration of a loop:
 
 ```python
-for int i = 0; i < 10; i += 1
+for int i; i < 10; i++
   # Skip iteration when i == 5
   if i == 5
     continue
@@ -640,21 +534,25 @@ for int i = 0; i < 10; i += 1
   - [Arrays](#arrays)
   - [Strings](#strings)
 
-Cyth's whole ethos is that it is an embeddable language. Cyth is designed to be embedded inside C, C++ and Rust applications.
+Cyth is designed to be embedded inside C, C++ and Rust applications.
 This is done through the C API provided in `cyth.h`. 
 
-This guide will show you how to embed Cyth inside a simple C application. It will show you how to call C functions from Cyth, call Cyth functions from C and how to share data between C and Cyth.
+This guide will show you how to embed Cyth inside a simple C application and will cover:
+- How to call C functions from Cyth
+- How to call Cyth functions from C 
+- How to share data between C and Cyth
+
 Even though this guide shows C code, the code can be easily adapted to C++ or even Rust (though this will require some extra effort).
 
 ### Calling C functions from Cyth
 
-To start, let's create a main function and import `cyth.h`. This header includes all the important functionality required to embed Cyth into your project. The header also includes documentation for each function, so be sure to check it out if you happen to forget something.
+To start, create a `main` function and import `cyth.h`. 
 
-Inside the `main` function, the very first thing to do is to create a Cyth VM instance. This VM instance is what you will provide as the first argument to all the `cyth_` functions in the `cyth.h` header. The VM instance internally keeps track of all the source code you provide, the compiled code you run, and much more.
+The `cyth.h` header includes all the important functionality required to embed Cyth into your project. The header includes documentation for each function, so be sure to check it out if you happen to forget something.
 
-Right before the application closes, we'll also call `cyth_destroy` which cleans up all the resources allocated by the VM instance.
+Inside the `main` function, create a Cyth VM instance. This VM instance is what you will provide as the first argument to most of the `cyth_` functions. The VM instance internally keeps track of all the source code you provide, the compiled code you run, and much more.
 
-**Side note:** Even though it's called a "VM", that's just convention. Cyth is a JIT compiled language, there is no concept of a virtual machine (aside from the internal intermediate instructions used to get to the final assembly).
+Right before the application closes, call `cyth_destroy` which cleans up all the resources allocated by the VM instance.
 
 ```cpp
 #include <stdio.h>
@@ -668,15 +566,14 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 ```
-
-Now that we have a VM initialized, the next step is to load some functions. This means that you will be able to call C functions from Cyth.
+The next step is to load some functions. This means that you will be able to call C functions from Cyth.
 
 
 This can be done using this function:
 ```c++
 int cyth_load_function(CyVM* vm, const char* signature, uintptr_t func)
 ```
-For the first argument, you provide the Cyth VM instance that you previously created. Then you provide a signature and address. 
+For the first argument, you provide the Cyth VM instance previously created. Then you provide a signature and address. 
 
 The signature argument can be a bit tricky. A function signature is just a Cyth function without a body.
 
@@ -703,9 +600,9 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-At this point, the `print` function is accessible from Cyth. All that is left to do is load some Cyth code, compile it and run it!
+At this point, the `print` function is accessible from Cyth. The next step is to load some Cyth code, compile it and run it!
 
-To load Cyth code, you have two functions to choose from:
+To load Cyth code, you have two functions to pick from:
 ```c++
 int cyth_load_string(CyVM* vm, const char* filename, const char* string)
 ```
@@ -716,7 +613,7 @@ and
 int cyth_load_file(CyVM* vm, const char* filename)
 ```
 
-Both of these functions will load some Cyth code, the first one from a string and the last one from a file. The `filename` argument is used when an error occurs to show what file the error refers to.
+Both of these functions will load some Cyth code, the first one from a string and the last one from a file. The `filename` argument is used when an error occurs to show what file the error came from.
 
 As the embedder, be aware that load order matters. Load your internal code before the user's code. This way, if a conflict occurs, the error will appear inside the user's code rather than your internal code, which the user may or may not have access to.
 
@@ -1225,6 +1122,8 @@ int main(int argc, char* argv[]) {
 ```
 
 You can now run the above code and you should see `Hi everyone!` appear in your terminal.
+
+---
 
 This concludes the guide. This is only a handful of the interesting things possible with Cyth that can be mentioned. 
 

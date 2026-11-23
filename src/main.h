@@ -24,21 +24,11 @@
 #define UNREACH() __builtin_unreachable()
 #endif
 
-#define EXPECT(expr)                                                                               \
-  do                                                                                               \
-  {                                                                                                \
-    if (!(expr))                                                                                   \
-    {                                                                                              \
-      fprintf(stderr, "Assertion failed: %s %s:%d\n", #expr, __FILE__, __LINE__);                  \
-      TRAP();                                                                                      \
-      abort();                                                                                     \
-    }                                                                                              \
-  } while (0)
-
 #define UNREACHABLE(message)                                                                       \
   do                                                                                               \
   {                                                                                                \
-    EXPECT(!message);                                                                              \
+    assert(!message);                                                                              \
+    TRAP();                                                                                        \
     UNREACH();                                                                                     \
   } while (0)
 

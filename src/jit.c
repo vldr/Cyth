@@ -534,6 +534,14 @@ static MIR_insn_code_t sized_mir_type_to_mov_type(MIR_type_t type)
   UNREACHABLE("Unexpected mir type");
 }
 
+static const char* data_type_to_sized_mir_type_string(CyVM* vm, const char* prefix,
+                                                      DataType data_type)
+{
+  return memory_sprintf("%s.%s.%s", prefix,
+                        MIR_type_str(vm->ctx, data_type_to_sized_mir_type(data_type)),
+                        data_type_is_pointer(data_type) ? "" : "atomic");
+}
+
 static MIR_item_t data_type_to_proto(CyVM* vm, DataType data_type)
 {
   const char* name = data_type_to_string(data_type);
@@ -816,8 +824,7 @@ static Function generate_function_wrapper(CyVM* vm, MIR_func_t func, bool use_po
 static Function* generate_array_push_function(CyVM* vm, DataType data_type,
                                               DataType element_data_type)
 {
-  const char* name = memory_sprintf(
-    "array.push.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
+  const char* name = data_type_to_sized_mir_type_string(vm, "array.push", element_data_type);
 
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
@@ -844,66 +851,96 @@ static Function* generate_array_push_function(CyVM* vm, DataType data_type,
     MIR_reg_t ptr = MIR_reg(vm->ctx, "ptr", vm->function->u.func);
     MIR_reg_t value = MIR_reg(vm->ctx, "value", vm->function->u.func);
 
+    MIR_reg_t array_ptr = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
+                                 generate_array_data_op(vm, ptr)));
+
+    MIR_reg_t array_length = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_length),
+                                 generate_array_length_op(vm, ptr)));
+
+    MIR_reg_t array_capacity = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+    MIR_append_insn(vm->ctx, vm->function,
+                    MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_capacity),
+                                 generate_array_capacity_op(vm, ptr)));
+
     {
       MIR_label_t push_label = MIR_new_label(vm->ctx);
-      MIR_label_t resize_label = MIR_new_label(vm->ctx);
+      MIR_label_t update_label = MIR_new_label(vm->ctx);
+      MIR_label_t empty_label = MIR_new_label(vm->ctx);
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_BEQS, MIR_new_label_op(vm->ctx, resize_label),
-                                   generate_array_length_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr)));
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, push_label)));
-
-      MIR_append_insn(vm->ctx, vm->function, resize_label);
-
-      MIR_reg_t new_size = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
+                      MIR_new_insn(vm->ctx, MIR_UBLTS, MIR_new_label_op(vm->ctx, push_label),
+                                   MIR_new_reg_op(vm->ctx, array_length),
+                                   MIR_new_reg_op(vm->ctx, array_capacity)));
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_UMULOS, generate_array_capacity_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr),
-                                   MIR_new_int_op(vm->ctx, 2)));
+                      MIR_new_insn(vm->ctx, MIR_BEQS, MIR_new_label_op(vm->ctx, empty_label),
+                                   MIR_new_reg_op(vm->ctx, array_capacity),
+                                   MIR_new_int_op(vm->ctx, 0)));
 
       MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_capacity_op(vm, ptr),
-                                   generate_array_capacity_op(vm, ptr),
+                      MIR_new_insn(vm->ctx, MIR_LSH, MIR_new_reg_op(vm->ctx, array_capacity),
+                                   MIR_new_reg_op(vm->ctx, array_capacity),
                                    MIR_new_int_op(vm->ctx, 1)));
 
+      MIR_reg_t new_size = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_insn(vm->ctx, MIR_UMULOS, MIR_new_reg_op(vm->ctx, new_size),
-                                   generate_array_capacity_op(vm, ptr),
+                                   MIR_new_reg_op(vm->ctx, array_capacity),
                                    MIR_new_int_op(vm->ctx, size_data_type(element_data_type))));
 
-      generate_realloc_expression(vm, generate_array_data_op(vm, ptr),
-                                  generate_array_data_op(vm, ptr),
+      generate_realloc_expression(vm, MIR_new_reg_op(vm->ctx, array_ptr),
+                                  MIR_new_reg_op(vm->ctx, array_ptr),
                                   MIR_new_reg_op(vm->ctx, new_size));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_JMP, MIR_new_label_op(vm->ctx, update_label)));
+
+      MIR_append_insn(vm->ctx, vm->function, empty_label);
+
+      uint64_t ARRAY_INITIAL_SIZE = 4;
+
+      if (data_type_is_pointer(element_data_type))
+        generate_malloc_expression(
+          vm, array_ptr,
+          MIR_new_int_op(vm->ctx, ARRAY_INITIAL_SIZE * size_data_type(element_data_type)));
+      else
+        generate_malloc_atomic_expression(
+          vm, array_ptr,
+          MIR_new_int_op(vm->ctx, ARRAY_INITIAL_SIZE * size_data_type(element_data_type)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_capacity),
+                                   MIR_new_int_op(vm->ctx, ARRAY_INITIAL_SIZE)));
+
+      MIR_append_insn(vm->ctx, vm->function, update_label);
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, generate_array_data_op(vm, ptr),
+                                   MIR_new_reg_op(vm->ctx, array_ptr)));
+
+      MIR_append_insn(vm->ctx, vm->function,
+                      MIR_new_insn(vm->ctx, MIR_MOV, generate_array_capacity_op(vm, ptr),
+                                   MIR_new_reg_op(vm->ctx, array_capacity)));
 
       MIR_append_insn(vm->ctx, vm->function, push_label);
     }
 
     {
-      MIR_reg_t array_ptr = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, array_ptr),
-                                   generate_array_data_op(vm, ptr)));
-
-      MIR_reg_t index = _MIR_new_temp_reg(vm->ctx, MIR_T_I64, vm->function->u.func);
-
-      MIR_append_insn(vm->ctx, vm->function,
-                      MIR_new_insn(vm->ctx, MIR_MOV, MIR_new_reg_op(vm->ctx, index),
-                                   generate_array_length_op(vm, ptr)));
-
       MIR_append_insn(
         vm->ctx, vm->function,
         MIR_new_insn(vm->ctx, data_type_to_mov_type(element_data_type),
                      MIR_new_mem_op(vm->ctx, data_type_to_sized_mir_type(element_data_type), 0,
-                                    array_ptr, index, size_data_type(element_data_type)),
+                                    array_ptr, array_length, size_data_type(element_data_type)),
                      MIR_new_reg_op(vm->ctx, value)));
 
       MIR_append_insn(vm->ctx, vm->function,
                       MIR_new_insn(vm->ctx, MIR_ADDS, generate_array_length_op(vm, ptr),
-                                   generate_array_length_op(vm, ptr), MIR_new_int_op(vm->ctx, 1)));
+                                   MIR_new_reg_op(vm->ctx, array_length),
+                                   MIR_new_int_op(vm->ctx, 1)));
     }
 
     map_put_function(&vm->functions, name, function);
@@ -1032,8 +1069,7 @@ static Function* generate_array_push_string_function(CyVM* vm, DataType data_typ
 static Function* generate_array_pop_function(CyVM* vm, DataType data_type)
 {
   DataType element_data_type = array_data_type_element(data_type);
-  const char* name = memory_sprintf(
-    "array.pop.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
+  const char* name = data_type_to_sized_mir_type_string(vm, "array.pop", element_data_type);
 
   Function* function = map_get_function(&vm->functions, name);
   if (!function)
@@ -1233,8 +1269,7 @@ static Function* generate_array_clear_function(CyVM* vm, DataType data_type)
 static Function* generate_array_remove_function(CyVM* vm, DataType data_type)
 {
   DataType element_data_type = array_data_type_element(data_type);
-  const char* name = memory_sprintf(
-    "array.remove.%s", MIR_type_str(vm->ctx, data_type_to_sized_mir_type(element_data_type)));
+  const char* name = data_type_to_sized_mir_type_string(vm, "array.remove", element_data_type);
 
   Function* function = map_get_function(&vm->functions, name);
   if (!function)

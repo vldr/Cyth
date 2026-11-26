@@ -533,6 +533,7 @@ for int i; i < 10; i++
   - [Objects](#objects-1)
   - [Arrays](#arrays)
   - [Strings](#strings)
+  - [Any](#any-1)
 
 Cyth is designed to be embedded inside C, C++ and Rust applications.
 This is done through the C API provided in `cyth.h`. 
@@ -715,13 +716,8 @@ The return value of a Cyth function that crashed is always `0` or `NULL` (if the
 #include <stdio.h>
 #include <cyth.h>
 
-void print(CyString* text) {
-  printf("%s\n", text->data);
-}
-
 int main(int argc, char* argv[]) {
   CyVM* vm = cyth_init();
-  cyth_load_function(vm, "void print(string text)", (uintptr_t)print);
   cyth_load_string(vm, "example.cy", "int sum(int a, int b)\n"
                                      "  return a + b\n");
   cyth_compile(vm);
@@ -903,7 +899,7 @@ Have a look at the `cyth_alloc` function call where we passed `0` in for the fir
 
 #### Arrays
 
-In this next section, we will show how to share arrays between C and Cyth.
+In this section, we will show how to share arrays between C and Cyth.
 
 The `cyth.h` header provides a `CyArray` struct definition which matches the memory layout of arrays in Cyth:
 
@@ -967,13 +963,13 @@ void* cyth_alloc(int atomic, uintptr_t size)
 
 To allocate a Cyth array, we will need to perform two allocations. One for the `CyArray` struct and another for the underlying `data` field.
 
-So, with this in mind, let's create a `createArray` function which will allocate a 2-item array and pass it into Cyth:
+So, with this in mind, let's create a `makeArray` function which will allocate a 2-item array and pass it into Cyth:
 
 ```cpp
 #include <stdio.h>
 #include <cyth.h>
 
-CyArray* createArray() {
+CyArray* makeArray() {
   const int SIZE = 2;
 
   int* data = cyth_alloc(1, sizeof(int) * SIZE);
@@ -998,9 +994,9 @@ void printArray(CyArray* array) {
 
 int main(int argc, char* argv[]) {
   CyVM* vm = cyth_init();
-  cyth_load_function(vm, "int[] createArray()", (uintptr_t)createArray);
+  cyth_load_function(vm, "int[] makeArray()", (uintptr_t)makeArray);
   cyth_load_function(vm, "void printArray(int[] array)", (uintptr_t)printArray);
-  cyth_load_string(vm, "example.cy", "printArray(createArray())");
+  cyth_load_string(vm, "example.cy", "printArray(makeArray())");
   cyth_compile(vm);
   cyth_run(vm);
   cyth_destroy(vm);
@@ -1017,7 +1013,7 @@ In contrast, have a look at the second `cyth_alloc` function call, where we pass
 
 #### Strings
 
-In this final section, we will show how to share strings between C and Cyth.
+In this section, we will show how to share strings between C and Cyth.
 
 The `cyth.h` header provides a `CyString` struct definition which matches the memory layout of strings in Cyth:
 
@@ -1085,14 +1081,14 @@ Allocating Cyth strings can be tricky, because you need to ensure three things:
 
 3. You *MUST* pass `1` in for the `atomic` argument, since strings are atomic, because they do not contain any pointers.
 
-So, with this in mind, let's create a `createString` function which will allocate a string and pass it into Cyth:
+So, with this in mind, let's create a `makeString` function which will allocate a string and pass it into Cyth:
 
 ```cpp
 #include <stdio.h>
 #include <string.h>
 #include <cyth.h>
 
-CyString* createString() {
+CyString* makeString() {
   const char* text = "Hi everyone!";
   int size = strlen(text);
 
@@ -1110,9 +1106,9 @@ void printString(CyString* string) {
 
 int main(int argc, char* argv[]) {
   CyVM* vm = cyth_init();
-  cyth_load_function(vm, "string createString()", (uintptr_t)createString);
+  cyth_load_function(vm, "string makeString()", (uintptr_t)makeString);
   cyth_load_function(vm, "void printString(string array)", (uintptr_t)printString);
-  cyth_load_string(vm, "example.cy", "printString(createString())");
+  cyth_load_string(vm, "example.cy", "printString(makeString())");
   cyth_compile(vm);
   cyth_run(vm);
   cyth_destroy(vm);
@@ -1122,6 +1118,183 @@ int main(int argc, char* argv[]) {
 ```
 
 You can now run the above code and you should see `Hi everyone!` appear in your terminal.
+
+#### Any
+
+In this section, we will show how to use the [`any`](#any) type between C and Cyth.
+
+You can use the `any` type in two unique ways:
+1. As a sum type, which you can use to store multiple different types inside.
+2. As an opaque pointer, which you can use to store any internal C/C++/Rust pointers inside.
+
+##### Sum type
+
+To use `any` like a sum type, you must first declare the type like so:
+
+```cpp
+any StringOrInt = int | string
+```
+
+This means that `StringOrInt` can hold an `int`, a `string` or `null` (since `any` types are nullable).
+
+To use it from C, you need to know its layout. An `any` is a 64-bit value. The upper 16 bits are the ID that says which type is stored, and the lower 48 bits are the value itself:
+
+```
+16-bit ID | 48-bit value
+```
+
+The ID of each type is its position in the declaration, counting from left to right, starting at 1:
+- `int` comes first, so its ID is `1`.
+- `string` comes second, so its ID is `2`.
+
+ID `0` is reserved for `null`, which means the `any` holds no value.
+
+With that in mind, let's create a `printAny` function that prints the value inside a `StringOrInt` and use it from our Cyth code:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+void printAny(uint64_t any) {
+  uint64_t id = any >> 48;
+  uint64_t value = any & 0xFFFFFFFFFFFFull;
+
+  if (id == 1) {
+    int integer = (int)value;
+
+    printf("Integer: %d\n", (int)integer);
+  } else if (id == 2) {
+    CyString* string = (CyString*)value;
+
+    printf("String: %s\n", string->data);
+  } else {
+    printf("Null\n");
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printAny(StringOrInt stringOrInt)", (uintptr_t)printAny);
+  cyth_load_string(vm, "builtin.cy", "any StringOrInt = int | string");
+  cyth_load_string(vm, "example.cy", "printAny(\"Hello World\")\n"
+                                     "printAny(1337)\n"
+                                     "printAny(null)\n");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see the following appear in your terminal:
+
+```
+String: Hello World
+Integer: 1337
+Null
+```
+
+---
+
+Now, going the other direction, let's create a `makeAny` function that creates an any value from C to be used inside Cyth:
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+uintptr_t makeAny(CyString* string) {
+  uintptr_t id = 2ul << 48;
+  uintptr_t value = (uintptr_t)string;
+
+  return id | value;
+}
+
+void printAny(uint64_t any) {
+  uint64_t id = any >> 48;
+  uint64_t value = any & 0xFFFFFFFFFFFFull;
+
+  if (id == 1) {
+    int integer = (int)value;
+
+    printf("Integer: %d\n", (int)integer);
+  } else if (id == 2) {
+    CyString* string = (CyString*)value;
+
+    printf("String: %s\n", string->data);
+  } else {
+    printf("Null\n");
+  }
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "void printAny(StringOrInt value)", (uintptr_t)printAny);
+  cyth_load_function(vm, "StringOrInt makeAny(string value)", (uintptr_t)makeAny);
+  cyth_load_string(vm, "builtin.cy", "any StringOrInt = int | string");
+  cyth_load_string(vm, "example.cy", "printAny(makeAny(\"Hello World\"))");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see the following appear in your terminal:
+
+```
+String: Hello World
+```
+
+##### Opaque pointer
+
+To use `any` like an opaque pointer, you must first declare the type like so:
+
+```cpp
+any Handle
+```
+
+Because `Handle` has no types listed, Cyth code can't create one. The only way to get a `Handle` is from an external C function. Cyth code can still store, pass, and return it.
+
+To see this in action, we'll write two C functions: `getHandle`, which returns a `Handle` pointer, and `printHandle`, which prints the pointer's `field` value. 
+
+```cpp
+#include <stdio.h>
+#include <cyth.h>
+
+typedef struct {
+  int field;
+} Handle;
+
+Handle globalHandle = { 12 };
+
+Handle* getHandle(void) {
+  return &globalHandle;
+}
+
+void printHandle(Handle* handle) {
+  if (handle)
+    printf("%d\n", handle->field);
+}
+
+int main(int argc, char* argv[]) {
+  CyVM* vm = cyth_init();
+  cyth_load_function(vm, "Handle getHandle()", (uintptr_t)getHandle);
+  cyth_load_function(vm, "void printHandle(Handle handle)", (uintptr_t)printHandle);
+  cyth_load_string(vm, "builtin.cy", "any Handle");
+  cyth_load_string(vm, "example.cy", "printHandle(getHandle())");
+  cyth_compile(vm);
+  cyth_run(vm);
+  cyth_destroy(vm);
+
+  return 0;
+}
+```
+
+You can now run the above code and you should see `12` appear in your terminal.
+
+**Important:** C owns the pointer. Cyth never frees or tracks it, so you must keep it valid for as long as Cyth code might use it. The example uses a global variable, but you can just as well use `malloc` or any other allocator.
 
 ---
 

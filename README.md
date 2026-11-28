@@ -14,7 +14,6 @@ A fast and simple, embeddable programming language that targets WebAssembly, x86
   - [MacOS](#macos)
   - [Windows](#windows)
   - [Web](#web)
-- [Contributing](#contributing)
 - [Overview](#overview)
 - [Embedding Guide](#embedding-guide)
 
@@ -132,7 +131,6 @@ cmake -S . -B xbuild -G Xcode
 
 Then, in the `xbuild` directory, open `cyth.xcodeproj` in Xcode.
 
-
 ### Windows
 
 Run the following commands from the root directory (in a terminal):
@@ -157,25 +155,12 @@ For web builds, you will need to have [Emscripten](https://emscripten.org/docs/g
 
 Run the following commands from the root directory (in a terminal):
 
-_Release_:
 ```
 mkdir embuild
 cd embuild
 emcmake cmake ..
 make
 ```
-
-_Debug_:  
-```
-mkdir embuild
-cd embuild
-cmake -DCMAKE_BUILD_TYPE=Debug .. 
-make
-``` 
-
-## Contributing
-
-If you would like to contribute to the project or simply provide feedback and ask questions, please email [cyth@vldr.org](mailto:cyth@vldr.org)
 
 ## Overview
 
@@ -196,6 +181,7 @@ If you would like to contribute to the project or simply provide feedback and as
   - [Functions](#functions-1)
   - [Objects](#objects)
 - [Overloading](#overloading)
+- [`match` statement](#match-statement)
 - [`if` statement](#if-statement)
 - [`while` loop](#while-loop)
 - [`for` loop](#for-loop)
@@ -459,6 +445,57 @@ myFunction<int>(10, 20, 30)
 myFunction<float>(10, 20)
 ```
 
+## `match` statement
+
+A `match` statement can be used to match on [`any`](#any) types or [generic](#generics) types.
+
+_Example (matching on an `any` type):_
+
+```py
+any StringOrInt = string | int
+
+for StringOrInt item in ["Hello World", 1234, null]
+  match item
+    case string
+      # matches string; item contains string
+    case int
+      # matches int; item contains int
+    default
+      # matches null since we covered all types
+```
+
+_Example (matching on generic type):_
+
+```py
+void myFunction<T>(T value)
+  match T
+    case string
+      # matches string; value is a string
+    case int
+      # matches int; value is an int
+    default
+      # matches everything else
+
+myFunction<string>("Hello World")
+myFunction<int>(1234)
+myFunction<float>(12.625)
+```
+
+When matching on an `any` type, you can optionally redeclare the matched variable:
+
+```py
+any StringOrInt = string | int
+
+for StringOrInt item in ["Hello World", 67, null]
+  match item
+    case int myInt
+      # myInt contains the int value; item does not
+    case string myString
+      # myString contains the string value; item does not
+    default
+      # matches null since we covered all types
+```
+
 ## `if` statement
 
 You can declare `if` statements, like this:
@@ -651,7 +688,7 @@ int cyth_run(CyVM* vm)
 
 This function will run the top-level scope of the program. There is no main function in the traditional sense, anything in the global scope is run top-to-bottom, for every file. 
 
-**Important:** You should *ALWAYS* call `cyth_run`. This is because if a user has defined some global variables, then these global variables won't be initialized until you call `cyth_run`.
+> You should *ALWAYS* call `cyth_run`. This is because if a user has defined some global variables, then these global variables won't be initialized until you call `cyth_run`.
 
 So with that said, let's add `cyth_compile` and `cyth_run`:
 
@@ -736,9 +773,9 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `The sum is 30` appear in your terminal.
 
-**Important:** You should *ALWAYS* call `cyth_error` after calling a Cyth function to check whether the function ran successfully or not.
+> You should *ALWAYS* call `cyth_error` after calling a Cyth function to check whether the function ran successfully or not.
 
-**Important:** If a Cyth function panics (crashes), it will *ALWAYS* return `0` or `NULL`. This includes strings and arrays, which are *NEVER* allowed to be `NULL`. So make sure to call `cyth_error` to see whether a given function ran successfully or not.
+> If a Cyth function panics (crashes), it will *ALWAYS* return `0` or `NULL`. This includes strings and arrays, which are *NEVER* allowed to be `NULL`. So make sure to call `cyth_error` to see whether a given function ran successfully or not.
 
 One last thing to mention is that there exists a `cyth_get_function_unsafe` function. This function is similar to `cyth_get_function`, except that the address it returns is an unsafe variant, meaning that if you call the Cyth function and a runtime panic occurs, then your C application will crash alongside the Cyth application.
 
@@ -819,11 +856,11 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `10 20 30` appear in your terminal.
 
-**Important:** The memory layout of the Cyth class *MUST* match the memory layout of the C struct.
+> The memory layout of the Cyth class *MUST* match the memory layout of the C struct.
 
-**Important:** Make sure to keep Cyth pointers on the stack and not somewhere the garbage collector can't scan, like inside a heap-allocated C array. The GC can't see outside the stack and may collect an object out from under you if it's stored outside the stack.
+> Make sure to keep Cyth pointers on the stack and not somewhere the garbage collector can't scan, like inside a heap-allocated C array. The GC can't see outside the stack and may collect an object out from under you if it's stored outside the stack.
 
-**Important:** Objects can be `NULL`, so make sure to check them. Strings and arrays are *NEVER* null, so you don't have to check them.
+> Objects can be `NULL`, so make sure to check them. Strings and arrays are *NEVER* null, so you don't have to check them.
 
 ---
 
@@ -950,7 +987,7 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `1 2 3 4 5 6` appear in your terminal.
 
-**Important:** You don't need to check if `array` is a `NULL` pointer because arrays are *NEVER* null. By default, they are empty. But, the `data` field may be `NULL` if the `size`/`capacity` is zero.
+> You don't need to check if `array` is a `NULL` pointer because arrays are *NEVER* null. By default, they are empty. But, the `data` field may be `NULL` if the `size`/`capacity` is zero.
 
 ---
 
@@ -1061,7 +1098,7 @@ You can now run the above code and you should see `Hello World` appear in your t
 
 Have a look at the `printf` function call, we passed `string->data` directly into `printf`. This works because, internally, the `data` array is `NULL` terminated.
 
-**Important:** You don't need to check if `string` is a `NULL` pointer because strings are *NEVER* null. By default, they are empty.
+> You don't need to check if `string` is a `NULL` pointer because strings are *NEVER* null. By default, they are empty.
 
 ---
 
@@ -1294,7 +1331,7 @@ int main(int argc, char* argv[]) {
 
 You can now run the above code and you should see `12` appear in your terminal.
 
-**Important:** C owns the pointer. Cyth never frees or tracks it, so you must keep it valid for as long as Cyth code might use it. The example uses a global variable, but you can just as well use `malloc` or any other allocator.
+> C owns the pointer. Cyth never frees or tracks it, so you must keep it valid for as long as Cyth code might use it. The example uses a global variable, but you can just as well use `malloc` or any other allocator.
 
 ---
 
